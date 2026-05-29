@@ -23,6 +23,8 @@ export default defineEventHandler(async (event) => {
     enabled: body?.enabled !== false,
     definition: body.definition,
     cron: validation.cron,
+    runAt: validation.runAt,
+    timezone: validation.timezone,
     createdAt: now,
     updatedAt: now
   })

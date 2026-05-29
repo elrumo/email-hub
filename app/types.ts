@@ -1,7 +1,7 @@
 // Frontend-facing shapes mirroring the API responses. Kept deliberately small;
 // the source of truth is server/engine/types.ts.
 
-export type FieldType = 'string' | 'number' | 'boolean' | 'secret' | 'select'
+export type FieldType = 'string' | 'number' | 'boolean' | 'secret' | 'select' | 'keyValue'
 
 export interface FieldSchema {
   key: string
@@ -11,7 +11,11 @@ export interface FieldSchema {
   options?: Array<{ label: string, value: string | number }>
   placeholder?: string
   help?: string
-  default?: string | number | boolean
+  default?: string | number | boolean | Record<string, string>
+  /** only show/validate when another field's value is one of `in` */
+  showIf?: { field: string, in: Array<string | number | boolean> }
+  /** render inside a collapsible "Advanced" section */
+  advanced?: boolean
 }
 
 export interface ActionMeta {
@@ -91,6 +95,50 @@ export type SnapshotResponse
   = | ({ ok: true } & MonitorSnapshot)
     | { ok: false, error: string }
 
+/** A labelled link, optionally pingable for liveness while a page is open. */
+export interface Shortcut {
+  id: string
+  name: string
+  url: string
+  icon?: string | null
+  pingEnabled: boolean
+  /** separate URL to ping; falls back to `url` when null */
+  pingUrl?: string | null
+  /** seconds between pings */
+  pingInterval: number
+  sortOrder: number
+  createdAt: number
+  updatedAt: number
+}
+
+/** Result of GET /api/shortcuts/:id/ping — a live, non-persisted liveness check. */
+export interface PingResult {
+  ok: boolean
+  status: number | null
+  latency: number
+  error?: string
+  checkedAt: number
+}
+
+export type WidgetKind = 'shortcut' | 'flow' | 'monitor' | 'note'
+
+/** A tile on the home bento grid. See server/db/schema.ts `widgets`. */
+export interface Widget {
+  id: string
+  kind: WidgetKind
+  /** id of the referenced shortcut/flow/monitor, or null for notes */
+  refId?: string | null
+  /** markdown body for note tiles */
+  content?: string | null
+  /** column span (1–4) */
+  w: number
+  /** row span (1–4) */
+  h: number
+  sortOrder: number
+  createdAt: number
+  updatedAt: number
+}
+
 export type Operator
   = | 'eq' | 'ne' | 'lt' | 'lte' | 'gt' | 'gte'
     | 'contains' | 'notContains' | 'exists' | 'notExists' | 'truthy' | 'falsy'
@@ -124,6 +172,35 @@ export interface StateStep {
 }
 export type FlowStep = ActionStep | ConditionStep | ForEachStep | StateStep
 
+export type ScheduleMode = 'cron' | 'interval' | 'at'
+
+/** Shape of `config` for a `core.cron` trigger (mirrors server schedule.ts). */
+export interface ScheduleConfig {
+  mode?: ScheduleMode
+  cron?: string
+  intervalMs?: number
+  runAt?: number
+  timezone?: string | null
+  /** verbatim friendly-UI inputs so the builder can reconstruct itself */
+  builder?: ScheduleBuilderState
+  [key: string]: unknown
+}
+
+/** The friendly schedule-builder's UI state, persisted in config.builder. */
+export interface ScheduleBuilderState {
+  mode: ScheduleMode
+  /** preset key for recurring mode: 'minutes' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'advanced' */
+  preset?: string
+  intervalEvery?: number
+  intervalUnit?: 'minutes' | 'hours'
+  timeOfDay?: string
+  weekdays?: number[]
+  dayOfMonth?: number
+  atLocal?: string
+  cron?: string
+  timezone?: string | null
+}
+
 export interface FlowTrigger {
   integrationId: string
   triggerId: string
@@ -132,9 +209,12 @@ export interface FlowTrigger {
   cron?: string
 }
 
+export type NotifyOnRun = 'never' | 'always' | 'failure' | 'success'
+
 export interface FlowDefinition {
   trigger: FlowTrigger
   steps: FlowStep[]
+  notifyOnRun?: NotifyOnRun
 }
 
 export interface Flow {
@@ -144,6 +224,8 @@ export interface Flow {
   enabled: boolean
   definition: FlowDefinition
   cron?: string | null
+  runAt?: number | null
+  timezone?: string | null
   lastRunAt?: number | null
   updatedAt: number
 }

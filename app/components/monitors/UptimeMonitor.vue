@@ -37,39 +37,39 @@ const group = computed(() => {
       <div class="relative flex items-start gap-3 w-full">
         <!-- Header -->
         <div class="flex flex-col items-start gap-1">
-            <div class="flex flex-row items-center gap-2">
-                <div 
-                    class="flex items-center justify-center size-4 rounded-xl bg-elevated aspect-square overflow-hidden animate-pulse"
-                    :class="{
-                        'bg-success/10': snapshot ? snapshot.state === 'up' : 'bg-neutral',
-                        'bg-error/10': snapshot ? snapshot.state === 'down' : 'bg-neutral',
-                        'bg-warning/10': snapshot ? snapshot.state === 'pending' : 'bg-neutral',
-                        'bg-info/10': snapshot ? snapshot.state === 'maintenance' : 'bg-neutral',
-                        'bg-neutral/10': snapshot ? snapshot.state === 'unknown' : 'bg-neutral',
-                    }"
-                >
-                    <span
-                        class="size-2 rounded-full"
-                        :class="{
-                            'bg-success': snapshot ? snapshot.state === 'up' : 'bg-neutral',
-                            'bg-error': snapshot ? snapshot.state === 'down' : 'bg-neutral',
-                            'bg-warning': snapshot ? snapshot.state === 'pending' : 'bg-neutral',
-                            'bg-info': snapshot ? snapshot.state === 'maintenance' : 'bg-neutral',
-                            'bg-neutral': snapshot ? snapshot.state === 'unknown' : 'bg-neutral',
-                        }"
-                    />
-                </div>
-                <p class="text-sm font-medium text-highlighted">
-                    {{ monitor.name }}
-                </p>
-            </div>
-
-            <p
-                v-if="group"
-                class="text-xs text-dimmed"
+          <div class="flex flex-row items-center gap-2">
+            <div
+              class="flex items-center justify-center size-4 rounded-xl bg-elevated aspect-square overflow-hidden animate-pulse"
+              :class="{
+                'bg-success/10': snapshot ? snapshot.state === 'up' : 'bg-neutral',
+                'bg-error/10': snapshot ? snapshot.state === 'down' : 'bg-neutral',
+                'bg-warning/10': snapshot ? snapshot.state === 'pending' : 'bg-neutral',
+                'bg-info/10': snapshot ? snapshot.state === 'maintenance' : 'bg-neutral',
+                'bg-neutral/10': snapshot ? snapshot.state === 'unknown' : 'bg-neutral'
+              }"
             >
-                {{ group }}
+              <span
+                class="size-2 rounded-full"
+                :class="{
+                  'bg-success': snapshot ? snapshot.state === 'up' : 'bg-neutral',
+                  'bg-error': snapshot ? snapshot.state === 'down' : 'bg-neutral',
+                  'bg-warning': snapshot ? snapshot.state === 'pending' : 'bg-neutral',
+                  'bg-info': snapshot ? snapshot.state === 'maintenance' : 'bg-neutral',
+                  'bg-neutral': snapshot ? snapshot.state === 'unknown' : 'bg-neutral'
+                }"
+              />
+            </div>
+            <p class="text-sm font-medium text-highlighted">
+              {{ monitor.name }}
             </p>
+          </div>
+
+          <p
+            v-if="group"
+            class="text-xs text-dimmed"
+          >
+            {{ group }}
+          </p>
         </div>
 
         <!-- Actions -->
@@ -106,29 +106,29 @@ const group = computed(() => {
 
         <!-- error -->
         <div
-            v-if="error"
-            class="text-sm text-error"
+          v-if="error"
+          class="text-sm text-error"
         >
-            {{ error }}
+          {{ error }}
         </div>
 
         <!-- status -->
         <div
-            v-else-if="snapshot"
-            class="flex items-center gap-2"
+          v-else-if="snapshot"
+          class="flex items-center gap-2"
         >
-            <span
+          <span
             v-if="snapshot.detail"
             class="text-xs text-dimmed"
-            >{{ snapshot.detail }}</span>
+          >{{ snapshot.detail }}</span>
         </div>
 
         <!-- loading -->
         <div
-            v-else-if="loading"
-            class="text-xs text-dimmed"
+          v-else-if="loading"
+          class="text-xs text-dimmed"
         >
-            Loading…
+          Loading…
         </div>
       </div>
     </div>

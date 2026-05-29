@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Flow } from '~/types'
-import { relTime } from '~/composables/format'
+import { relTime, scheduleSummary } from '~/composables/format'
 
 const { data: flows, refresh } = await useFetch<Flow[]>('/api/flows', {
   key: 'flows',
@@ -12,7 +12,7 @@ const running = ref<string | null>(null)
 function triggerSummary(f: Flow): string {
   const t = f.definition?.trigger
   if (!t) return 'No trigger'
-  if (f.cron) return `Schedule · ${f.cron}`
+  if (t.integrationId === 'core' && t.triggerId === 'cron') return scheduleSummary(f)
   if (t.triggerId === 'manual') return 'Manual'
   if (t.triggerId === 'webhook') return 'Webhook'
   return `${t.integrationId} · ${t.triggerId}`

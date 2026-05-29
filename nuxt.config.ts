@@ -14,6 +14,13 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     dbFile: process.env.NUXT_DB_FILE || '/data/app.db',
+    // Web Push (VAPID). Left empty by default — keys are auto-generated and
+    // persisted in the DB on first use, so push works with zero config. Set
+    // these to pin a fixed keypair (e.g. so a re-deploy doesn't invalidate
+    // existing browser subscriptions). vapidSubject is an abuse-contact mailto.
+    vapidPublicKey: process.env.NUXT_VAPID_PUBLIC_KEY || '',
+    vapidPrivateKey: process.env.NUXT_VAPID_PRIVATE_KEY || '',
+    vapidSubject: process.env.NUXT_VAPID_SUBJECT || '',
     schedulerIntervalMs: process.env.NUXT_SCHEDULER_INTERVAL_MS || '',
     kumaUrl: process.env.NUXT_KUMA_URL || '',
     kumaApiKey: process.env.NUXT_KUMA_API_KEY || '',
@@ -41,6 +48,17 @@ export default defineNuxtConfig({
   nitro: {
     // Build for the Bun runtime so Nitro emits a Bun-targeted server.
     preset: 'bun',
+    // Flow scheduling runs as Nitro tasks (server/tasks/flows/*). The internal
+    // loop in server/plugins/engine.ts drives `flows:tick` on Bun (where the
+    // preset doesn't run scheduledTasks); this cron entry additionally drives it
+    // in dev and on presets that do support scheduledTasks. Single-instance task
+    // semantics + the cron lastRunAt guard keep the two drivers idempotent.
+    experimental: {
+      tasks: true
+    },
+    scheduledTasks: {
+      '* * * * *': ['flows:tick']
+    },
     // `bun:sqlite` is a Bun built-in — keep it out of the bundle so it
     // resolves natively at runtime instead of Rollup trying (and failing) to
     // bundle it, which is what produces the "could not be resolved" warning.
@@ -95,6 +113,10 @@ export default defineNuxtConfig({
       // Pre-cache the built app shell; API calls stay network-first so flow
       // data is never served stale.
       globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
+      // Fold our Web Push handlers (push + notificationclick) into the
+      // generated service worker. The file lives in public/ so it ships at the
+      // site root and shares the SW scope.
+      importScripts: ['/sw-push.js'],
       navigateFallback: '/',
       runtimeCaching: [
         {

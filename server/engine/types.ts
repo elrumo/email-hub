@@ -11,7 +11,7 @@
 // "no-code" and forms trivially generatable.
 // ---------------------------------------------------------------------------
 
-export type FieldType = 'string' | 'number' | 'boolean' | 'secret' | 'select'
+export type FieldType = 'string' | 'number' | 'boolean' | 'secret' | 'select' | 'keyValue'
 
 export interface FieldSchema {
   key: string
@@ -22,7 +22,20 @@ export interface FieldSchema {
   options?: Array<{ label: string, value: string | number }>
   placeholder?: string
   help?: string
-  default?: string | number | boolean
+  default?: string | number | boolean | Record<string, string>
+  /**
+   * Conditional visibility: only show/validate this field when another field's
+   * current value is one of `in`. Lets one integration present provider-specific
+   * fields (e.g. an "AI" connection whose fields depend on the chosen provider)
+   * without splitting into multiple integrations. Hidden fields are skipped by
+   * the UI and treated as absent by validation.
+   */
+  showIf?: { field: string, in: Array<string | number | boolean> }
+  /**
+   * Render this field inside a collapsible "Advanced" section. Purely a UI hint;
+   * validation is unaffected.
+   */
+  advanced?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -292,13 +305,30 @@ export interface FlowTrigger {
   triggerId: string
   connectionId?: string | null
   config: Record<string, unknown>
-  /** denormalized for cron triggers */
+  /**
+   * denormalized for cron triggers. For schedule modes other than a raw cron
+   * (interval/preset), this is the compiled canonical cron string. The config
+   * that backs a `core.cron` trigger is a ScheduleConfig (server/engine/schedule.ts):
+   * { mode, cron?, intervalMs?, runAt?, timezone?, builder? }.
+   */
   cron?: string
 }
+
+/**
+ * When (if ever) a browser notification fires automatically on a flow run.
+ *  - "always"  → every completed run
+ *  - "failure" → only when the run errors
+ *  - "success" → only when the run succeeds
+ * Omitted/"never" disables it. Delivery uses the same Web Push fan-out as the
+ * `browser` integration action (server/utils/push.ts).
+ */
+export type NotifyOnRun = 'never' | 'always' | 'failure' | 'success'
 
 export interface FlowDefinition {
   trigger: FlowTrigger
   steps: FlowStep[]
+  /** auto-notify subscribed browsers when this flow runs. Default: never. */
+  notifyOnRun?: NotifyOnRun
 }
 
 // ---------------------------------------------------------------------------

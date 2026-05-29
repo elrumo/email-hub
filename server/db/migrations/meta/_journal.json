@@ -15,6 +15,27 @@
       "when": 1780053783356,
       "tag": "0001_absent_machine_man",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1780070838825,
+      "tag": "0002_abnormal_fixer",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1780070918061,
+      "tag": "0003_smooth_tombstone",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1780071020098,
+      "tag": "0004_colossal_luke_cage",
+      "breakpoints": true
     }
   ]
 }

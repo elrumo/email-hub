@@ -12,6 +12,8 @@ export default defineEventHandler(async () => {
     enabled: f.enabled,
     definition: f.definition,
     cron: f.cron,
+    runAt: f.runAt,
+    timezone: f.timezone,
     lastRunAt: f.lastRunAt,
     updatedAt: f.updatedAt
   }))

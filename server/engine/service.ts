@@ -2,8 +2,9 @@ import { randomUUID } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { getDb } from '../db'
 import { flowRuns, flows } from '../db/schema'
+import { sendPush } from '../utils/push'
 import { runFlow } from './runner'
-import type { FlowDefinition, RunTriggerKind } from './types'
+import type { FlowDefinition, NotifyOnRun, RunTriggerKind } from './types'
 
 export interface ExecuteResult {
   runId: string
@@ -63,5 +64,37 @@ export async function executeFlow(
   // bookkeeping for cron de-dup
   await db.update(flows).set({ lastRunAt: startedAt }).where(eq(flows.id, flowId))
 
+  // fire-and-forget browser notification if the flow opted in. Never let a
+  // push failure affect the run's recorded outcome.
+  if (shouldNotify(definition.notifyOnRun, result.status)) {
+    await notifyRun(flow.name, result.status, result.error).catch((e) => {
+      console.error('[engine] notify-on-run push failed:', e instanceof Error ? e.message : e)
+    })
+  }
+
   return { runId, status: result.status, error: result.error }
+}
+
+function shouldNotify(setting: NotifyOnRun | undefined, status: ExecuteResult['status']): boolean {
+  switch (setting) {
+    case 'always': return true
+    case 'failure': return status === 'error'
+    case 'success': return status === 'success'
+    default: return false
+  }
+}
+
+async function notifyRun(
+  flowName: string,
+  status: ExecuteResult['status'],
+  error?: string
+): Promise<void> {
+  const emoji = status === 'error' ? '❌' : status === 'skipped' ? '⏭️' : '✅'
+  const body = status === 'error' && error ? error : `Run ${status}`
+  await sendPush({
+    title: `${emoji} ${flowName}`,
+    body,
+    url: '/',
+    tag: `flow-run` // newer run notifications replace older ones
+  })
 }

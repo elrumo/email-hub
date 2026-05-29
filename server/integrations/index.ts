@@ -1,4 +1,6 @@
 import { registerIntegration } from '../engine/registry'
+import { aiIntegration } from './ai'
+import { browserIntegration } from './browser'
 import { bunnyIntegration } from './bunny'
 import { dokployIntegration } from './dokploy'
 import { kumaIntegration } from './kuma'
@@ -23,9 +25,11 @@ export function registerAllIntegrations(): void {
     kumaIntegration,
     probeIntegration,
     notifyIntegration,
+    browserIntegration,
     telegramIntegration,
     mailgunIntegration,
-    mongoIntegration
+    mongoIntegration,
+    aiIntegration
   ]) {
     registerIntegration(i)
   }

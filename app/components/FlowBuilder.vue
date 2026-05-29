@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Connection, Flow, FlowDefinition, FlowStep, FlowTrigger, IntegrationMeta, TriggerMeta } from '~/types'
+import type { Connection, Flow, FlowDefinition, FlowStep, FlowTrigger, IntegrationMeta, NotifyOnRun, TriggerMeta } from '~/types'
 import { blankStep, STEP_TYPE_OPTIONS } from '~/composables/builder'
 
 const props = defineProps<{
@@ -23,7 +23,7 @@ const trigger = ref<FlowTrigger>(
   props.flow?.definition?.trigger ?? { integrationId: 'core', triggerId: 'manual', config: {} }
 )
 const triggerKind = ref<TriggerKind>(
-  props.flow?.cron
+  trigger.value.integrationId === 'core' && trigger.value.triggerId === 'cron'
     ? 'cron'
     : trigger.value.triggerId === 'webhook'
       ? 'webhook'
@@ -33,6 +33,17 @@ const triggerKind = ref<TriggerKind>(
 )
 
 const steps = ref<FlowStep[]>(props.flow?.definition?.steps ?? [])
+
+// browser-notification-on-run setting
+const { supported: pushSupported, enabled: pushEnabled, refresh: refreshPush } = usePush()
+onMounted(refreshPush)
+const notifyOnRun = ref<NotifyOnRun>(props.flow?.definition?.notifyOnRun ?? 'never')
+const notifyItems = [
+  { label: 'Don’t notify', value: 'never', icon: 'i-lucide-bell-off' },
+  { label: 'On every run', value: 'always', icon: 'i-lucide-bell-ring' },
+  { label: 'Only when it fails', value: 'failure', icon: 'i-lucide-triangle-alert' },
+  { label: 'Only when it succeeds', value: 'success', icon: 'i-lucide-circle-check' }
+]
 
 // poll triggers available across integrations
 const pollTriggers = computed(() =>
@@ -50,10 +61,20 @@ const triggerKindItems = [
 
 function onTriggerKind(k: TriggerKind) {
   triggerKind.value = k
-  if (k === 'manual') trigger.value = { integrationId: 'core', triggerId: 'manual', config: {} }
-  else if (k === 'cron') trigger.value = { integrationId: 'core', triggerId: 'cron', config: {}, cron: trigger.value.cron ?? '*/5 * * * *' }
-  else if (k === 'webhook') trigger.value = { integrationId: 'core', triggerId: 'webhook', config: { webhookSecret: trigger.value.config?.webhookSecret ?? randomSecret() } }
-  else {
+  if (k === 'manual') {
+    trigger.value = { integrationId: 'core', triggerId: 'manual', config: {} }
+  } else if (k === 'cron') {
+    // Preserve an existing schedule config when re-selecting cron; otherwise
+    // seed a sensible default. The full schedule lives in config (ScheduleConfig).
+    const existing = trigger.value.integrationId === 'core' && trigger.value.triggerId === 'cron' ? trigger.value.config : null
+    trigger.value = {
+      integrationId: 'core',
+      triggerId: 'cron',
+      config: existing && Object.keys(existing).length ? existing : { mode: 'cron', cron: '*/5 * * * *', timezone: browserTz() }
+    }
+  } else if (k === 'webhook') {
+    trigger.value = { integrationId: 'core', triggerId: 'webhook', config: { webhookSecret: trigger.value.config?.webhookSecret ?? randomSecret() } }
+  } else {
     const first = pollTriggers.value[0]
     trigger.value = first
       ? { integrationId: first.integration.id, triggerId: first.trigger.id, connectionId: null, config: {} }
@@ -63,6 +84,14 @@ function onTriggerKind(k: TriggerKind) {
 
 function randomSecret() {
   return Array.from({ length: 24 }, () => Math.floor(Math.random() * 36).toString(36)).join('')
+}
+
+function browserTz(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone
+  } catch {
+    return 'UTC'
+  }
 }
 
 const selectedPoll = computed<{ integration: IntegrationMeta, trigger: TriggerMeta } | undefined>(() =>
@@ -112,7 +141,7 @@ async function save() {
     toast.add({ title: 'Give your flow a name', color: 'warning' })
     return
   }
-  const definition: FlowDefinition = { trigger: trigger.value, steps: steps.value }
+  const definition: FlowDefinition = { trigger: trigger.value, steps: steps.value, notifyOnRun: notifyOnRun.value }
   saving.value = true
   try {
     if (props.flow) {
@@ -182,18 +211,10 @@ async function save() {
             @update:model-value="onTriggerKind($event as TriggerKind)"
           />
 
-          <UFormField
+          <ScheduleBuilder
             v-if="triggerKind === 'cron'"
-            label="Schedule (cron expression)"
-            description="Five fields: minute hour day month weekday. Example: */5 * * * * = every 5 minutes."
-          >
-            <UInput
-              :model-value="trigger.cron"
-              placeholder="*/5 * * * *"
-              class="w-full font-mono"
-              @update:model-value="trigger.cron = $event"
-            />
-          </UFormField>
+            v-model="trigger.config"
+          />
 
           <template v-else-if="triggerKind === 'webhook'">
             <UFormField
@@ -315,6 +336,38 @@ async function save() {
           </template>
         </UPopover>
       </div>
+    </div>
+
+    <!-- notify on run -->
+    <div>
+      <h2 class="mb-2 flex items-center gap-2 text-sm font-semibold text-highlighted">
+        <UIcon
+          name="i-lucide-bell"
+          class="size-4 text-primary"
+        />
+        Notify me when it runs
+      </h2>
+      <UCard>
+        <div class="space-y-3">
+          <USelect
+            v-model="notifyOnRun"
+            :items="notifyItems"
+            class="w-full"
+          />
+          <p class="text-xs text-muted">
+            Sends a browser notification to every device that has notifications turned on (the bell in the top bar).
+          </p>
+          <UAlert
+            v-if="notifyOnRun !== 'never' && pushSupported && !pushEnabled"
+            color="warning"
+            variant="soft"
+            icon="i-lucide-bell-off"
+            title="Notifications are off on this device"
+            description="Turn them on with the bell in the top bar to receive these on this browser."
+            :ui="{ description: 'text-xs' }"
+          />
+        </div>
+      </UCard>
     </div>
 
     <!-- footer actions -->

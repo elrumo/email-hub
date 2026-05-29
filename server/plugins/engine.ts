@@ -1,7 +1,6 @@
 import path from 'node:path'
 import { initDb } from '../db'
 import { drainPool } from '../engine/clientPool'
-import { schedulerTick } from '../engine/scheduler'
 import { registerAllIntegrations } from '../integrations'
 
 /**
@@ -44,10 +43,17 @@ export default async function (nitroApp?: { hooks?: { hook: (name: string, fn: (
   })
 }
 
+/**
+ * The firing driver. Each iteration runs the `flows:tick` Nitro task rather than
+ * calling schedulerTick directly: the task gives single-instance dedup (a slow
+ * tick can't overlap the next) and a manual-invocation surface. This internal
+ * interval is what makes scheduling reliable on the standalone Bun preset, where
+ * nitro `scheduledTasks` cron is not driven by the runtime.
+ */
 async function loop(intervalMs: number, signal: AbortSignal): Promise<void> {
   while (!signal.aborted) {
     try {
-      await schedulerTick(Date.now(), signal)
+      await runTask('flows:tick')
     } catch (e) {
       console.error('[engine] scheduler tick failed:', e instanceof Error ? e.message : e)
     }

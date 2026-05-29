@@ -28,12 +28,14 @@ const description = 'Automation flows for your infrastructure — connect Dokplo
 
 const route = useRoute()
 const nav = [
-  { label: 'Flows', to: '/', icon: 'i-lucide-workflow' },
+  { label: 'Home', to: '/', icon: 'i-lucide-layout-grid' },
+  { label: 'Flows', to: '/flows', icon: 'i-lucide-workflow' },
+  { label: 'Shortcuts', to: '/shortcuts', icon: 'i-lucide-link' },
   { label: 'Connections', to: '/connections', icon: 'i-lucide-plug' },
   { label: 'Monitoring', to: '/monitoring', icon: 'i-lucide-activity' }
 ]
 function isActive(to: string) {
-  return to === '/' ? route.path === '/' || route.path.startsWith('/flows') : route.path.startsWith(to)
+  return to === '/' ? route.path === '/' : route.path.startsWith(to)
 }
 
 useSeoMeta({
@@ -78,6 +80,8 @@ useSeoMeta({
       </nav>
 
       <template #right>
+        <PushToggle />
+
         <UColorModeButton />
 
         <UButton

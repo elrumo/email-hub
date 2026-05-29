@@ -22,6 +22,12 @@ export function validateAgainstSchema(
   const out: Record<string, unknown> = {}
 
   for (const field of schema) {
+    // conditional fields: skip entirely when their showIf predicate isn't met
+    if (field.showIf) {
+      const controlling = src[field.showIf.field]
+      if (!field.showIf.in.some(allowed => allowed === controlling)) continue
+    }
+
     let v = src[field.key]
 
     if (v === undefined || v === '') {
@@ -54,6 +60,19 @@ export function validateAgainstSchema(
           return { ok: false, error: `${field.label} must be one of: ${allowed.join(', ')}`, value: {} }
         }
         out[field.key] = v
+        break
+      }
+      case 'keyValue': {
+        // a flat string→string map (e.g. custom HTTP headers). Coerce loosely:
+        // accept an object, drop non-string/blank entries.
+        if (v == null || typeof v !== 'object' || Array.isArray(v)) {
+          return { ok: false, error: `${field.label} must be a set of key/value pairs`, value: {} }
+        }
+        const map: Record<string, string> = {}
+        for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+          if (k.trim() && val != null && val !== '') map[k] = String(val)
+        }
+        out[field.key] = map
         break
       }
       default:

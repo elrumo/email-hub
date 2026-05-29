@@ -9,7 +9,9 @@ import type { FlowDefinition } from './types'
 
 /**
  * One scheduler tick: run every enabled flow whose trigger is due.
- *  - cron triggers: fire when the cron expression matches this minute.
+ *  - one-time ("at") schedules: fire once when now passes runAt, then disable.
+ *  - cron triggers: fire when the cron expression matches this minute (in the
+ *    flow's timezone, if set).
  *  - poll triggers: call the integration's poll(); fire when it returns a payload.
  * Manual/webhook triggers are not handled here (driven by API routes).
  *
@@ -25,8 +27,19 @@ export async function schedulerTick(now: number, signal: AbortSignal): Promise<v
       const trig = def?.trigger
       if (!trig) continue
 
-      // cron
-      if (trig.cron && cronDue(trig.cron, now, flow.lastRunAt)) {
+      // one-time "at": fire once when due, then disable so it never repeats.
+      // lastRunAt guards against a double-fire within the same tick window.
+      if (flow.runAt != null) {
+        if (now >= flow.runAt && flow.lastRunAt == null) {
+          await executeFlow(flow.id, 'cron', { firedAt: now, scheduledAt: flow.runAt }, signal)
+          await db.update(flows).set({ enabled: false }).where(eq(flows.id, flow.id))
+          console.log(`[scheduler] one-time flow ${flow.id} fired and disabled`)
+        }
+        continue
+      }
+
+      // cron (evaluated in the flow's timezone when one is set)
+      if (flow.cron && cronDue(flow.cron, now, flow.lastRunAt, flow.timezone)) {
         await executeFlow(flow.id, 'cron', { firedAt: now }, signal)
         continue
       }

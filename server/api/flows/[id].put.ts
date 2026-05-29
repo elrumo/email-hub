@@ -22,12 +22,25 @@ export default defineEventHandler(async (event) => {
     update.name = name
   }
   if (body?.description !== undefined) update.description = body.description ? String(body.description) : null
-  if (body?.enabled !== undefined) update.enabled = !!body.enabled
+  if (body?.enabled !== undefined) {
+    update.enabled = !!body.enabled
+    // Re-enabling clears the cron bookkeeping so a one-time 'at' (which
+    // auto-disables after firing) can be armed again and a recurring flow
+    // isn't suppressed by a stale same-minute guard.
+    if (!!body.enabled && !existing.enabled) update.lastRunAt = null
+  }
   if (body?.definition !== undefined) {
     const validation = validateFlowDefinition(body.definition)
     if (!validation.ok) throw createError({ statusCode: 400, statusMessage: validation.error })
     update.definition = body.definition
     update.cron = validation.cron
+    update.runAt = validation.runAt
+    update.timezone = validation.timezone
+    // The schedule may have changed; reset the same-minute / one-time guard so
+    // the new schedule fires when due rather than being deduped against the old.
+    if (validation.cron !== existing.cron || validation.runAt !== existing.runAt) {
+      update.lastRunAt = null
+    }
   }
 
   await db.update(flows).set(update).where(eq(flows.id, id))

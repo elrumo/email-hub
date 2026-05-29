@@ -110,8 +110,8 @@ const diskFree = computed(() => {
 
 function gaugeColor(p: number | null, inverted?: boolean): 'success' | 'warning' | 'error' | 'neutral' | 'info' {
   if (p == null) return 'neutral'
-  if(inverted){
-    switch(true){
+  if (inverted) {
+    switch (true) {
       case p >= 90:
         return 'success'
       case p >= 75:
@@ -125,7 +125,7 @@ function gaugeColor(p: number | null, inverted?: boolean): 'success' | 'warning'
     }
   }
 
-  switch(true){
+  switch (true) {
     case p >= 90:
       return 'error'
     case p >= 75:
@@ -171,7 +171,6 @@ const updatedAgo = computed(() => {
   if (!lastUpdated.value) return ''
   return new Date(lastUpdated.value).toLocaleTimeString()
 })
-
 </script>
 
 <template>
@@ -327,44 +326,44 @@ const updatedAgo = computed(() => {
 
         <div class="flex flex-row gap-3">
           <div class="flex-1 rounded-md border border-default bg-elevated/10 p-3 flex flex-col items-baseline text-sm relative">
-              <span class="text-muted">
-                Disk usage
-                <span class="text-xs text-dimmed">
-                  {{ percentage(diskUsage, diskTotal) }}
-                </span>
+            <span class="text-muted">
+              Disk usage
+              <span class="text-xs text-dimmed">
+                {{ percentage(diskUsage, diskTotal) }}
               </span>
-              <span class="font-medium text-highlighted">
-                {{ diskUsage }} GB <span class="text-dimmed">/ {{ diskTotal }} GB</span>
-              </span>
+            </span>
+            <span class="font-medium text-highlighted">
+              {{ diskUsage }} GB <span class="text-dimmed">/ {{ diskTotal }} GB</span>
+            </span>
 
-              <UProgress 
-                class="mt-2"
-                :color="gaugeColor(percentage(diskUsage, diskTotal, true) ? Number(percentage(diskUsage, diskTotal, true)) : 0, false)"
-                v-model="diskUsage" 
-                :max="diskTotal ? diskTotal : 0" 
-                size="sm" 
-              />
+            <UProgress
+              v-model="diskUsage"
+              class="mt-2"
+              :color="gaugeColor(percentage(diskUsage, diskTotal, true) ? Number(percentage(diskUsage, diskTotal, true)) : 0, false)"
+              :max="diskTotal ? diskTotal : 0"
+              size="sm"
+            />
           </div>
 
           <div class="flex-1 rounded-md border border-default bg-elevated/10 p-3 flex flex-col items-baseline text-sm relative">
-              <span class="text-muted">
-                Disk free
-                <span class="text-xs text-dimmed">
-                  {{ percentage(diskFree, diskTotal) }}
-                </span>
+            <span class="text-muted">
+              Disk free
+              <span class="text-xs text-dimmed">
+                {{ percentage(diskFree, diskTotal) }}
               </span>
+            </span>
 
-              <span class="font-medium text-highlighted">
-                {{ diskFree }} GB <span class="text-dimmed">/ {{ diskTotal }} GB</span>
-              </span>
+            <span class="font-medium text-highlighted">
+              {{ diskFree }} GB <span class="text-dimmed">/ {{ diskTotal }} GB</span>
+            </span>
 
-              <UProgress 
-                class="mt-2"
-                :color="gaugeColor(percentage(diskFree, diskTotal, true) ? 100 - Number(percentage(diskFree, diskTotal, true)) : 0, true)"
-                v-model="diskFree" 
-                :max="diskTotal ? diskTotal : 100" 
-                size="sm" 
-              />
+            <UProgress
+              v-model="diskFree"
+              class="mt-2"
+              :color="gaugeColor(percentage(diskFree, diskTotal, true) ? 100 - Number(percentage(diskFree, diskTotal, true)) : 0, true)"
+              :max="diskTotal ? diskTotal : 100"
+              size="sm"
+            />
           </div>
         </div>
       </div>
