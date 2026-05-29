@@ -202,11 +202,20 @@ export interface AnalyticsScriptTag {
  */
 export interface WebAnalyticsCapability {
   /**
-   * Build the public-safe script tags to inject on a tracked board. Receives the
-   * connection's stored config. Return `[]` to inject nothing (e.g. when the
-   * config lacks the bits needed to track).
+   * Optional per-board field this provider needs to identify the site it tracks
+   * — e.g. Plausible's site domain (`data-domain`). When set, board settings
+   * prompt for it and the value is passed to `scriptTags` as `options.domain`.
+   * Providers keyed solely by connection config (e.g. GA's measurement id) omit
+   * this and ignore the option.
    */
-  scriptTags: (config: Record<string, unknown>) => AnalyticsScriptTag[]
+  domainField?: { label: string, placeholder?: string, help?: string }
+  /**
+   * Build the public-safe script tags to inject on a tracked board. Receives the
+   * connection's stored config and per-board `options` (the board's chosen
+   * analytics domain, when set). Return `[]` to inject nothing (e.g. when the
+   * config/options lack the bits needed to track).
+   */
+  scriptTags: (config: Record<string, unknown>, options?: { domain?: string }) => AnalyticsScriptTag[]
 }
 
 export interface Integration {

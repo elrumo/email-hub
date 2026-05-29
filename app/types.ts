@@ -58,8 +58,12 @@ export interface IntegrationMeta {
   img?: string
   canTest?: boolean
   monitoring?: MonitoringCapability
-  /** true when the integration can track public boards (Plausible / GA) */
-  webAnalytics?: boolean
+  /**
+   * Present when the integration can track public boards (Plausible / GA).
+   * `domainField` is set when the provider also needs a per-board site domain
+   * (e.g. Plausible's `data-domain`); absent for connection-keyed providers (GA).
+   */
+  webAnalytics?: { domainField?: { label: string, placeholder?: string, help?: string } }
   connectionSchema: FieldSchema[]
   triggers: TriggerMeta[]
   actions: ActionMeta[]
@@ -177,6 +181,8 @@ export interface Board {
   publicTrigger: boolean
   /** connection used to track visits to this board (Plausible / Google Analytics), or null */
   analyticsConnectionId?: string | null
+  /** site domain for the analytics provider when it tracks a specific site (Plausible), or null */
+  analyticsDomain?: string | null
   sortOrder: number
   createdAt: number
   updatedAt: number

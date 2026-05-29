@@ -71,3 +71,15 @@ export async function resolveAnalyticsConnectionId(
   }
   return connectionId
 }
+
+/**
+ * Normalize a board's analytics site domain (e.g. Plausible's `data-domain`).
+ * Trims whitespace and treats empty as "unset" (`null`). Providers that don't
+ * need a per-board domain (e.g. Google Analytics) simply ignore the stored
+ * value. Accepts the raw request value (string | null | undefined).
+ */
+export function normalizeAnalyticsDomain(raw: unknown): string | null {
+  if (raw == null) return null
+  const v = String(raw).trim()
+  return v || null
+}
