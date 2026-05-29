@@ -393,8 +393,12 @@ export const boards = sqliteTable(
  *   - "shortcut" → refId = shortcuts.id (link tile, live ping if configured)
  *   - "flow"     → refId = flows.id     (enabled/last-run + run-now)
  *   - "monitor"  → refId = monitors.id  (live gauges/status card)
- *   - "note"     → refId = null, content holds free markdown text
- * `w`/`h` are the tile's span in grid columns/rows (1–4). The referenced row
+ *   - "note"     → refId = null, content holds rich text (Tiptap HTML; legacy
+ *                  rows may hold plain text, rendered verbatim)
+ *   - "section"  → refId = null, content holds a section-title string; renders
+ *                  as a full-width heading band between groups of tiles
+ * `w`/`h` are the tile's span in grid columns/rows (1–4). `cardStyle` chooses
+ * the per-tile chrome (soft shadow / outline ring / none). The referenced row
  * may be deleted independently; the home page skips dangling widgets.
  */
 export const widgets = sqliteTable(
@@ -405,12 +409,14 @@ export const widgets = sqliteTable(
     ownerId: text('owner_id').references(() => users.id, { onDelete: 'cascade' }),
     /** the board this tile lives on (FK→boards.id); nullable only as a migration artifact, always set on insert */
     boardId: text('board_id').references(() => boards.id, { onDelete: 'cascade' }),
-    /** "shortcut" | "flow" | "monitor" | "note" */
+    /** "shortcut" | "flow" | "monitor" | "note" | "section" */
     kind: text('kind').notNull(),
-    /** id of the referenced entity, or null for self-contained tiles (note) */
+    /** id of the referenced entity, or null for self-contained tiles (note, section) */
     refId: text('ref_id'),
-    /** free text for "note" tiles (markdown) */
+    /** rich text (note) or title string (section); null for reference tiles */
     content: text('content'),
+    /** per-tile card chrome: "shadow" | "outline" | "none" */
+    cardStyle: text('card_style').notNull().default('shadow'),
     /** column span on the bento grid (1–4) */
     w: integer('w').notNull().default(1),
     /** row span on the bento grid (1–4) */

@@ -4,7 +4,11 @@ import type { PublicBoard, SnapshotResponse } from '~/types'
 const props = defineProps<{
   boardSlug: string
   monitor: PublicBoard['monitors'][number]
+  /** bento card chrome classes (shadow/outline/none); from bentoCardClass() */
+  cardClass?: string
 }>()
+
+const cardClass = computed(() => props.cardClass ?? bentoCardClass('shadow'))
 
 const response = ref<SnapshotResponse | null>(null)
 const loading = ref(false)
@@ -54,7 +58,7 @@ watch(
 
 <template>
   <div
-    class="bento-card flex h-full flex-col gap-3 bg-default p-4 ring-1 ring-default"
+    :class="`${cardClass} flex h-full flex-col gap-3 bg-default p-4`"
   >
     <div class="flex items-center gap-2 font-medium text-highlighted">
       <span class="flex size-8 shrink-0 items-center justify-center rounded-xl bg-elevated text-muted">

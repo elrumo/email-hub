@@ -2,7 +2,14 @@ import { and, eq } from 'drizzle-orm'
 import type { DB } from '../../db'
 import { boards, type NewWidgetRow } from '../../db/schema'
 
-export const WIDGET_KINDS = ['shortcut', 'flow', 'monitor', 'note'] as const
+export const WIDGET_KINDS = ['shortcut', 'flow', 'monitor', 'note', 'section'] as const
+
+/** Tile kinds that carry their own `content` instead of pointing at an entity. */
+export const SELF_CONTAINED_KINDS = ['note', 'section'] as const
+
+/** Allowed per-tile card chrome. */
+export const CARD_STYLES = ['shadow', 'outline', 'none'] as const
+export type CardStyle = (typeof CARD_STYLES)[number]
 
 /**
  * Resolve a board id that belongs to `ownerId`. When `boardId` is given it must
@@ -32,12 +39,16 @@ export async function resolveOwnedBoard(
 }
 export type WidgetKind = (typeof WIDGET_KINDS)[number]
 
-type WidgetFields = Pick<NewWidgetRow, 'kind' | 'refId' | 'content' | 'w' | 'h' | 'sortOrder'>
+type WidgetFields = Pick<NewWidgetRow, 'kind' | 'refId' | 'content' | 'cardStyle' | 'w' | 'h' | 'sortOrder'>
 
 function clampSpan(value: unknown, fallback: number): number {
   const n = Number(value)
   if (!Number.isFinite(n)) return fallback
   return Math.min(4, Math.max(1, Math.round(n)))
+}
+
+function isSelfContained(kind: WidgetKind): boolean {
+  return (SELF_CONTAINED_KINDS as readonly string[]).includes(kind)
 }
 
 /**
@@ -60,7 +71,7 @@ export function normalizeWidgetBody(
     ? (String(b.refId).trim() || null)
     : existing.refId ?? null
 
-  if (kind !== 'note' && !refId) {
+  if (!isSelfContained(kind) && !refId) {
     throw createError({ statusCode: 400, statusMessage: `${kind} widgets need a refId` })
   }
 
@@ -68,10 +79,16 @@ export function normalizeWidgetBody(
     ? (b.content === null ? null : String(b.content))
     : existing.content ?? null
 
+  const cardStyle = (b.cardStyle !== undefined ? String(b.cardStyle) : existing.cardStyle ?? 'shadow') as CardStyle
+  if (!CARD_STYLES.includes(cardStyle)) {
+    throw createError({ statusCode: 400, statusMessage: `cardStyle must be one of: ${CARD_STYLES.join(', ')}` })
+  }
+
   return {
     kind,
-    refId: kind === 'note' ? null : refId,
-    content: kind === 'note' ? content : null,
+    refId: isSelfContained(kind) ? null : refId,
+    content: isSelfContained(kind) ? content : null,
+    cardStyle,
     w: clampSpan(b.w, existing.w ?? 1),
     h: clampSpan(b.h, existing.h ?? 1),
     sortOrder: b.sortOrder !== undefined ? (Number(b.sortOrder) || 0) : existing.sortOrder ?? 0

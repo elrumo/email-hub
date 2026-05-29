@@ -122,16 +122,21 @@ export interface PingResult {
   checkedAt: number
 }
 
-export type WidgetKind = 'shortcut' | 'flow' | 'monitor' | 'note'
+export type WidgetKind = 'shortcut' | 'flow' | 'monitor' | 'note' | 'section'
+
+/** Per-tile card chrome on the bento grid. */
+export type CardStyle = 'shadow' | 'outline' | 'none'
 
 /** A tile on the home bento grid. See server/db/schema.ts `widgets`. */
 export interface Widget {
   id: string
   kind: WidgetKind
-  /** id of the referenced shortcut/flow/monitor, or null for notes */
+  /** id of the referenced shortcut/flow/monitor, or null for note/section */
   refId?: string | null
-  /** markdown body for note tiles */
+  /** rich text (note) or title string (section); null for reference tiles */
   content?: string | null
+  /** card chrome — soft shadow, outline ring, or none */
+  cardStyle?: CardStyle
   /** column span (1–4) */
   w: number
   /** row span (1–4) */
@@ -161,7 +166,7 @@ export interface Board {
 /** Shape returned by the public board endpoint (display-only, no secrets). */
 export interface PublicBoard {
   board: { id: string, name: string, slug: string, publicTrigger: boolean }
-  widgets: Array<Pick<Widget, 'id' | 'kind' | 'refId' | 'content' | 'w' | 'h' | 'sortOrder'>>
+  widgets: Array<Pick<Widget, 'id' | 'kind' | 'refId' | 'content' | 'cardStyle' | 'w' | 'h' | 'sortOrder'>>
   shortcuts: Array<{ id: string, name: string, url: string, icon?: string | null }>
   flows: Array<{ id: string, name: string, description?: string | null, enabled: boolean, canTrigger: boolean }>
   monitors: Array<{ id: string, name: string, integrationId: string, publicVisible: boolean }>

@@ -55,6 +55,7 @@ export default defineEventHandler(async (event) => {
       kind: t.kind,
       refId: t.refId,
       content: t.content,
+      cardStyle: t.cardStyle,
       w: t.w,
       h: t.h,
       sortOrder: t.sortOrder

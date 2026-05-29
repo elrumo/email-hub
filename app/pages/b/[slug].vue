@@ -8,6 +8,9 @@ import type { PublicBoard } from '~/types'
  * server/api/public/*). Renders the board's tiles using only the display
  * fields the public endpoint returns; flow tiles show a Run button only when
  * the flow is publicly triggerable.
+ *
+ * On desktop the layout is two columns: a sticky profile header on the left and
+ * the bento grid on the right; it stacks on narrow screens.
  */
 const route = useRoute()
 const slug = computed(() => String(route.params.slug))
@@ -24,7 +27,7 @@ const monitorOf = (id?: string | null) => data.value?.monitors.find(m => m.id ==
 
 // A single letter for the profile avatar, like bento.me's monogram.
 const initial = computed(() => (board.value?.name ?? '·').trim().charAt(0).toUpperCase() || '·')
-const tileCount = computed(() => widgets.value.length)
+const tileCount = computed(() => widgets.value.filter(w => w.kind !== 'section').length)
 
 useSeoMeta({
   title: () => board.value?.name ?? 'Board',
@@ -81,135 +84,174 @@ function hostOf(url: string) {
       </div>
 
       <template v-else>
-        <!-- bento.me-style profile header -->
-        <header class="mb-10 flex flex-col items-center text-center sm:mb-14">
-          <span class="avatar-monogram flex size-20 items-center justify-center rounded-full text-3xl font-semibold text-inverted">
-            {{ initial }}
-          </span>
-          <h1 class="mt-5 text-3xl font-semibold tracking-tight text-highlighted">
-            {{ board.name }}
-          </h1>
-          <p class="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-elevated/70 px-3 py-1 text-xs font-medium text-muted ring-1 ring-default">
-            <UIcon
-              name="i-lucide-layout-grid"
-              class="size-3.5"
-            />
-            {{ tileCount }} {{ tileCount === 1 ? 'tile' : 'tiles' }}
-          </p>
-        </header>
-
-        <div
-          v-if="widgets.length === 0"
-          class="mx-auto max-w-md rounded-3xl border border-dashed border-default bg-default/60 py-20 text-center text-sm text-muted"
-        >
-          This board has no tiles yet.
-        </div>
-
-        <div
-          v-else
-          class="grid auto-rows-[8.5rem] grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4"
-        >
-          <div
-            v-for="w in widgets"
-            :key="w.id"
-            :style="{ gridColumn: `span ${w.w}`, gridRow: `span ${w.h}` }"
-          >
-            <!-- shortcut: the whole tile is the link, with a nudging arrow -->
-            <a
-              v-if="w.kind === 'shortcut' && shortcutOf(w.refId)"
-              :href="shortcutOf(w.refId)!.url"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="bento-card group flex h-full flex-col justify-between bg-default p-4 ring-1 ring-default"
-            >
-              <span class="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-elevated text-muted">
-                <img
-                  v-if="isImageIcon(shortcutOf(w.refId)!.icon)"
-                  :src="shortcutOf(w.refId)!.icon!"
-                  alt=""
-                  class="size-6 rounded-md"
-                >
-                <UIcon
-                  v-else
-                  :name="shortcutOf(w.refId)!.icon || 'i-lucide-link'"
-                  class="size-6"
-                />
-              </span>
-              <span class="mt-3 min-w-0">
-                <span class="flex items-center justify-between gap-2">
-                  <span class="truncate font-medium text-highlighted">{{ shortcutOf(w.refId)!.name }}</span>
-                  <UIcon
-                    name="i-lucide-arrow-up-right"
-                    class="size-4 shrink-0 text-dimmed transition-all duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary"
-                  />
-                </span>
-                <span class="mt-0.5 block truncate text-sm text-dimmed">{{ hostOf(shortcutOf(w.refId)!.url) }}</span>
-              </span>
-            </a>
-
-            <!-- flow -->
-            <div
-              v-else-if="w.kind === 'flow' && flowOf(w.refId)"
-              class="bento-card flex h-full flex-col gap-2 bg-default p-4 ring-1 ring-default"
-            >
-              <div class="flex items-center gap-2 font-medium text-highlighted">
-                <span class="flex size-8 shrink-0 items-center justify-center rounded-xl bg-elevated text-muted">
-                  <UIcon
-                    name="i-lucide-workflow"
-                    class="size-4"
-                  />
-                </span>
-                <span class="truncate">{{ flowOf(w.refId)!.name }}</span>
-              </div>
-              <p
-                v-if="flowOf(w.refId)!.description"
-                class="line-clamp-2 text-sm text-muted"
-              >
-                {{ flowOf(w.refId)!.description }}
-              </p>
-              <UButton
-                v-if="flowOf(w.refId)!.canTrigger"
-                icon="i-lucide-play"
-                label="Run"
-                color="neutral"
-                variant="soft"
-                size="sm"
-                class="mt-auto self-start"
-                :loading="running === w.refId"
-                @click="runFlow(w.refId!)"
+        <div class="lg:grid lg:grid-cols-[16rem_1fr] lg:gap-12">
+          <!-- bento.me-style profile header (left column, sticky on desktop) -->
+          <header class="mb-10 flex flex-col items-center text-center lg:sticky lg:top-20 lg:mb-0 lg:items-start lg:self-start lg:text-left">
+            <span class="avatar-monogram flex size-20 items-center justify-center rounded-full text-3xl font-semibold text-inverted">
+              {{ initial }}
+            </span>
+            <h1 class="mt-5 text-3xl font-semibold tracking-tight text-highlighted">
+              {{ board.name }}
+            </h1>
+            <p class="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-elevated/70 px-3 py-1 text-xs font-medium text-muted ring-1 ring-default">
+              <UIcon
+                name="i-lucide-layout-grid"
+                class="size-3.5"
               />
-              <UBadge
-                v-else
-                color="neutral"
-                variant="soft"
-                size="sm"
-                class="mt-auto self-start"
-              >
-                View only
-              </UBadge>
+              {{ tileCount }} {{ tileCount === 1 ? 'tile' : 'tiles' }}
+            </p>
+
+            <!-- footer credit lives in the sidebar on desktop -->
+            <span class="mt-6 hidden items-center gap-1.5 rounded-full bg-elevated/60 px-3 py-1.5 text-xs font-medium text-dimmed ring-1 ring-default lg:inline-flex">
+              <UIcon
+                name="i-lucide-stethoscope"
+                class="size-3.5 text-primary"
+              />
+              Made with Flow Hub
+            </span>
+          </header>
+
+          <!-- bento grid (right column) -->
+          <div>
+            <div
+              v-if="widgets.length === 0"
+              class="rounded-3xl border border-dashed border-default bg-default/60 py-20 text-center text-sm text-muted"
+            >
+              This board has no tiles yet.
             </div>
 
-            <!-- monitor -->
-            <PublicMonitorTile
-              v-else-if="w.kind === 'monitor' && monitorOf(w.refId)"
-              :board-slug="board.slug"
-              :monitor="monitorOf(w.refId)!"
-            />
-
-            <!-- note -->
             <div
-              v-else-if="w.kind === 'note'"
-              class="bento-card h-full bg-default p-4 ring-1 ring-default"
+              v-else
+              class="grid auto-rows-[8.5rem] grid-cols-2 gap-4 sm:grid-cols-3"
             >
-              <p class="h-full overflow-auto whitespace-pre-wrap text-sm text-muted">
-                {{ w.content || 'Empty note' }}
-              </p>
+              <div
+                v-for="w in widgets"
+                :key="w.id"
+                :style="{
+                  gridColumn: w.kind === 'section' ? '1 / -1' : `span ${w.w}`,
+                  gridRow: w.kind === 'section' ? 'span 1' : `span ${w.h}`
+                }"
+              >
+                <!-- section heading band -->
+                <div
+                  v-if="w.kind === 'section'"
+                  class="flex h-full items-center gap-3"
+                >
+                  <h2 class="shrink-0 text-base font-semibold tracking-tight text-highlighted">
+                    {{ w.content || 'Section' }}
+                  </h2>
+                  <span class="h-px flex-1 bg-default" />
+                </div>
+
+                <!-- shortcut: the whole tile is the link, with a nudging arrow -->
+                <a
+                  v-else-if="w.kind === 'shortcut' && shortcutOf(w.refId)"
+                  :href="shortcutOf(w.refId)!.url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  :class="`${bentoCardClass(w.cardStyle)} group flex h-full flex-col justify-between bg-default p-4`"
+                >
+                  <span class="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-elevated text-muted">
+                    <img
+                      v-if="isImageIcon(shortcutOf(w.refId)!.icon)"
+                      :src="shortcutOf(w.refId)!.icon!"
+                      alt=""
+                      class="size-6 rounded-md"
+                    >
+                    <UIcon
+                      v-else
+                      :name="shortcutOf(w.refId)!.icon || 'i-lucide-link'"
+                      class="size-6"
+                    />
+                  </span>
+                  <span class="mt-3 min-w-0">
+                    <span class="flex items-center justify-between gap-2">
+                      <span class="truncate font-medium text-highlighted">{{ shortcutOf(w.refId)!.name }}</span>
+                      <UIcon
+                        name="i-lucide-arrow-up-right"
+                        class="size-4 shrink-0 text-dimmed transition-all duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary"
+                      />
+                    </span>
+                    <span class="mt-0.5 block truncate text-sm text-dimmed">{{ hostOf(shortcutOf(w.refId)!.url) }}</span>
+                  </span>
+                </a>
+
+                <!-- flow -->
+                <div
+                  v-else-if="w.kind === 'flow' && flowOf(w.refId)"
+                  :class="`${bentoCardClass(w.cardStyle)} flex h-full flex-col gap-2 bg-default p-4`"
+                >
+                  <div class="flex items-center gap-2 font-medium text-highlighted">
+                    <span class="flex size-8 shrink-0 items-center justify-center rounded-xl bg-elevated text-muted">
+                      <UIcon
+                        name="i-lucide-workflow"
+                        class="size-4"
+                      />
+                    </span>
+                    <span class="truncate">{{ flowOf(w.refId)!.name }}</span>
+                  </div>
+                  <p
+                    v-if="flowOf(w.refId)!.description"
+                    class="line-clamp-2 text-sm text-muted"
+                  >
+                    {{ flowOf(w.refId)!.description }}
+                  </p>
+                  <UButton
+                    v-if="flowOf(w.refId)!.canTrigger"
+                    icon="i-lucide-play"
+                    label="Run"
+                    color="neutral"
+                    variant="soft"
+                    size="sm"
+                    class="mt-auto self-start"
+                    :loading="running === w.refId"
+                    @click="runFlow(w.refId!)"
+                  />
+                  <UBadge
+                    v-else
+                    color="neutral"
+                    variant="soft"
+                    size="sm"
+                    class="mt-auto self-start"
+                  >
+                    View only
+                  </UBadge>
+                </div>
+
+                <!-- monitor -->
+                <PublicMonitorTile
+                  v-else-if="w.kind === 'monitor' && monitorOf(w.refId)"
+                  :board-slug="board.slug"
+                  :monitor="monitorOf(w.refId)!"
+                  :card-class="bentoCardClass(w.cardStyle)"
+                />
+
+                <!-- note (rich text) -->
+                <div
+                  v-else-if="w.kind === 'note'"
+                  :class="`${bentoCardClass(w.cardStyle)} h-full bg-default p-4`"
+                >
+                  <!-- eslint-disable vue/no-v-html -- author-owned content from the Nuxt UI editor -->
+                  <div
+                    v-if="isRichTextHtml(w.content)"
+                    class="bento-richtext h-full overflow-auto text-sm"
+                    v-html="w.content"
+                  />
+                  <!-- eslint-enable vue/no-v-html -->
+                  <p
+                    v-else
+                    class="h-full overflow-auto whitespace-pre-wrap text-sm text-muted"
+                  >
+                    {{ w.content || 'Empty note' }}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- gentle bento.me-style footer credit -->
-        <footer class="mt-14 flex justify-center">
+        <!-- footer credit (mobile only; desktop shows it in the sidebar) -->
+        <footer class="mt-14 flex justify-center lg:hidden">
           <span class="inline-flex items-center gap-1.5 rounded-full bg-elevated/60 px-3 py-1.5 text-xs font-medium text-dimmed ring-1 ring-default">
             <UIcon
               name="i-lucide-stethoscope"
