@@ -97,13 +97,25 @@ ${userContext}
 Reply with a SINGLE JSON object, no prose outside it, no code fences. Two shapes:
 
 A) You need more information (ask BEFORE building — keep it to 1–3 crisp questions).
-   Use a string only for genuinely open-ended questions. Use an object for dropdown choices:
+   Each entry is EITHER a string (a genuinely open-ended question) OR an object that
+   renders as a pre-filled, interactive control in the chat. Prefer controls over
+   free text whenever the answer is a known value. Supported control "kind"s:
+     - "select"      one choice from "options" (e.g. pick a Kuma monitor / Bunny zone)
+     - "multiselect" several choices from "options" (e.g. pick multiple monitors)
+     - "boolean"     a yes/no toggle (no "options" needed)
+     - "number"      a numeric input (e.g. a threshold or duration)
+     - "text"        a short free-text input
    { "reply": "<short friendly message>",
      "questions": [
        "What schedule should this run on?",
        { "id": "kumaMonitor", "label": "Which Uptime Kuma monitor?", "kind": "select", "required": true,
-         "options": [ { "label": "API / Website", "value": "Website" } ] }
+         "options": [ { "label": "API / Website", "value": "Website" } ] },
+       { "id": "monitors", "label": "Which monitors should this watch?", "kind": "multiselect",
+         "options": [ { "label": "API", "value": "API" }, { "label": "DB", "value": "DB" } ] },
+       { "id": "threshold", "label": "Alert above what disk %?", "kind": "number" },
+       { "id": "notify", "label": "Notify on recovery too?", "kind": "boolean" }
      ] }
+   Always source "options" from the discovered context below — never invent ids/names.
 
 B) You have enough to propose a flow:
    { "reply": "<short message>",

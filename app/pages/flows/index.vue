@@ -1,14 +1,54 @@
 <script setup lang="ts">
-import type { Flow } from '~/types'
+import type { Connection, Flow } from '~/types'
+import type { FlowChatApplyPayload } from '~/composables/useFlowChat'
 import { relTime, scheduleSummary } from '~/composables/format'
 
 const { data: flows, refresh } = await useFetch<Flow[]>('/api/flows', {
   key: 'flows',
   default: () => []
 })
+// the AI launcher needs the integration catalog + saved connections
+const { data: catalog } = useCatalog()
+const { data: connections } = await useFetch<Connection[]>('/api/connections', {
+  key: 'connections',
+  default: () => []
+})
 const toast = useToast()
 const running = ref<string | null>(null)
 const router = useRouter()
+
+// ── AI launcher (Claude-style composer → floating chat) ──────────────────────
+const pendingDraft = usePendingFlowDraft()
+const chatPrompt = ref('')
+const chatOpen = ref(false)
+const seededPrompt = ref('')
+const promptSuggestions = [
+  'Alert me when an Uptime Kuma monitor goes down',
+  'Every morning, check a server and warn me if disk is over 90%',
+  'When a webhook fires, post a message and run a follow-up'
+]
+
+function launchChat(prompt?: string) {
+  if (prompt !== undefined) chatPrompt.value = prompt
+  seededPrompt.value = chatPrompt.value.trim()
+  chatPrompt.value = ''
+  chatOpen.value = true
+}
+// reopening the dock via its own button should start fresh, not replay the
+// last seeded prompt
+watch(chatOpen, (v) => {
+  if (!v) seededPrompt.value = ''
+})
+
+function onChatApply(p: FlowChatApplyPayload) {
+  // hand the AI draft to the builder for review, then save
+  pendingDraft.value = {
+    name: p.name,
+    description: p.description,
+    definition: { trigger: p.trigger, steps: p.steps, notifyOnRun: 'never' }
+  }
+  router.push('/flows/new')
+}
 
 function startExample(id: string) {
   router.push({ path: '/flows/new', query: { example: id } })
@@ -74,6 +114,49 @@ async function confirmDelete() {
       />
     </div>
 
+    <!-- Claude-style AI launcher on top of the list -->
+    <div class="mb-8 rounded-2xl border border-default bg-default p-4 sm:p-5">
+      <div class="mb-3 flex items-start gap-2.5">
+        <span class="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <UIcon
+            name="i-lucide-sparkles"
+            class="size-4"
+          />
+        </span>
+        <div>
+          <p class="text-sm font-semibold text-highlighted">
+            Build a flow with AI
+          </p>
+          <p class="text-sm text-muted">
+            Describe what you want to automate — I’ll pick monitors and conditions with you, then draft it.
+          </p>
+        </div>
+      </div>
+
+      <UChatPrompt
+        v-model="chatPrompt"
+        placeholder="e.g. Alert me when my API monitor goes down for 5 minutes…"
+        @submit="launchChat()"
+      >
+        <UChatPromptSubmit
+          label="Start"
+          icon="i-lucide-arrow-up"
+        />
+      </UChatPrompt>
+
+      <div class="mt-3 flex flex-wrap gap-2">
+        <button
+          v-for="s in promptSuggestions"
+          :key="s"
+          type="button"
+          class="rounded-full border border-default px-3 py-1 text-xs text-muted transition-colors hover:bg-elevated hover:text-highlighted"
+          @click="launchChat(s)"
+        >
+          {{ s }}
+        </button>
+      </div>
+    </div>
+
     <div
       v-if="flows.length === 0"
       class="space-y-6 rounded-2xl border border-dashed border-default p-6 sm:p-8"
@@ -91,7 +174,7 @@ async function confirmDelete() {
               No flows yet
             </p>
             <p class="text-sm text-muted">
-              Start from scratch, or pick one of these examples and make it yours.
+              Start from scratch, describe one to the assistant above, or pick an example and make it yours.
             </p>
           </div>
         </div>
@@ -178,6 +261,16 @@ async function confirmDelete() {
         </div>
       </UCard>
     </div>
+
+    <!-- floating AI chat, opened by the launcher above -->
+    <FlowChatDock
+      v-model:open="chatOpen"
+      :catalog="catalog"
+      :connections="connections"
+      :initial-prompt="seededPrompt"
+      button-label="Build with AI"
+      @apply="onChatApply"
+    />
 
     <UModal
       :open="!!deleteTarget"
