@@ -17,6 +17,16 @@
 }
 
 /*
+ * Installed mobile PWAs can render beneath the status bar / notch. Add a bit
+ * of breathing room to the app header only in standalone mode.
+ */
+@media (max-width: 767px) and (display-mode: standalone) {
+  .app-header {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 0.5rem);
+  }
+}
+
+/*
  * iOS Safari zooms the viewport whenever a focused form control renders below
  * 16px. Nuxt UI inputs default to text-sm (14px) — and the sm/xs variants go
  * smaller still — so any field would trigger that zoom-and-pan on focus. Force

@@ -18,6 +18,7 @@ export default defineEventHandler(async (event) => {
     integrationId: m.integrationId,
     name: m.name,
     targetConfig: redactTargetConfig(m.targetConfig, targetSchemaFor(getIntegration(m.integrationId))),
+    publicVisible: m.publicVisible,
     createdAt: m.createdAt
   }))
 })

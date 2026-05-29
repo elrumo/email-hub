@@ -37,11 +37,11 @@ const alignItems = [
 ] satisfies Array<{ label: string, value: Align, icon: string }>
 
 const paddingItems = [
-  { side: 'top', label: 'Top', icon: 'i-lucide-arrow-up' },
-  { side: 'right', label: 'Right', icon: 'i-lucide-arrow-right' },
-  { side: 'bottom', label: 'Bottom', icon: 'i-lucide-arrow-down' },
-  { side: 'left', label: 'Left', icon: 'i-lucide-arrow-left' }
-] satisfies Array<{ side: PaddingSide, label: string, icon: string }>
+  { side: 'top', label: 'Top' },
+  { side: 'right', label: 'Right' },
+  { side: 'bottom', label: 'Bottom' },
+  { side: 'left', label: 'Left' }
+] satisfies Array<{ side: PaddingSide, label: string }>
 
 function patch(field: string, value: unknown) {
   if (!props.selectedId) return
@@ -376,7 +376,6 @@ function onImageUploaded(asset: UploadedAsset) {
                         <UInputNumber
                           :model-value="getPaddingSides(selected.padding)[item.side]"
                           class="w-full"
-                          :icon="item.icon"
                           @update:model-value="patchPaddingSide(item.side, $event)"
                         />
                       </UFormField>

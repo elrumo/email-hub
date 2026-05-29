@@ -1,9 +1,7 @@
 import { and, eq } from 'drizzle-orm'
 import { getDb } from '../../../db'
 import { monitors } from '../../../db/schema'
-import { acquireClient } from '../../../engine/clientPool'
-import { resolveConnection } from '../../../engine/connections'
-import { getAction, getIntegration } from '../../../engine/registry'
+import { snapshotMonitor } from '../_snapshot'
 import { registerAllIntegrations } from '../../../integrations'
 import { requireUser } from '../../../utils/auth'
 
@@ -23,25 +21,6 @@ export default defineEventHandler(async (event) => {
   const m = (await db.select().from(monitors).where(and(eq(monitors.id, id), eq(monitors.ownerId, user.id))))[0]
   if (!m) throw createError({ statusCode: 404, statusMessage: 'monitor not found' })
 
-  const integration = getIntegration(m.integrationId)
-  if (!integration?.monitoring) {
-    return { ok: false, error: `${m.integrationId} no longer supports monitoring` }
-  }
-  const action = getAction(m.integrationId, integration.monitoring.snapshotAction)
-  if (!action) {
-    return { ok: false, error: 'monitoring action unavailable' }
-  }
-
-  const connection = await resolveConnection(db, m.connectionId, user.id)
   const signal = (event.node.req as unknown as { signal?: AbortSignal }).signal ?? new AbortController().signal
-  try {
-    const client = connection ? await acquireClient(connection, signal) : null
-    // thread the monitor id in for integrations (e.g. ping) whose snapshot reads
-    // its own time-series; others simply ignore the extra key.
-    const input = { ...m.targetConfig, _monitorId: m.id }
-    const snapshot = await action.run({ connection, input, log: () => {}, signal, client })
-    return { ok: true, ...snapshot }
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) }
-  }
+  return snapshotMonitor(db, m, user.id, signal)
 })

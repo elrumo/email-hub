@@ -5,9 +5,9 @@ import { boards, flows, monitors, shortcuts, widgets } from '../../../db/schema'
 /**
  * Public, unauthenticated read of a board by slug. Returns the board plus its
  * widgets and only the DISPLAY fields of the referenced entities — never
- * connection ids/configs, webhook secrets, or live monitor data. Each flow
- * carries a `canTrigger` flag computed from the board's `publicTrigger`
- * (overrides) OR the flow's own `publicTrigger`.
+ * connection ids/configs or webhook secrets. Monitor tiles carry a
+ * `publicVisible` flag; live monitor data is fetched separately and only for
+ * monitors that opt into public display.
  *
  * 404 unless the board exists and `isPublic` is true.
  */
@@ -77,7 +77,8 @@ export default defineEventHandler(async (event) => {
     monitors: monitorRows.map(m => ({
       id: m.id,
       name: m.name,
-      integrationId: m.integrationId
+      integrationId: m.integrationId,
+      publicVisible: m.publicVisible
     }))
   }
 })

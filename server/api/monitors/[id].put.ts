@@ -7,8 +7,9 @@ import { registerAllIntegrations } from '../../integrations'
 import { requireUser } from '../../utils/auth'
 
 /**
- * Update a monitor. Body: { name?, targetConfig? }. Redacted/blank secrets in
- * targetConfig are merged from the saved config so the user needn't retype them.
+ * Update a monitor. Body: { name?, targetConfig?, publicVisible? }. Redacted/
+ * blank secrets in targetConfig are merged from the saved config so the user
+ * needn't retype them.
  */
 export default defineEventHandler(async (event) => {
   registerAllIntegrations()
@@ -24,6 +25,7 @@ export default defineEventHandler(async (event) => {
 
   const update: Record<string, unknown> = { updatedAt: Date.now() }
   if (body?.name !== undefined) update.name = String(body.name).trim()
+  if (body?.publicVisible !== undefined) update.publicVisible = !!body.publicVisible
 
   if (body?.targetConfig !== undefined) {
     const integration = getIntegration(existing.integrationId)

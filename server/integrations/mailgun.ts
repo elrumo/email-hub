@@ -1,3 +1,9 @@
+import { eq } from 'drizzle-orm'
+import type { EmailDocument } from '#shared/email/blocks'
+import { applyTemplateVariables } from '#shared/email/placeholders'
+import { renderEmailHtml } from '#shared/email/render'
+import { getDb } from '../db'
+import { emailProjects } from '../db/schema'
 import type { Integration } from '../engine/types'
 
 /**
@@ -11,6 +17,60 @@ function baseUrl(config: Record<string, unknown>): string {
 }
 function authHeader(apiKey: string): string {
   return 'Basic ' + Buffer.from(`api:${apiKey}`).toString('base64')
+}
+
+function normalizeVariables(input: unknown): Record<string, string> {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {}
+  const out: Record<string, string> = {}
+  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    if (!key.trim()) continue
+    out[key] = value == null ? '' : String(value)
+  }
+  return out
+}
+
+function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|tr|table|h[1-6]|li)>/gi, '\n')
+    .replace(/<li>/gi, '- ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, '\'')
+    .replace(/\r/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim()
+}
+
+async function buildTemplatedEmail(input: Record<string, unknown>): Promise<{
+  subject: string
+  html: string
+  text: string
+  templateName: string
+}> {
+  const templateId = String(input.templateId ?? '').trim()
+  if (!templateId) throw new Error('Choose an email template')
+
+  const db = getDb()
+  const rows = await db.select().from(emailProjects).where(eq(emailProjects.id, templateId))
+  const project = rows[0]
+  if (!project) throw new Error('Selected email template was not found')
+
+  const templateDoc = project.document as unknown as EmailDocument
+  const hydratedDoc = applyTemplateVariables(templateDoc, normalizeVariables(input.templateVariables))
+  const subject = String(input.subject ?? '').trim() || hydratedDoc.settings.title || project.name
+  if (!subject.trim()) throw new Error('Template emails need a subject')
+
+  const html = renderEmailHtml(hydratedDoc)
+  const text = htmlToPlainText(html)
+  return { subject, html, text, templateName: project.name }
 }
 
 export const mailgunIntegration: Integration = {
@@ -53,8 +113,41 @@ export const mailgunIntegration: Integration = {
       needsConnection: true,
       inputSchema: [
         { key: 'to', label: 'To', type: 'string', required: true, placeholder: 'you@example.com', help: 'Comma-separate multiple recipients.' },
-        { key: 'subject', label: 'Subject', type: 'string', required: true },
-        { key: 'text', label: 'Body (plain text)', type: 'string', required: true },
+        {
+          key: 'contentMode',
+          label: 'Content',
+          type: 'select',
+          default: 'plain',
+          options: [
+            { label: 'Plain text', value: 'plain' },
+            { label: 'Email template', value: 'template' }
+          ]
+        },
+        { key: 'subject', label: 'Subject', type: 'string', help: 'Leave blank in template mode to use the template subject.' },
+        {
+          key: 'text',
+          label: 'Body (plain text)',
+          type: 'string',
+          required: true,
+          help: 'Supports flow refs like {{ trigger.host }}.',
+          showIf: { field: 'contentMode', in: ['plain'] }
+        },
+        {
+          key: 'templateId',
+          label: 'Email template',
+          type: 'select',
+          options: [],
+          required: true,
+          help: 'Pick one of your saved email projects.',
+          showIf: { field: 'contentMode', in: ['template'] }
+        },
+        {
+          key: 'templateVariables',
+          label: 'Template variables',
+          type: 'keyValue',
+          help: 'Map template placeholders like {{ firstName }} to the text or flow refs you want to inject.',
+          showIf: { field: 'contentMode', in: ['template'] }
+        },
         { key: 'from', label: 'From (optional)', type: 'string', help: 'Overrides the connection default.' }
       ],
       outputKeys: ['sent', 'id'],
@@ -62,11 +155,25 @@ export const mailgunIntegration: Integration = {
         const cfg = ctx.connection!.config
         const apiKey = String(cfg.apiKey ?? '')
         const domain = String(cfg.domain ?? '')
+        const mode = String(ctx.input.contentMode ?? 'plain')
+        const usingTemplate = mode === 'template'
+        const templated = usingTemplate ? await buildTemplatedEmail(ctx.input) : null
+        const subject = usingTemplate
+          ? templated!.subject
+          : String(ctx.input.subject ?? '').trim()
+        const text = usingTemplate
+          ? templated!.text
+          : String(ctx.input.text ?? '')
+
+        if (!subject) throw new Error('Subject is required')
+        if (!text.trim()) throw new Error(usingTemplate ? 'Rendered template body was empty' : 'Body is required')
+
         const form = new URLSearchParams()
         form.set('from', String(ctx.input.from ?? cfg.fromEmail ?? ''))
         form.set('to', String(ctx.input.to ?? ''))
-        form.set('subject', String(ctx.input.subject ?? ''))
-        form.set('text', String(ctx.input.text ?? ''))
+        form.set('subject', subject)
+        form.set('text', text)
+        if (usingTemplate) form.set('html', templated!.html)
         const res = await fetch(`${baseUrl(cfg)}/v3/${encodeURIComponent(domain)}/messages`, {
           method: 'POST',
           headers: { 'Authorization': authHeader(apiKey), 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -75,7 +182,9 @@ export const mailgunIntegration: Integration = {
         })
         const data = await res.json().catch(() => null) as { id?: string, message?: string } | null
         if (!res.ok) throw new Error(data?.message || `Mailgun send → ${res.status}`)
-        ctx.log(`mailgun → ${ctx.input.to} (${data?.id ?? 'queued'})`)
+        ctx.log(usingTemplate
+          ? `mailgun → ${ctx.input.to} using template "${templated!.templateName}" (${data?.id ?? 'queued'})`
+          : `mailgun → ${ctx.input.to} (${data?.id ?? 'queued'})`)
         return { sent: true, id: data?.id ?? null }
       }
     }

@@ -120,7 +120,8 @@ export const connections = sqliteTable(
  * `integrationId` is denormalized from the connection so listing doesn't need a
  * join. `targetConfig` is integration-specific (validated against the
  * integration's monitoring.targetSchema): for Dokploy it holds the metrics
- * URL/token + serverId; for Kuma it holds the monitor name.
+ * URL/token + serverId; for Kuma it holds the monitor name. `publicVisible`
+ * controls whether the monitor's live snapshot may appear on a public board.
  */
 export const monitors = sqliteTable(
   'monitors',
@@ -135,6 +136,8 @@ export const monitors = sqliteTable(
     name: text('name').notNull(),
     /** JSON blob of the integration's monitoring target fields */
     targetConfig: text('target_config', { mode: 'json' }).notNull().$type<Record<string, unknown>>(),
+    /** allow this monitor's live snapshot to appear on public boards */
+    publicVisible: integer('public_visible', { mode: 'boolean' }).notNull().default(false),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull()
   },

@@ -153,10 +153,13 @@ function optionByValue(v: unknown): SelectItem | undefined {
     />
 
     <template
-      v-if="allowRefs && (field.type === 'string' || field.type === 'number')"
+      v-if="allowRefs && (field.type === 'string' || field.type === 'number' || field.type === 'keyValue')"
       #hint
     >
-      <span class="text-xs text-dimmed">supports <code class="text-muted">{{ refHint }}</code></span>
+      <span class="text-xs text-dimmed">
+        {{ field.type === 'keyValue' ? 'values support' : 'supports' }}
+        <code class="text-muted">{{ refHint }}</code>
+      </span>
     </template>
   </UFormField>
 </template>

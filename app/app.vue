@@ -84,7 +84,7 @@ useSeoMeta({
       <UHeader
         :toggle="{ class: 'sm:hidden' }"
         :ui="{
-          root: 'border-none backdrop-blur',
+          root: 'app-header border-none backdrop-blur',
           center: 'gap-2',
           container: 'max-w-[2000px]!'
         }"
@@ -147,9 +147,9 @@ useSeoMeta({
           </UDropdownMenu>
         </template>
 
-        <!-- Mobile menu — rendered in UHeader's built-in slide-over, toggled by
-           the hamburger that appears automatically below the sm breakpoint. -->
-        <template #content>
+        <!-- Mobile menu body — keep UHeader's built-in mobile header chrome so
+           the title/actions still render when the menu opens. -->
+        <template #body>
           <nav class="flex flex-col gap-1">
             <UButton
               v-for="item in nav"

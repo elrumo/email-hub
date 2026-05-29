@@ -45,11 +45,19 @@ interface Row { k: string, v: string }
 const kvRows = reactive<Record<string, Row[]>>({})
 
 function rowsFor(key: string): Row[] {
+  const obj = (props.modelValue[key] as Record<string, string> | undefined) ?? {}
   if (!kvRows[key]) {
-    const obj = (props.modelValue[key] as Record<string, string> | undefined) ?? {}
     kvRows[key] = Object.entries(obj).map(([k, v]) => ({ k, v: String(v) }))
+    return kvRows[key]!
   }
-  return kvRows[key]!
+
+  const rows = kvRows[key]!
+  for (const [entryKey, entryValue] of Object.entries(obj)) {
+    const existing = rows.find(row => row.k === entryKey)
+    if (existing) existing.v = String(entryValue)
+    else rows.push({ k: entryKey, v: String(entryValue) })
+  }
+  return rows
 }
 function commitRows(key: string) {
   const obj: Record<string, string> = {}

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { EmailDocument } from '#shared/email/blocks'
+import { extractTemplateVariables } from '#shared/email/placeholders'
 import type { ActionStep, Connection, FlowStep, ForEachStep, IntegrationMeta, StateStep, ConditionStep } from '~/types'
 import { STATE_OPS, stepTitle } from '~/composables/builder'
 
@@ -52,13 +54,102 @@ const connectionItems = computed(() =>
     .filter(c => c.integrationId === asAction.value.integrationId)
     .map(c => ({ label: c.name, value: c.id }))
 )
+interface EmailProjectSummary {
+  id: string
+  name: string
+  subject: string
+}
+interface EmailProjectDetail {
+  id: string
+  name: string
+  document: EmailDocument
+}
+const { data: emailProjects } = useFetch<EmailProjectSummary[]>('/api/email-projects', {
+  key: 'email-project-options',
+  default: () => []
+})
+const isMailgunSend = computed(() =>
+  asAction.value.integrationId === 'mailgun' && asAction.value.actionId === 'sendEmail'
+)
+const mailgunSchema = computed(() => {
+  if (!currentAction.value) return []
+  if (!isMailgunSend.value) return currentAction.value.inputSchema
+  return currentAction.value.inputSchema.map((field) => {
+    if (field.key !== 'templateId') return field
+    return {
+      ...field,
+      options: emailProjects.value.map(project => ({
+        label: project.subject ? `${project.name} · ${project.subject}` : project.name,
+        value: project.id
+      }))
+    }
+  })
+})
 const kumaActionSchema = useKumaMonitorSchema({
   enabled: computed(() => asAction.value.integrationId === 'kuma'),
   connectionId: computed(() => asAction.value.connectionId),
-  schema: computed(() => currentAction.value?.inputSchema ?? []),
+  schema: computed(() => mailgunSchema.value),
   values: computed(() => asAction.value.input)
 })
 const renderedActionSchema = computed(() => kumaActionSchema.schema.value)
+const selectedTemplateId = computed(() => {
+  if (!isMailgunSend.value || asAction.value.input.contentMode !== 'template') return ''
+  return String(asAction.value.input.templateId ?? '').trim()
+})
+const selectedTemplate = ref<EmailProjectDetail | null>(null)
+const loadingTemplate = ref(false)
+const templateLoadError = ref('')
+const templateVariableKeys = computed(() =>
+  selectedTemplate.value ? extractTemplateVariables(selectedTemplate.value.document) : []
+)
+const configuredTemplateVariables = computed(() => {
+  const raw = asAction.value.input.templateVariables
+  return raw && typeof raw === 'object' && !Array.isArray(raw)
+    ? raw as Record<string, unknown>
+    : {}
+})
+const missingTemplateVariables = computed(() =>
+  templateVariableKeys.value.filter((key) => {
+    const value = configuredTemplateVariables.value[key]
+    return value == null || String(value).trim() === ''
+  })
+)
+
+watch(selectedTemplateId, async (templateId) => {
+  selectedTemplate.value = null
+  templateLoadError.value = ''
+  if (!templateId) return
+
+  loadingTemplate.value = true
+  try {
+    selectedTemplate.value = await $fetch<EmailProjectDetail>(`/api/email-projects/${templateId}`)
+  } catch {
+    templateLoadError.value = 'Could not load template details.'
+  } finally {
+    loadingTemplate.value = false
+  }
+}, { immediate: true })
+
+watch([templateVariableKeys, configuredTemplateVariables], ([keys, currentVars]) => {
+  if (!isMailgunSend.value || asAction.value.input.contentMode !== 'template' || !keys.length) return
+
+  let changed = false
+  const next: Record<string, unknown> = { ...currentVars }
+  for (const key of keys) {
+    if (!Object.hasOwn(next, key)) {
+      next[key] = ''
+      changed = true
+    }
+  }
+  if (!changed) return
+
+  patch({
+    input: {
+      ...asAction.value.input,
+      templateVariables: next
+    }
+  } as Partial<ActionStep>)
+}, { immediate: true })
 
 function setIntegration(id: string) {
   patch({ integrationId: id, actionId: '', connectionId: null, input: {} } as Partial<ActionStep>)
@@ -198,6 +289,39 @@ const showGate = computed(() => showAmount.value)
             :schema="renderedActionSchema"
             allow-refs
             @update:model-value="setInput($event)"
+          />
+          <UAlert
+            v-if="isMailgunSend && asAction.input.contentMode === 'template' && !emailProjects.length"
+            color="warning"
+            variant="soft"
+            icon="i-lucide-mail-warning"
+            title="No email templates yet"
+            description="Create an email project on the Email designer page first, then come back and attach it here."
+          />
+          <UAlert
+            v-else-if="isMailgunSend && asAction.input.contentMode === 'template' && loadingTemplate"
+            color="neutral"
+            variant="soft"
+            icon="i-lucide-loader-circle"
+            title="Loading template"
+            description="Checking this email project for variables."
+          />
+          <UAlert
+            v-else-if="isMailgunSend && asAction.input.contentMode === 'template' && templateLoadError"
+            color="error"
+            variant="soft"
+            icon="i-lucide-triangle-alert"
+            :description="templateLoadError"
+          />
+          <UAlert
+            v-else-if="isMailgunSend && asAction.input.contentMode === 'template' && selectedTemplate"
+            :color="missingTemplateVariables.length ? 'warning' : 'success'"
+            variant="soft"
+            :icon="missingTemplateVariables.length ? 'i-lucide-braces' : 'i-lucide-check-check'"
+            :title="missingTemplateVariables.length ? 'Template variables need values' : 'Template variables are ready'"
+            :description="templateVariableKeys.length
+              ? `${templateVariableKeys.join(', ')}${missingTemplateVariables.length ? ` · missing: ${missingTemplateVariables.join(', ')}` : ''}`
+              : 'This template does not declare any placeholders.'"
           />
         </template>
       </template>

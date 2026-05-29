@@ -26,7 +26,11 @@ const NUMERIC_BLOCK_FIELDS = new Set(['level', 'fontSize', 'radius', 'width', 't
 const NUMERIC_SETTINGS_FIELDS = new Set(['contentWidth'])
 
 function clone(doc: EmailDocument): EmailDocument {
-  return structuredClone(doc)
+  try {
+    return structuredClone(doc)
+  } catch {
+    return JSON.parse(JSON.stringify(doc)) as EmailDocument
+  }
 }
 
 let _counter = 0
@@ -72,7 +76,7 @@ function removeBlockById(blocks: EmailBlock[], id: string): boolean {
 
 /** Replace the entire document (settings + blocks). Assigns ids to any block missing one. */
 export function setDocument(_doc: EmailDocument, next: EmailDocument): OpResult {
-  const doc = structuredClone(next)
+  const doc = clone(next)
   walkBlocks(doc.blocks, (b) => {
     if (!b.id) (b as { id: string }).id = newBlockId()
   })
@@ -85,7 +89,8 @@ export function updateSettings(doc: EmailDocument, patch: Partial<EmailDocument[
   const normalized = { ...patch } as Record<string, unknown>
   for (const field of NUMERIC_SETTINGS_FIELDS) {
     if (field in normalized) {
-      normalized[field] = coerceNumberLike(normalized[field], next.settings[field as keyof EmailDocument['settings']] as number)
+      const current = next.settings[field as keyof EmailDocument['settings']]
+      normalized[field] = coerceNumberLike(normalized[field], typeof current === 'number' ? current : 0)
     }
   }
   next.settings = { ...next.settings, ...normalized }
@@ -101,7 +106,8 @@ export function updateBlock(doc: EmailDocument, id: string, patch: Record<string
   if ('padding' in safe) safe.padding = normalizePadding(safe.padding)
   for (const field of NUMERIC_BLOCK_FIELDS) {
     if (field in safe) {
-      safe[field] = coerceNumberLike(safe[field], (target as Record<string, unknown>)[field] as number ?? 0)
+      const current = (target as unknown as Record<string, unknown>)[field]
+      safe[field] = coerceNumberLike(safe[field], typeof current === 'number' ? current : 0)
     }
   }
   Object.assign(target, safe)

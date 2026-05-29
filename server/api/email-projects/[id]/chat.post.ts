@@ -61,7 +61,7 @@ function systemPrompt(doc: EmailDocument, selectedId?: string): string {
     '- spacer: { height }',
     '- columns: { columns: block[][], gap? }',
     '- html: raw email-safe HTML escape hatch — use ONLY when a structured block cannot express it; always table-based with inline styles.',
-    'All blocks also support: { padding?, background? }.',
+    'All blocks also support: { padding?, background? }. `padding` can be a single number or { top, right, bottom, left } in px.',
     '',
     'Guidance:',
     '- When the user asks for a whole new email or a big redesign, prefer set_document with the full block list.',

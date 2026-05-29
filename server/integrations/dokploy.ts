@@ -1,4 +1,4 @@
-import type { ActionContext, ActionDef, Integration, MonitorSnapshot } from '../engine/types'
+import type { ActionContext, ActionDef, Integration, MonitorSnapshot, TriggerContext, TriggerDef } from '../engine/types'
 import { loadDokploySpec, type SpecOperation } from './dokploy-spec'
 
 /**
@@ -222,6 +222,144 @@ const getServerMetrics: ActionDef = {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Sustained-threshold trigger. Watches ONE machine stat (CPU / memory / disk %)
+// from the monitoring agent and fires when it stays past a threshold for the
+// whole window (e.g. CPU > 80% over 10 minutes). Like every poll trigger it
+// fires on EVERY check while the window is breached — add a `state` cooldown
+// gate in the flow if you want it to act once per incident. Combine stats
+// ("CPU high AND RAM high") with one trigger per stat plus the flow's condition
+// steps, or two flows.
+// ---------------------------------------------------------------------------
+
+const STAT_FIELDS = {
+  cpu: { label: 'CPU', sample: (s: AgentSample) => s.cpu },
+  memUsedPercentage: { label: 'Memory', sample: (s: AgentSample) => s.memUsed },
+  diskUsedPercentage: { label: 'Disk', sample: (s: AgentSample) => s.diskUsed }
+} as const
+
+const parseNum = (v: string | number | undefined): number | null => {
+  const n = typeof v === 'string' ? parseFloat(v) : v
+  return typeof n === 'number' && Number.isFinite(n) ? n : null
+}
+
+// Agent timestamps are ISO strings; fall back to null when absent/unparseable.
+const parseTs = (v: string | undefined): number | null => {
+  if (!v) return null
+  const t = Date.parse(v)
+  return Number.isFinite(t) ? t : null
+}
+
+const statThreshold: TriggerDef = {
+  id: 'statThreshold',
+  name: 'When a machine stat stays past a threshold',
+  description:
+    'Reads CPU / memory / disk usage from the Dokploy monitoring agent and fires when the stat stays on the wrong side of the threshold for the whole window (e.g. CPU above 80% over 10 minutes). Fires on EVERY check while the window stays breached — add a state cooldown gate in the flow to act once per incident. Exposed as {{ trigger.stat }} / {{ trigger.value }} / {{ trigger.threshold }} / {{ trigger.windowMinutes }} / {{ trigger.samples }}.',
+  kind: 'poll',
+  needsConnection: true,
+  configSchema: [
+    { key: 'metricsUrl', label: 'Monitoring URL', type: 'string', required: true, help: 'The agent metrics endpoint, e.g. http://<server-ip>:4500/metrics' },
+    { key: 'metricsToken', label: 'Monitoring token', type: 'secret', required: true },
+    {
+      key: 'stat', label: 'Stat to watch', type: 'select', required: true, default: 'cpu',
+      options: [
+        { label: 'CPU usage %', value: 'cpu' },
+        { label: 'Memory usage %', value: 'memUsedPercentage' },
+        { label: 'Disk usage %', value: 'diskUsedPercentage' }
+      ]
+    },
+    {
+      key: 'comparison', label: 'Fires when the stat is…', type: 'select', default: 'above',
+      options: [
+        { label: 'above the threshold', value: 'above' },
+        { label: 'below the threshold', value: 'below' }
+      ]
+    },
+    { key: 'threshold', label: 'Threshold (%)', type: 'number', required: true, placeholder: '80' },
+    { key: 'windowMinutes', label: 'Sustained for (minutes)', type: 'number', required: true, default: 10, help: 'Every sample within this window must breach the threshold for the trigger to fire.' }
+  ],
+  poll: async (ctx: TriggerContext) => {
+    const metricsUrl = String(ctx.config.metricsUrl ?? '').trim()
+    const metricsToken = String(ctx.config.metricsToken ?? '').trim()
+    const statKey = String(ctx.config.stat ?? 'cpu') as keyof typeof STAT_FIELDS
+    const stat = STAT_FIELDS[statKey] ?? STAT_FIELDS.cpu
+    const comparison = String(ctx.config.comparison ?? 'above')
+    const threshold = parseNum(ctx.config.threshold as number)
+    const windowMinutes = parseNum(ctx.config.windowMinutes as number) ?? 10
+
+    if (!metricsUrl || !metricsToken) {
+      throw new Error('Monitoring URL and token are required — enable monitoring for this server in Dokploy and deploy the agent.')
+    }
+    if (threshold == null) throw new Error('A numeric threshold is required.')
+
+    // The scheduler ticks every ~30s, so a few-minute window holds multiple
+    // samples; ask for enough to cover the window with headroom.
+    const url = new URL(metricsUrl)
+    if (!url.searchParams.has('limit')) url.searchParams.set('limit', '500')
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${metricsToken}`, Accept: 'application/json' },
+      signal: ctx.signal
+    })
+    if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      const hint = res.status === 401 ? ' — token mismatch, or the monitoring agent container is not running' : ''
+      throw new Error(`Monitoring agent ${res.status}${hint}${body ? `: ${body.slice(0, 200)}` : ''}`)
+    }
+    const raw = (await res.json()) as AgentSample[]
+    if (!Array.isArray(raw) || raw.length === 0) return null
+
+    // Keep only samples inside the window. The agent stamps each sample; if
+    // timestamps are missing we fall back to the most recent N samples that
+    // would fit a 30s cadence, so the window is still bounded.
+    const latestTs = parseTs(raw[raw.length - 1]?.timestamp)
+    const windowMs = windowMinutes * 60_000
+    let windowed: AgentSample[]
+    if (latestTs != null) {
+      const cutoff = latestTs - windowMs
+      windowed = raw.filter((s) => {
+        const t = parseTs(s.timestamp)
+        return t != null && t >= cutoff
+      })
+    } else {
+      const approxCount = Math.max(1, Math.ceil(windowMs / 30_000))
+      windowed = raw.slice(-approxCount)
+    }
+    if (windowed.length === 0) return null
+
+    // Require enough span actually covered: if timestamps exist, the oldest
+    // windowed sample must reach back to roughly the start of the window —
+    // otherwise the agent hasn't been collecting long enough to confirm
+    // "sustained" and we must NOT fire on a partial window.
+    if (latestTs != null) {
+      const oldestTs = parseTs(windowed[0]?.timestamp)
+      // allow one tick (~30s) of slack so a freshly-aligned window still fires
+      if (oldestTs == null || oldestTs > latestTs - windowMs + 30_000) return null
+    }
+
+    const values = windowed
+      .map(s => parseNum(stat.sample(s)))
+      .filter((n): n is number => n != null)
+    if (values.length === 0) return null
+
+    const breaches = (v: number) => (comparison === 'below' ? v < threshold : v > threshold)
+    // Sustained = EVERY sample in the window breaches.
+    if (!values.every(breaches)) return null
+
+    const current = values[values.length - 1]
+    return {
+      stat: statKey,
+      label: stat.label,
+      comparison,
+      threshold,
+      windowMinutes,
+      value: current,
+      min: Math.min(...values),
+      max: Math.max(...values),
+      samples: values.length
+    }
+  }
+}
+
 const handCraftedActions: ActionDef[] = [
   getServerMetrics,
   {
@@ -354,7 +492,7 @@ export const dokployIntegration: Integration = {
       return { ok: false, message: e instanceof Error ? e.message : 'Could not reach Dokploy' }
     }
   },
-  triggers: [],
+  triggers: [statThreshold],
   // Hand-crafted actions (nicer output parsing) first, then one auto-generated
   // action per remaining Dokploy endpoint from the OpenAPI spec.
   actions: [...handCraftedActions, ...generatedActions(HAND_CRAFTED_PROCEDURES)],

@@ -8,7 +8,7 @@ import { registerAllIntegrations } from '../../integrations'
 import { logActivity, requireUser } from '../../utils/auth'
 
 /**
- * Create a monitor. Body: { connectionId, name, targetConfig }.
+ * Create a monitor. Body: { connectionId, name, targetConfig, publicVisible? }.
  * The connection's integration must declare a `monitoring` capability; the
  * targetConfig is validated against that integration's monitoring.targetSchema.
  */
@@ -18,6 +18,7 @@ export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   const connectionId = String(body?.connectionId ?? '')
   const name = String(body?.name ?? '').trim()
+  const publicVisible = !!body?.publicVisible
   if (!name) throw createError({ statusCode: 400, statusMessage: 'name is required' })
 
   const db = getDb()
@@ -44,6 +45,7 @@ export default defineEventHandler(async (event) => {
     integrationId: conn.integrationId,
     name,
     targetConfig: validated.value,
+    publicVisible,
     createdAt: now,
     updatedAt: now
   })

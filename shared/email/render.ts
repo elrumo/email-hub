@@ -87,7 +87,8 @@ function renderButton(b: ButtonBlock): string {
 }
 
 function renderImage(b: ImageBlock, contentWidth: number): string {
-  const w = b.width && b.width > 0 ? Math.min(b.width, contentWidth) : contentWidth - paddingHorizontal(b.padding)
+  const availableWidth = Math.max(contentWidth - paddingHorizontal(b.padding), 0)
+  const w = b.width && b.width > 0 ? Math.min(b.width, contentWidth) : availableWidth
   const img = `<img src="${esc(b.src)}" alt="${esc(b.alt)}" width="${w}" style="display:block;width:${w}px;max-width:100%;height:auto;border:0;outline:none;text-decoration:none;border-radius:4px;" />`
   const inner = b.href && /^(https?:|mailto:)/i.test(b.href)
     ? `<a href="${esc(b.href)}" target="_blank" rel="noopener noreferrer">${img}</a>`
@@ -116,7 +117,7 @@ function renderHtml(b: HtmlBlock): string {
 function renderColumns(b: ColumnsBlock, contentWidth: number): string {
   const cols = b.columns.length || 1
   const gap = typeof b.gap === 'number' ? b.gap : 16
-  const inner = contentWidth - paddingHorizontal(b.padding)
+  const inner = Math.max(contentWidth - paddingHorizontal(b.padding), 0)
   const colWidth = Math.floor((inner - gap * (cols - 1)) / cols)
   const cells = b.columns.map((col, i) => {
     const ml = i > 0 ? `padding-left:${gap}px;` : ''
