@@ -65,12 +65,15 @@ const draft = reactive<{ kind: WidgetKind, refId: string, content: string, cardS
 })
 
 // "Text" maps to the self-contained "note" kind, now authored as rich text.
+// "Image" and "Embed" are self-contained too — their `content` is a URL.
 const KIND_OPTIONS = [
   { label: 'Shortcut', value: 'shortcut', icon: 'i-lucide-link' },
   { label: 'Flow', value: 'flow', icon: 'i-lucide-workflow' },
   { label: 'Monitor', value: 'monitor', icon: 'i-lucide-activity' },
   { label: 'Text', value: 'note', icon: 'i-lucide-type' },
-  { label: 'Section', value: 'section', icon: 'i-lucide-heading' }
+  { label: 'Section', value: 'section', icon: 'i-lucide-heading' },
+  { label: 'Image', value: 'image', icon: 'i-lucide-image' },
+  { label: 'Embed', value: 'iframe', icon: 'i-lucide-app-window' }
 ] as const
 
 const CARD_STYLE_OPTIONS = [
@@ -101,7 +104,7 @@ const refEmptyHint = computed(() => {
 // sensible default span per kind when the type changes (add mode only)
 function defaultSpan(kind: WidgetKind): { w: number, h: number } {
   if (kind === 'section') return { w: 4, h: 1 }
-  if (kind === 'note') return { w: 2, h: 2 }
+  if (kind === 'note' || kind === 'image' || kind === 'iframe') return { w: 2, h: 2 }
   if (kind === 'monitor') return { w: 1, h: 2 }
   return { w: 1, h: 1 }
 }
@@ -138,6 +141,10 @@ async function saveWidget() {
   }
   if (draft.kind === 'section' && !draft.content.trim()) {
     toast.add({ title: 'Give the section a title', color: 'warning' })
+    return
+  }
+  if ((draft.kind === 'image' || draft.kind === 'iframe') && !draft.content.trim()) {
+    toast.add({ title: 'Paste a URL first', color: 'warning' })
     return
   }
   adding.value = true
@@ -766,6 +773,49 @@ function spanFor(w: Widget) {
             <UInput
               v-model="draft.content"
               placeholder="e.g. Services, Links, Notes"
+              class="w-full"
+            />
+          </UFormField>
+
+          <!-- image URL (with a live preview) -->
+          <UFormField
+            v-else-if="draft.kind === 'image'"
+            label="Image URL"
+            description="A direct link to an image (https://… or a data:image/ URI)."
+            required
+          >
+            <UInput
+              v-model="draft.content"
+              type="url"
+              placeholder="https://example.com/photo.jpg"
+              icon="i-lucide-image"
+              class="w-full"
+            />
+            <div
+              v-if="draft.content.trim()"
+              class="mt-2 overflow-hidden rounded-lg ring ring-default"
+            >
+              <img
+                :src="draft.content"
+                alt=""
+                class="max-h-48 w-full object-cover"
+                referrerpolicy="no-referrer"
+              >
+            </div>
+          </UFormField>
+
+          <!-- iframe / embed URL -->
+          <UFormField
+            v-else-if="draft.kind === 'iframe'"
+            label="Embed URL"
+            description="A page to embed in the tile (e.g. a dashboard, map or video). Some sites block embedding."
+            required
+          >
+            <UInput
+              v-model="draft.content"
+              type="url"
+              placeholder="https://example.com/embed"
+              icon="i-lucide-app-window"
               class="w-full"
             />
           </UFormField>

@@ -273,5 +273,54 @@ const host = computed(() => {
         {{ widget.content || 'Empty note' }}
       </p>
     </UCard>
+
+    <!-- image (content is the image URL; fills the tile, edge to edge) -->
+    <div
+      v-else-if="widget.kind === 'image'"
+      :class="`${cardClass} h-full overflow-hidden bg-elevated`"
+    >
+      <img
+        v-if="widget.content"
+        :src="widget.content"
+        alt=""
+        class="size-full object-cover"
+        loading="lazy"
+        referrerpolicy="no-referrer"
+      >
+      <div
+        v-else
+        class="flex h-full items-center justify-center text-dimmed"
+      >
+        <UIcon
+          name="i-lucide-image"
+          class="size-6"
+        />
+      </div>
+    </div>
+
+    <!-- iframe (content is the embed URL; owner-authored, like notes) -->
+    <div
+      v-else-if="widget.kind === 'iframe'"
+      :class="`${cardClass} h-full overflow-hidden bg-default`"
+    >
+      <iframe
+        v-if="widget.content"
+        :src="widget.content"
+        title="Embedded content"
+        class="size-full border-0"
+        loading="lazy"
+        referrerpolicy="no-referrer"
+        allow="fullscreen; clipboard-write"
+      />
+      <div
+        v-else
+        class="flex h-full items-center justify-center text-dimmed"
+      >
+        <UIcon
+          name="i-lucide-app-window"
+          class="size-6"
+        />
+      </div>
+    </div>
   </div>
 </template>

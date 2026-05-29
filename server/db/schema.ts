@@ -409,11 +409,11 @@ export const widgets = sqliteTable(
     ownerId: text('owner_id').references(() => users.id, { onDelete: 'cascade' }),
     /** the board this tile lives on (FK→boards.id); nullable only as a migration artifact, always set on insert */
     boardId: text('board_id').references(() => boards.id, { onDelete: 'cascade' }),
-    /** "shortcut" | "flow" | "monitor" | "note" | "section" */
+    /** "shortcut" | "flow" | "monitor" | "note" | "section" | "image" | "iframe" */
     kind: text('kind').notNull(),
-    /** id of the referenced entity, or null for self-contained tiles (note, section) */
+    /** id of the referenced entity, or null for self-contained tiles (note, section, image, iframe) */
     refId: text('ref_id'),
-    /** rich text (note) or title string (section); null for reference tiles */
+    /** rich text (note), title (section), or URL (image/iframe src); null for reference tiles */
     content: text('content'),
     /** per-tile card chrome: "shadow" | "outline" | "none" */
     cardStyle: text('card_style').notNull().default('shadow'),

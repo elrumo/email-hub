@@ -245,6 +245,35 @@ function hostOf(url: string) {
                     {{ w.content || 'Empty note' }}
                   </p>
                 </div>
+
+                <!-- image -->
+                <div
+                  v-else-if="w.kind === 'image' && w.content"
+                  :class="`${bentoCardClass(w.cardStyle)} h-full overflow-hidden bg-elevated`"
+                >
+                  <img
+                    :src="w.content"
+                    alt=""
+                    class="size-full object-cover"
+                    loading="lazy"
+                    referrerpolicy="no-referrer"
+                  >
+                </div>
+
+                <!-- iframe / embed -->
+                <div
+                  v-else-if="w.kind === 'iframe' && w.content"
+                  :class="`${bentoCardClass(w.cardStyle)} h-full overflow-hidden bg-default`"
+                >
+                  <iframe
+                    :src="w.content"
+                    title="Embedded content"
+                    class="size-full border-0"
+                    loading="lazy"
+                    referrerpolicy="no-referrer"
+                    allow="fullscreen; clipboard-write"
+                  />
+                </div>
               </div>
             </div>
           </div>

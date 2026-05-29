@@ -122,7 +122,7 @@ export interface PingResult {
   checkedAt: number
 }
 
-export type WidgetKind = 'shortcut' | 'flow' | 'monitor' | 'note' | 'section'
+export type WidgetKind = 'shortcut' | 'flow' | 'monitor' | 'note' | 'section' | 'image' | 'iframe'
 
 /** Per-tile card chrome on the bento grid. */
 export type CardStyle = 'shadow' | 'outline' | 'none'
@@ -133,7 +133,7 @@ export interface Widget {
   kind: WidgetKind
   /** id of the referenced shortcut/flow/monitor, or null for note/section */
   refId?: string | null
-  /** rich text (note) or title string (section); null for reference tiles */
+  /** rich text (note), title (section), or URL (image/iframe src); null for reference tiles */
   content?: string | null
   /** card chrome — soft shadow, outline ring, or none */
   cardStyle?: CardStyle
