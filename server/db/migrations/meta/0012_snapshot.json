@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "0691a2de-62e1-46f4-b294-1b504c4eb995",
-  "prevId": "0e6ccbe3-9d7f-41dd-8af9-d785e64d4e52",
+  "id": "cbdd7965-350a-40dc-936d-4e0997ec3b28",
+  "prevId": "0691a2de-62e1-46f4-b294-1b504c4eb995",
   "tables": {
     "activity_log": {
       "name": "activity_log",
@@ -178,6 +178,13 @@
           "autoincrement": false,
           "default": false
         },
+        "analytics_connection_id": {
+          "name": "analytics_connection_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "sort_order": {
           "name": "sort_order",
           "type": "integer",
@@ -229,6 +236,19 @@
             "id"
           ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "boards_analytics_connection_id_connections_id_fk": {
+          "name": "boards_analytics_connection_id_connections_id_fk",
+          "tableFrom": "boards",
+          "tableTo": "connections",
+          "columnsFrom": [
+            "analytics_connection_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },

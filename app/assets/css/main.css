@@ -17,11 +17,16 @@
 }
 
 /*
- * Installed mobile PWAs can render beneath the status bar / notch. Add a bit
- * of breathing room to the app header only in standalone mode.
+ * Installed mobile PWAs render beneath the translucent status bar / notch, so
+ * the header needs to reserve the top safe-area inset or it gets overlapped by
+ * the OS clock and battery indicator. We can't rely on the
+ * `display-mode: standalone` media query here: iOS apps launched via
+ * `apple-mobile-web-app-capable` don't reliably match it. The `.pwa-standalone`
+ * class is toggled at runtime by the pwa-standalone client plugin, which also
+ * checks iOS's non-standard `navigator.standalone`.
  */
-@media (max-width: 767px) and (display-mode: standalone) {
-  .app-header {
+@media (max-width: 767px) {
+  .pwa-standalone .app-header {
     padding-top: calc(env(safe-area-inset-top, 0px) + 0.5rem);
   }
 }
@@ -66,18 +71,25 @@
  */
 .bento-card {
   border-radius: 1.5rem;
-  box-shadow:
-    0 1px 2px rgb(0 0 0 / 0.04),
-    0 10px 30px -18px rgb(0 0 0 / 0.22);
   transition:
     transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
     box-shadow 0.28s ease,
     border-color 0.28s ease;
 }
 
+/* Elevation is opt-in per tile (cardStyle === 'shadow'); outline/none tiles
+   stay flat and only pick up the hover lift below. */
+.bento-card.bento-elevated {
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.04),
+    0 10px 30px -18px rgb(0 0 0 / 0.22);
+}
+
 @media (hover: hover) {
   .bento-card:hover {
     transform: translateY(-4px);
+  }
+  .bento-card.bento-elevated:hover {
     box-shadow:
       0 2px 4px rgb(0 0 0 / 0.05),
       0 22px 48px -22px rgb(0 0 0 / 0.4);
@@ -91,6 +103,60 @@
     transition: none;
   }
 }
+
+/*
+ * Rich-text tiles render formatted HTML authored with the Nuxt UI editor
+ * (UEditor). Tailwind's reset strips heading/list styling, so restore a
+ * compact, theme-aware prose scale just inside note tiles and the editor.
+ */
+.bento-richtext {
+  color: var(--ui-text-muted);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.bento-richtext :where(h1, h2, h3) {
+  color: var(--ui-text-highlighted);
+  font-weight: 600;
+  line-height: 1.25;
+  margin: 0.4em 0 0.3em;
+}
+.bento-richtext :where(h1) { font-size: 1.25rem; }
+.bento-richtext :where(h2) { font-size: 1.125rem; }
+.bento-richtext :where(h3) { font-size: 1rem; }
+.bento-richtext :where(p) { margin: 0.4em 0; }
+.bento-richtext :where(a) {
+  color: var(--ui-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.bento-richtext :where(strong) { color: var(--ui-text-highlighted); font-weight: 600; }
+.bento-richtext :where(ul, ol) { margin: 0.4em 0; padding-left: 1.25rem; }
+.bento-richtext :where(ul) { list-style: disc; }
+.bento-richtext :where(ol) { list-style: decimal; }
+.bento-richtext :where(li) { margin: 0.15em 0; }
+.bento-richtext :where(blockquote) {
+  margin: 0.5em 0;
+  padding-left: 0.75rem;
+  border-left: 2px solid var(--ui-border-accented);
+  color: var(--ui-text-dimmed);
+}
+.bento-richtext :where(code) {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  padding: 0.1em 0.3em;
+  border-radius: 0.3rem;
+  background: var(--ui-bg-elevated);
+}
+.bento-richtext :where(pre) {
+  margin: 0.5em 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.6rem;
+  background: var(--ui-bg-elevated);
+  overflow: auto;
+}
+.bento-richtext :where(pre code) { padding: 0; background: none; }
+.bento-richtext :where(:first-child) { margin-top: 0; }
+.bento-richtext :where(:last-child) { margin-bottom: 0; }
 
 /*
  * Comark renders AI chat markdown in the email designer; its `highlight` plugin

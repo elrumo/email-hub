@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Board, Connection, Flow, Monitor, Shortcut, Widget, WidgetKind } from '~/types'
+import type { Board, CardStyle, Connection, Flow, Monitor, Shortcut, Widget, WidgetKind } from '~/types'
 
 // ── boards (multiple home grids) ──────────────────────────────────────────────
 const { data: boards, refresh: refreshBoards } = await useFetch<Board[]>('/api/boards', {
@@ -65,23 +65,40 @@ const { results: pings } = usePing(gridShortcuts)
 
 const editMode = ref(false)
 
-// ── add-widget modal ────────────────────────────────────────────────────────
+// ── add / edit tile modal ─────────────────────────────────────────────────────
+// One modal serves both creating a tile and editing an existing one. `editingId`
+// is null when adding; the tile's kind is immutable once created.
 const addOpen = ref(false)
 const adding = ref(false)
-const draft = reactive<{ kind: WidgetKind, refId: string, content: string, w: number, h: number }>({
+const editingId = ref<string | null>(null)
+const draft = reactive<{ kind: WidgetKind, refId: string, content: string, cardStyle: CardStyle, w: number, h: number }>({
   kind: 'shortcut',
   refId: '',
   content: '',
+  cardStyle: 'shadow',
   w: 1,
   h: 1
 })
 
+// "Text" maps to the self-contained "note" kind, now authored as rich text.
 const KIND_OPTIONS = [
   { label: 'Shortcut', value: 'shortcut', icon: 'i-lucide-link' },
   { label: 'Flow', value: 'flow', icon: 'i-lucide-workflow' },
   { label: 'Monitor', value: 'monitor', icon: 'i-lucide-activity' },
-  { label: 'Note', value: 'note', icon: 'i-lucide-sticky-note' }
+  { label: 'Text', value: 'note', icon: 'i-lucide-type' },
+  { label: 'Section', value: 'section', icon: 'i-lucide-heading' }
 ] as const
+
+const CARD_STYLE_OPTIONS = [
+  { label: 'Shadow', value: 'shadow', icon: 'i-lucide-square' },
+  { label: 'Outline', value: 'outline', icon: 'i-lucide-square-dashed' },
+  { label: 'None', value: 'none', icon: 'i-lucide-ban' }
+] as const
+
+// kinds whose card chrome (shadow/outline/none) is configurable
+const hasCardStyle = computed(() => draft.kind !== 'section')
+// kinds that point at an existing entity (vs. self-contained note/section)
+const isReferenceKind = computed(() => ['shortcut', 'flow', 'monitor'].includes(draft.kind))
 
 // options for the reference picker, by kind
 const refItems = computed(() => {
@@ -97,42 +114,69 @@ const refEmptyHint = computed(() => {
   return null
 })
 
-watch(() => draft.kind, () => {
+// sensible default span per kind when the type changes (add mode only)
+function defaultSpan(kind: WidgetKind): { w: number, h: number } {
+  if (kind === 'section') return { w: 4, h: 1 }
+  if (kind === 'note') return { w: 2, h: 2 }
+  if (kind === 'monitor') return { w: 1, h: 2 }
+  return { w: 1, h: 1 }
+}
+
+watch(() => draft.kind, (kind) => {
+  if (editingId.value) return
   draft.refId = ''
-  // notes read better wider; monitors a touch taller
-  draft.w = draft.kind === 'note' ? 2 : 1
-  draft.h = draft.kind === 'monitor' ? 2 : 1
+  Object.assign(draft, defaultSpan(kind))
 })
 
 function openAdd() {
-  Object.assign(draft, { kind: 'shortcut', refId: '', content: '', w: 1, h: 1 })
+  editingId.value = null
+  Object.assign(draft, { kind: 'shortcut', refId: '', content: '', cardStyle: 'shadow', ...defaultSpan('shortcut') })
   addOpen.value = true
 }
 
-async function addWidget() {
-  if (draft.kind !== 'note' && !draft.refId) {
+function openEdit(w: Widget) {
+  editingId.value = w.id
+  Object.assign(draft, {
+    kind: w.kind,
+    refId: w.refId ?? '',
+    content: w.content ?? '',
+    cardStyle: w.cardStyle ?? 'shadow',
+    w: w.w,
+    h: w.h
+  })
+  addOpen.value = true
+}
+
+async function saveWidget() {
+  if (isReferenceKind.value && !draft.refId) {
     toast.add({ title: 'Pick something to add', color: 'warning' })
     return
   }
+  if (draft.kind === 'section' && !draft.content.trim()) {
+    toast.add({ title: 'Give the section a title', color: 'warning' })
+    return
+  }
   adding.value = true
+  const body: Record<string, unknown> = {
+    boardId: activeBoardId.value,
+    kind: draft.kind,
+    refId: isReferenceKind.value ? draft.refId : null,
+    content: isReferenceKind.value ? null : draft.content,
+    cardStyle: draft.cardStyle,
+    w: draft.w,
+    h: draft.h
+  }
   try {
-    await $fetch('/api/widgets', {
-      method: 'POST',
-      body: {
-        boardId: activeBoardId.value,
-        kind: draft.kind,
-        refId: draft.kind === 'note' ? null : draft.refId,
-        content: draft.kind === 'note' ? draft.content : null,
-        w: draft.w,
-        h: draft.h,
-        sortOrder: widgets.value.length
-      }
-    })
+    if (editingId.value) {
+      await $fetch(`/api/widgets/${editingId.value}`, { method: 'PUT', body })
+    } else {
+      await $fetch('/api/widgets', { method: 'POST', body: { ...body, sortOrder: widgets.value.length } })
+    }
     addOpen.value = false
     await refresh()
-    toast.add({ title: 'Added to home', color: 'success' })
+    toast.add({ title: editingId.value ? 'Tile updated' : 'Added to home', color: 'success' })
   } catch (e: unknown) {
-    const msg = (e as { data?: { statusMessage?: string } })?.data?.statusMessage || 'Could not add tile'
+    const msg = (e as { data?: { statusMessage?: string } })?.data?.statusMessage || 'Could not save tile'
     toast.add({ title: msg, color: 'error' })
   } finally {
     adding.value = false
@@ -624,8 +668,8 @@ function spanFor(w: Widget) {
           'is-edit': editMode
         }"
         :style="{
-          gridColumn: `span ${spanFor(w).w}`,
-          gridRow: `span ${spanFor(w).h}`,
+          gridColumn: w.kind === 'section' ? '1 / -1' : `span ${spanFor(w).w}`,
+          gridRow: w.kind === 'section' ? 'span 1' : `span ${spanFor(w).h}`,
           ...(dragId === w.id ? { transform: `translate(${dragOffset.x}px, ${dragOffset.y}px)` } : {})
         }"
         @pointerdown="onDragStart($event, w.id)"
@@ -641,11 +685,13 @@ function spanFor(w: Widget) {
           :edit-mode="editMode"
           :class="{ 'pointer-events-none ring-2 ring-primary/40 rounded-[var(--ui-radius)]': editMode }"
           @remove="removeWidget(w)"
+          @edit="openEdit(w)"
         />
 
-        <!-- resize handle (edit mode): drag to grow/shrink across grid cells -->
+        <!-- resize handle (edit mode): drag to grow/shrink across grid cells.
+             Sections are always full-width single-row, so they aren't resizable. -->
         <button
-          v-if="editMode"
+          v-if="editMode && w.kind !== 'section'"
           type="button"
           class="resize-handle"
           aria-label="Resize tile"
@@ -667,20 +713,21 @@ function spanFor(w: Widget) {
       </div>
     </TransitionGroup>
 
-    <!-- add-tile modal -->
+    <!-- add / edit tile modal -->
     <UModal
       v-model:open="addOpen"
-      title="Add a tile"
+      :title="editingId ? 'Edit tile' : 'Add a tile'"
     >
       <template #body>
         <div class="space-y-4">
           <UFormField label="Type">
-            <div class="grid grid-cols-4 gap-2">
+            <div class="grid grid-cols-3 gap-2 sm:grid-cols-5">
               <button
                 v-for="opt in KIND_OPTIONS"
                 :key="opt.value"
                 type="button"
-                class="flex flex-col items-center gap-1.5 rounded-lg border p-3 text-sm transition-colors"
+                :disabled="!!editingId && draft.kind !== opt.value"
+                class="flex flex-col items-center gap-1.5 rounded-lg border p-3 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                 :class="draft.kind === opt.value
                   ? 'border-primary bg-primary/10 text-primary'
                   : 'border-default text-muted hover:bg-elevated'"
@@ -695,7 +742,8 @@ function spanFor(w: Widget) {
             </div>
           </UFormField>
 
-          <template v-if="draft.kind !== 'note'">
+          <!-- reference picker (shortcut / flow / monitor) -->
+          <template v-if="isReferenceKind">
             <UFormField
               v-if="refItems.length"
               :label="draft.kind === 'shortcut' ? 'Shortcut' : draft.kind === 'flow' ? 'Flow' : 'Monitor'"
@@ -728,19 +776,80 @@ function spanFor(w: Widget) {
             </UAlert>
           </template>
 
+          <!-- section title -->
           <UFormField
-            v-else
-            label="Note"
+            v-else-if="draft.kind === 'section'"
+            label="Section title"
+            required
           >
-            <UTextarea
+            <UInput
               v-model="draft.content"
-              :rows="4"
-              placeholder="Anything you want to remember…"
+              placeholder="e.g. Services, Links, Notes"
               class="w-full"
             />
           </UFormField>
 
-          <div class="grid grid-cols-2 gap-3">
+          <!-- rich text -->
+          <UFormField
+            v-else
+            label="Text"
+            description="Format with the toolbar — headings, lists, links and more."
+          >
+            <div class="overflow-hidden rounded-lg ring ring-default">
+              <ClientOnly>
+                <UEditor
+                  v-model="draft.content"
+                  content-type="html"
+                  placeholder="Write something…"
+                  :ui="{ content: 'bento-richtext max-h-72 min-h-32 overflow-auto p-3' }"
+                >
+                  <template #default="{ editor }">
+                    <UEditorToolbar
+                      :editor="editor"
+                      class="border-b border-default p-1"
+                    />
+                  </template>
+                </UEditor>
+                <template #fallback>
+                  <div class="min-h-32 p-3 text-sm text-muted">
+                    Loading editor…
+                  </div>
+                </template>
+              </ClientOnly>
+            </div>
+          </UFormField>
+
+          <!-- card chrome (not applicable to section headings) -->
+          <UFormField
+            v-if="hasCardStyle"
+            label="Card style"
+            description="Shadow, a flat outline, or no chrome at all."
+          >
+            <div class="grid grid-cols-3 gap-2">
+              <button
+                v-for="opt in CARD_STYLE_OPTIONS"
+                :key="opt.value"
+                type="button"
+                class="flex items-center justify-center gap-1.5 rounded-lg border p-2 text-sm transition-colors"
+                :class="draft.cardStyle === opt.value
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-default text-muted hover:bg-elevated'"
+                @click="draft.cardStyle = opt.value"
+              >
+                <UIcon
+                  :name="opt.icon"
+                  class="size-4"
+                />
+                {{ opt.label }}
+              </button>
+            </div>
+          </UFormField>
+
+          <!-- span (sections are always full-width single-row) -->
+          <div
+            v-if="draft.kind !== 'section'"
+            class="grid grid-cols-2 gap-3"
+          >
             <UFormField
               label="Width"
               description="Columns (1–4)"
@@ -775,10 +884,10 @@ function spanFor(w: Widget) {
             @click="close"
           />
           <UButton
-            label="Add"
+            :label="editingId ? 'Save' : 'Add'"
             :loading="adding"
-            :disabled="draft.kind !== 'note' && !refItems.length"
-            @click="addWidget"
+            :disabled="isReferenceKind && !refItems.length"
+            @click="saveWidget"
           />
         </div>
       </template>
