@@ -36,7 +36,9 @@ function launchChat(prompt?: string) {
 }
 // reopening the dock via its own button should start fresh, not replay the
 // last seeded prompt
-watch(chatOpen, (v) => { if (!v) seededPrompt.value = '' })
+watch(chatOpen, (v) => {
+  if (!v) seededPrompt.value = ''
+})
 
 function onChatApply(p: FlowChatApplyPayload) {
   // hand the AI draft to the builder for review, then save

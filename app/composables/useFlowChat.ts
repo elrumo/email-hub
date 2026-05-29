@@ -108,7 +108,9 @@ export function useFlowChat(options: {
       setupConfig.value = seed
     }
   }, { immediate: true })
-  watch(setupConfig, () => { testResult.value = null }, { deep: true })
+  watch(setupConfig, () => {
+    testResult.value = null
+  }, { deep: true })
 
   async function testSetup() {
     testing.value = true
