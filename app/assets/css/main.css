@@ -1,0 +1,17 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+
+@theme static {
+  /* Inter is the closest open analogue to Apple's SF — clean, optical, neutral.
+     @nuxt/fonts loads it automatically. */
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /* Tabular figures for metrics, clocks and addresses. */
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+}
+
+:root {
+  /* Generous, rounded geometry — the single most "Apple" lever. */
+  --ui-radius: 0.625rem;
+  --ui-container: 56rem;
+}
