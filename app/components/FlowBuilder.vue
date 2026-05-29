@@ -40,15 +40,9 @@ const triggerKind = ref<TriggerKind>(
 
 const steps = ref<FlowStep[]>(initialFlow?.definition?.steps ?? [])
 
-// build mode: hand-build the steps, or let the AI assistant draft them. The
-// assistant fills the very same name/trigger/steps refs, then drops the user
-// back into manual mode to review and tweak before saving.
-const mode = ref<'manual' | 'assist'>('manual')
-const modeItems = [
-  { label: 'Build manually', value: 'manual', icon: 'i-lucide-list-ordered' },
-  { label: 'AI assist', value: 'assist', icon: 'i-lucide-sparkles' }
-]
-
+// The AI assistant is presented as a floating chat (FlowChatDock). When the
+// user accepts a proposed flow it fills the very same name/trigger/steps refs
+// the manual builder edits, so they can review and tweak before saving.
 function onAssistApply(draft: { name: string, description: string, trigger: FlowTrigger, steps: FlowStep[] }) {
   if (draft.name) name.value = draft.name
   if (draft.description) description.value = draft.description
@@ -63,14 +57,7 @@ function onAssistApply(draft: { name: string, description: string, trigger: Flow
           ? 'manual'
           : 'poll'
   steps.value = draft.steps
-  mode.value = 'manual'
   toast.add({ title: 'Flow drafted — review and save', color: 'success', icon: 'i-lucide-sparkles' })
-}
-
-async function onConnectionCreated() {
-  // the assistant created an AI connection inline; refresh the shared list so
-  // the picker (and the rest of the builder) sees it
-  await refreshNuxtData('connections')
 }
 
 // browser-notification-on-run setting
@@ -239,26 +226,8 @@ async function save() {
       </div>
     </UCard>
 
-    <!-- build mode toggle -->
-    <UTabs
-      v-model="mode"
-      :items="modeItems"
-      :content="false"
-      color="primary"
-      class="w-full"
-    />
-
-    <!-- AI assistant -->
-    <FlowAssistant
-      v-show="mode === 'assist'"
-      :catalog="catalog"
-      :connections="connections"
-      @apply="onAssistApply"
-      @connection-created="onConnectionCreated"
-    />
-
     <!-- trigger -->
-    <div v-show="mode === 'manual'">
+    <div>
       <h2 class="mb-2 flex items-center gap-2 text-sm font-semibold text-highlighted">
         <UIcon
           name="i-lucide-zap"
@@ -348,7 +317,7 @@ async function save() {
     </div>
 
     <!-- steps -->
-    <div v-show="mode === 'manual'">
+    <div>
       <h2 class="mb-2 flex items-center gap-2 text-sm font-semibold text-highlighted">
         <UIcon
           name="i-lucide-list-ordered"
@@ -403,7 +372,7 @@ async function save() {
     </div>
 
     <!-- notify on run -->
-    <div v-show="mode === 'manual'">
+    <div>
       <h2 class="mb-2 flex items-center gap-2 text-sm font-semibold text-highlighted">
         <UIcon
           name="i-lucide-bell"
@@ -435,7 +404,7 @@ async function save() {
     </div>
 
     <!-- public triggering -->
-    <div v-show="mode === 'manual'">
+    <div>
       <h2 class="mb-2 text-sm font-semibold text-highlighted">
         Public triggering
       </h2>
@@ -456,7 +425,6 @@ async function save() {
 
     <!-- footer actions -->
     <div
-      v-show="mode === 'manual'"
       class="flex flex-wrap items-center justify-between gap-4 border-t border-default pt-5"
     >
       <div class="flex items-center gap-2">
@@ -478,5 +446,13 @@ async function save() {
         />
       </div>
     </div>
+
+    <!-- floating AI assistant -->
+    <FlowChatDock
+      :catalog="catalog"
+      :connections="connections"
+      :button-label="flow ? 'Edit with AI' : 'Build with AI'"
+      @apply="onAssistApply"
+    />
   </div>
 </template>
