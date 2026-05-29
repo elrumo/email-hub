@@ -13,10 +13,18 @@
 import { renderEmailHtml } from '#shared/email/render'
 import type { EmailDocument } from '#shared/email/blocks'
 
+interface PreviewDevice {
+  id: string
+  label: string
+  icon?: string
+  width: number
+  height: number
+}
+
 const props = defineProps<{
   document: EmailDocument
   selectedId?: string | null
-  mode?: 'desktop' | 'mobile'
+  device: PreviewDevice
 }>()
 
 const emit = defineEmits<{
@@ -24,6 +32,36 @@ const emit = defineEmits<{
 }>()
 
 const frame = ref<HTMLIFrameElement | null>(null)
+const viewport = ref<HTMLElement | null>(null)
+const scale = ref(1)
+const chromeHeight = 34
+
+const frameWidth = computed(() => props.device.width)
+const frameHeight = computed(() => props.device.height + chromeHeight)
+const shellStyle = computed(() => ({
+  width: `${frameWidth.value * scale.value}px`,
+  height: `${frameHeight.value * scale.value}px`
+}))
+const deviceStyle = computed(() => ({
+  width: `${frameWidth.value}px`,
+  height: `${frameHeight.value}px`,
+  transform: `scale(${scale.value})`,
+  transformOrigin: 'top left'
+}))
+const iframeStyle = computed(() => ({
+  width: `${props.device.width}px`,
+  height: `${props.device.height}px`
+}))
+
+function updateScale() {
+  const el = viewport.value
+  if (!el) return
+
+  const availableWidth = Math.max(280, el.clientWidth - 32)
+  const availableHeight = Math.max(360, el.clientHeight - 32)
+  const nextScale = Math.min(1, availableWidth / frameWidth.value, availableHeight / frameHeight.value)
+  scale.value = Math.max(0.45, Number(nextScale.toFixed(3)))
+}
 
 /**
  * Inject a tiny runtime into the iframe that:
@@ -105,8 +143,19 @@ function onMessage(e: MessageEvent) {
   if (d.type === 'ready') postSelected()
 }
 
-onMounted(() => window.addEventListener('message', onMessage))
-onBeforeUnmount(() => window.removeEventListener('message', onMessage))
+let resizeObserver: ResizeObserver | null = null
+onMounted(() => {
+  window.addEventListener('message', onMessage)
+  updateScale()
+  if (viewport.value) {
+    resizeObserver = new ResizeObserver(updateScale)
+    resizeObserver.observe(viewport.value)
+  }
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('message', onMessage)
+  resizeObserver?.disconnect()
+})
 
 // Re-render the iframe when the document changes; re-apply selection when only
 // the selection changes (cheaper than a full reload).
@@ -116,21 +165,41 @@ function rebuild() {
 }
 watch(() => props.document, rebuild, { deep: true })
 watch(() => props.selectedId, () => postSelected())
+watch(() => props.device, () => nextTick(updateScale), { deep: true })
 </script>
 
 <template>
-  <div class="flex h-full w-full justify-center overflow-auto bg-elevated/40 p-6">
+  <div
+    ref="viewport"
+    class="flex h-full w-full justify-center overflow-auto bg-elevated/40 p-4"
+  >
     <div
-      class="mx-auto h-fit min-h-full w-full overflow-hidden rounded-lg shadow-sm ring-1 ring-default transition-all"
-      :class="mode === 'mobile' ? 'max-w-[390px]' : 'max-w-[680px]'"
+      class="relative shrink-0 transition-[height,width]"
+      :style="shellStyle"
     >
-      <iframe
-        ref="frame"
-        :srcdoc="srcDoc"
-        title="Email preview"
-        sandbox="allow-scripts allow-same-origin"
-        class="h-full min-h-[70vh] w-full border-0 bg-white"
-      />
+      <div
+        class="absolute left-0 top-0 overflow-hidden rounded-lg bg-default shadow-sm ring-1 ring-default"
+        :style="deviceStyle"
+      >
+        <div class="flex h-[34px] items-center justify-between border-b border-default bg-elevated/80 px-3">
+          <div class="flex min-w-0 items-center gap-2">
+            <UIcon
+              :name="device.icon || 'i-lucide-monitor'"
+              class="size-3.5 shrink-0 text-dimmed"
+            />
+            <span class="truncate text-xs font-medium text-highlighted">{{ device.label }}</span>
+          </div>
+          <span class="font-mono text-[11px] text-dimmed">{{ device.width }} × {{ device.height }}</span>
+        </div>
+        <iframe
+          ref="frame"
+          :srcdoc="srcDoc"
+          title="Email preview"
+          sandbox="allow-scripts allow-same-origin"
+          class="border-0 bg-white"
+          :style="iframeStyle"
+        />
+      </div>
     </div>
   </div>
 </template>

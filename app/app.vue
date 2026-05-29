@@ -27,6 +27,30 @@ const title = 'Flow Hub'
 const description = 'Automation flows for your infrastructure — connect Dokploy, Bunny, Uptime Kuma and more, then build trigger → action flows that run on a schedule, a webhook, or a button.'
 
 const route = useRoute()
+const router = useRouter()
+const auth = useAuth()
+
+// Hide the app chrome (header/footer/nav) on pages that render standalone: the
+// auth pages (centered card) and public board views at /b/<slug> (no sign-in,
+// their own minimal header).
+const isAuthPage = computed(() =>
+  route.path === '/login' || route.path === '/setup' || route.path.startsWith('/b/')
+)
+
+async function onLogout() {
+  await auth.logout()
+  await router.replace('/login')
+}
+
+const userMenu = computed(() => [
+  [{ label: auth.user.value?.username ?? 'Account', type: 'label' as const }],
+  [
+    { label: 'Account', icon: 'i-lucide-user', to: '/account' },
+    ...(auth.isAdmin.value ? [{ label: 'Admin', icon: 'i-lucide-shield', to: '/admin' }] : [])
+  ],
+  [{ label: 'Sign out', icon: 'i-lucide-log-out', onSelect: onLogout }]
+])
+
 const nav = [
   { label: 'Home', to: '/', icon: 'i-lucide-layout-grid' },
   { label: 'Flows', to: '/flows', icon: 'i-lucide-workflow' },
@@ -51,91 +75,120 @@ useSeoMeta({
 
 <template>
   <UApp>
-    <UHeader
-      :toggle="{ class: 'sm:hidden' }"
-      :ui="{ root: 'border-none backdrop-blur', center: 'gap-2' }"
-    >
-      <template #title>
-        <span class="flex items-center gap-2.5">
-          <span class="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/20">
-            <UIcon
-              name="i-lucide-stethoscope"
-              class="size-4"
-            />
+    <!-- Auth pages render their own centered card with no app chrome. -->
+    <UMain v-if="isAuthPage">
+      <NuxtPage />
+    </UMain>
+
+    <template v-else>
+      <UHeader
+        :toggle="{ class: 'sm:hidden' }"
+        :ui="{
+          root: 'border-none backdrop-blur',
+          center: 'gap-2',
+          container: 'max-w-[2000px]!'
+        }"
+      >
+        <template #title>
+          <span class="flex items-center gap-2.5">
+            <span class="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/20">
+              <UIcon
+                name="i-lucide-stethoscope"
+                class="size-4"
+              />
+            </span>
+            <span class="text-base font-semibold tracking-tight text-highlighted">Dokploy Doctor</span>
           </span>
-          <span class="text-base font-semibold tracking-tight text-highlighted">Dokploy Doctor</span>
-        </span>
-      </template>
+        </template>
 
-      <nav class="hidden items-center gap-1 sm:flex">
-        <UButton
-          v-for="item in nav"
-          :key="item.to"
-          :to="item.to"
-          :icon="item.icon"
-          :label="item.label"
-          size="sm"
-          :color="isActive(item.to) ? 'primary' : 'neutral'"
-          :variant="isActive(item.to) ? 'soft' : 'ghost'"
-        />
-      </nav>
-
-      <template #right>
-        <PushToggle />
-
-        <UColorModeButton />
-
-        <UButton
-          to="https://github.com/elrumo/flow-hub"
-          target="_blank"
-          icon="i-simple-icons-github"
-          aria-label="GitHub"
-          color="neutral"
-          variant="ghost"
-        />
-      </template>
-
-      <!-- Mobile menu — rendered in UHeader's built-in slide-over, toggled by
-           the hamburger that appears automatically below the sm breakpoint. -->
-      <template #content>
-        <nav class="flex flex-col gap-1">
+        <nav class="hidden items-center gap-1 sm:flex">
           <UButton
             v-for="item in nav"
             :key="item.to"
             :to="item.to"
             :icon="item.icon"
             :label="item.label"
-            size="lg"
-            block
-            :ui="{ base: 'justify-start' }"
+            size="sm"
             :color="isActive(item.to) ? 'primary' : 'neutral'"
             :variant="isActive(item.to) ? 'soft' : 'ghost'"
           />
         </nav>
-      </template>
-    </UHeader>
 
-    <UMain>
-      <NuxtPage />
-    </UMain>
+        <template #right>
+          <PushToggle />
 
-    <UFooter :ui="{ root: 'border-none' }">
-      <template #left>
-        <p class="text-sm text-muted">
-          Dokploy Doctor · © {{ new Date().getFullYear() }}
-        </p>
-      </template>
+          <UColorModeButton />
 
-      <template #right>
-        <UButton
-          to="https://github.com/elrumo/flow-hub"
-          target="_blank"
-          icon="i-simple-icons-github"
-          aria-label="GitHub"
-          color="neutral"
-          variant="ghost"
-        />
-      </template>
-    </UFooter>
+          <UButton
+            to="https://github.com/elrumo/flow-hub"
+            target="_blank"
+            icon="i-simple-icons-github"
+            aria-label="GitHub"
+            color="neutral"
+            variant="ghost"
+          />
+
+          <UDropdownMenu
+            v-if="auth.user.value"
+            :items="userMenu"
+          >
+            <UButton
+              color="neutral"
+              variant="ghost"
+              trailing-icon="i-lucide-chevron-down"
+            >
+              <UAvatar
+                :alt="auth.user.value.username"
+                size="2xs"
+                icon="i-lucide-user"
+              />
+              <span class="hidden text-sm sm:inline">{{ auth.user.value.username }}</span>
+            </UButton>
+          </UDropdownMenu>
+        </template>
+
+        <!-- Mobile menu — rendered in UHeader's built-in slide-over, toggled by
+           the hamburger that appears automatically below the sm breakpoint. -->
+        <template #content>
+          <nav class="flex flex-col gap-1">
+            <UButton
+              v-for="item in nav"
+              :key="item.to"
+              :to="item.to"
+              :icon="item.icon"
+              :label="item.label"
+              size="lg"
+              block
+              :ui="{ base: 'justify-start' }"
+              :color="isActive(item.to) ? 'primary' : 'neutral'"
+              :variant="isActive(item.to) ? 'soft' : 'ghost'"
+            />
+          </nav>
+        </template>
+      </UHeader>
+
+      <UMain>
+        <NuxtPage />
+      </UMain>
+
+      <UFooter :ui="{ root: 'border-none' }">
+        <template #left>
+          <p class="text-sm text-muted">
+            Dokploy Doctor · © {{ new Date().getFullYear() }}
+          </p>
+        </template>
+
+        <template #right>
+          <UButton
+            to="https://github.com/elrumo/flow-hub"
+            target="_blank"
+            icon="i-simple-icons-github"
+            aria-label="GitHub"
+            color="neutral"
+            variant="ghost"
+          />
+        </template>
+      </UFooter>
+    </template>
   </UApp>
 </template>

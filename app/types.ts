@@ -139,6 +139,32 @@ export interface Widget {
   updatedAt: number
 }
 
+/** A home grid. See server/db/schema.ts `boards`. */
+export interface Board {
+  id: string
+  name: string
+  /** url-safe unique id used for the public /b/<slug> view */
+  slug: string
+  /** the board the home page opens on (one per user) */
+  isDefault: boolean
+  /** viewable read-only by unauthenticated visitors */
+  isPublic: boolean
+  /** allow public visitors to run every flow on this board (overrides per-flow flag) */
+  publicTrigger: boolean
+  sortOrder: number
+  createdAt: number
+  updatedAt: number
+}
+
+/** Shape returned by the public board endpoint (display-only, no secrets). */
+export interface PublicBoard {
+  board: { id: string, name: string, slug: string, publicTrigger: boolean }
+  widgets: Array<Pick<Widget, 'id' | 'kind' | 'refId' | 'content' | 'w' | 'h' | 'sortOrder'>>
+  shortcuts: Array<{ id: string, name: string, url: string, icon?: string | null }>
+  flows: Array<{ id: string, name: string, description?: string | null, enabled: boolean, canTrigger: boolean }>
+  monitors: Array<{ id: string, name: string, integrationId: string }>
+}
+
 export type Operator
   = | 'eq' | 'ne' | 'lt' | 'lte' | 'gt' | 'gte'
     | 'contains' | 'notContains' | 'exists' | 'notExists' | 'truthy' | 'falsy'
@@ -222,6 +248,8 @@ export interface Flow {
   name: string
   description?: string | null
   enabled: boolean
+  /** allow unauthenticated visitors of a public board to run this flow */
+  publicTrigger?: boolean
   definition: FlowDefinition
   cron?: string | null
   runAt?: number | null
@@ -251,4 +279,63 @@ export interface FlowRun {
   finishedAt?: number | null
   error?: string | null
   steps?: StepRecord[] | null
+}
+
+// ---------------------------------------------------------------------------
+// Accounts, sessions and stats (multi-user)
+// ---------------------------------------------------------------------------
+
+export type UserRole = 'admin' | 'user'
+
+/** A user shape safe for the client (mirrors server PublicUser — no hash). */
+export interface PublicUser {
+  id: string
+  username: string
+  email: string | null
+  role: UserRole
+  lastLoginAt: number | null
+  createdAt: number
+}
+
+/** GET /api/auth/state — drives the login/setup/app routing decision. */
+export interface AuthState {
+  needsSetup: boolean
+  user: PublicUser | null
+}
+
+/** GET /api/me/stats and the per-user block of the admin overview. */
+export interface UserStats {
+  flowsCreated: number
+  connectionsCount: number
+  monitorsCount: number
+  shortcutsCount: number
+  flowRunsTotal: number
+  flowRunSuccess: number
+  flowRunError: number
+  lastFlowRunAt: number | null
+}
+
+/** One row in GET /api/me/activity. */
+export interface ActivityEntry {
+  id: string
+  userId: string
+  action: string
+  entityType: string | null
+  entityId: string | null
+  detail: Record<string, unknown> | null
+  createdAt: number
+}
+
+/** One row in GET /api/admin/users — a user plus their aggregate stats. */
+export interface AdminUserSummary extends PublicUser {
+  stats: UserStats
+}
+
+/** GET /api/admin/stats — instance-wide totals. */
+export interface AdminStats {
+  users: number
+  flows: number
+  connections: number
+  monitors: number
+  flowRuns: number
 }

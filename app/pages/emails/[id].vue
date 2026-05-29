@@ -22,8 +22,15 @@ import { Chat } from '@ai-sdk/vue'
 import { DefaultChatTransport, isTextUIPart, type UIMessage } from 'ai'
 import { isPartStreaming } from '@nuxt/ui/utils/ai'
 import type { EmailBlock, EmailBlockType, EmailDocument } from '#shared/email/blocks'
-import { addBlock } from '#shared/email/ops'
+import { addBlock, updateBlock } from '#shared/email/ops'
 import { renderEmailHtml } from '#shared/email/render'
+import { isStarterEmailDocument, type EmailTemplateDefinition } from '#shared/email/templates'
+import type { UploadedAsset } from '~/composables/useEmailAssets'
+
+import EmailPreview from '~/components/email/EmailPreview.vue'
+import EmailInspector from '~/components/email/EmailInspector.vue'
+import EmailTemplatePicker from '~/components/email/EmailTemplatePicker.vue'
+import EmailUploadModal from '~/components/email/EmailUploadModal.vue'
 
 const route = useRoute()
 const toast = useToast()
@@ -49,8 +56,28 @@ if (error.value || !project.value) {
 const document = ref<EmailDocument>(project.value.document)
 const selectedId = ref<string | null>(null)
 const name = ref(project.value.name)
-const previewMode = ref<'desktop' | 'mobile'>('desktop')
 const input = ref('')
+const templateOpen = ref(false)
+
+const previewDevices = [
+  { id: 'desktop', label: 'Desktop', icon: 'i-lucide-monitor', width: 960, height: 720 },
+  { id: 'tablet', label: 'Tablet', icon: 'i-lucide-tablet', width: 768, height: 900 },
+  { id: 'phone', label: 'Phone', icon: 'i-lucide-smartphone', width: 390, height: 844 },
+  { id: 'compact', label: 'Compact', icon: 'i-lucide-panel-top', width: 320, height: 568 }
+] as const
+const previewDeviceId = ref<(typeof previewDevices)[number]['id']>('desktop')
+const previewDevice = computed(() => previewDevices.find(d => d.id === previewDeviceId.value) ?? previewDevices[0])
+const previewDeviceItems = computed(() => [
+  previewDevices.map(device => ({
+    label: device.label,
+    description: `${device.width} × ${device.height}`,
+    icon: device.icon,
+    trailingIcon: previewDeviceId.value === device.id ? 'i-lucide-check' : undefined,
+    onSelect: () => {
+      previewDeviceId.value = device.id
+    }
+  }))
+])
 
 // ---- autosave (document + name) -------------------------------------------
 const saving = ref(false)
@@ -111,6 +138,12 @@ const promptPlaceholder = computed(() => {
     : 'Describe the email you want, or ask for a change…'
 })
 
+onMounted(() => {
+  if (!chat.messages.length && isStarterEmailDocument(document.value)) {
+    templateOpen.value = true
+  }
+})
+
 // ---- manual block insertion ----------------------------------------------
 const addItems = [
   [
@@ -122,12 +155,57 @@ const addItems = [
     { label: 'Spacer', icon: 'i-lucide-move-vertical', onSelect: () => insert('spacer') },
     { label: 'Columns', icon: 'i-lucide-columns-2', onSelect: () => insert('columns') },
     { label: 'Custom HTML', icon: 'i-lucide-code', onSelect: () => insert('html') }
+  ],
+  [
+    { label: 'Upload image…', icon: 'i-lucide-image-up', onSelect: () => openUpload('image') },
+    { label: 'Upload file…', icon: 'i-lucide-file-up', onSelect: () => openUpload('file') }
   ]
 ]
 function insert(type: EmailBlockType) {
   const res = addBlock(document.value, type)
   document.value = res.doc
   selectedId.value = res.id
+}
+
+function applyTemplate(payload: { template: EmailTemplateDefinition, document: EmailDocument }) {
+  document.value = payload.document
+  name.value = payload.template.name
+  selectedId.value = null
+  templateOpen.value = false
+  toast.add({ title: `Applied “${payload.template.name}”`, color: 'success' })
+}
+
+function applyBlank(nextDocument: EmailDocument) {
+  document.value = nextDocument
+  selectedId.value = null
+  templateOpen.value = false
+}
+
+// ---- S3 uploads -----------------------------------------------------------
+const uploadOpen = ref(false)
+const uploadMode = ref<'image' | 'file'>('image')
+function openUpload(mode: 'image' | 'file') {
+  uploadMode.value = mode
+  uploadOpen.value = true
+}
+function onUploaded(asset: UploadedAsset) {
+  if (asset.kind === 'image') {
+    // insert an image block pointing at the uploaded asset
+    const res = addBlock(document.value, 'image', {
+      src: asset.url,
+      alt: asset.name.replace(/\.[a-z0-9]+$/i, '')
+    })
+    document.value = res.doc
+    selectedId.value = res.id
+  } else {
+    // non-image file → a text block with a download link
+    const res = addBlock(document.value, 'text', { align: 'center' })
+    const withLink = updateBlock(res.doc, res.id, {
+      html: `<a href="${asset.url}">Download ${asset.name}</a>`
+    })
+    document.value = withLink.doc
+    selectedId.value = res.id
+  }
 }
 
 // ---- export ---------------------------------------------------------------
@@ -151,7 +229,7 @@ useHead({ title: () => `${name.value} · Email designer` })
 </script>
 
 <template>
-  <div class="flex h-dvh flex-col bg-default">
+  <div class="flex h-[calc(100vh-64px)] flex-col bg-default">
     <!-- top bar -->
     <header class="flex items-center gap-3 border-b border-default px-4 py-2.5">
       <UButton
@@ -178,24 +256,17 @@ useHead({ title: () => `${name.value} · Email designer` })
         {{ saving ? 'Saving…' : 'Saved' }}
       </span>
 
-      <UFieldGroup>
+      <UDropdownMenu :items="previewDeviceItems">
         <UButton
-          icon="i-lucide-monitor"
+          :icon="previewDevice.icon"
+          :label="previewDevice.label"
+          color="neutral"
+          variant="outline"
           size="sm"
-          :color="previewMode === 'desktop' ? 'primary' : 'neutral'"
-          :variant="previewMode === 'desktop' ? 'soft' : 'ghost'"
-          aria-label="Desktop preview"
-          @click="previewMode = 'desktop'"
+          trailing-icon="i-lucide-chevron-down"
+          :aria-label="`Preview device: ${previewDevice.label}`"
         />
-        <UButton
-          icon="i-lucide-smartphone"
-          size="sm"
-          :color="previewMode === 'mobile' ? 'primary' : 'neutral'"
-          :variant="previewMode === 'mobile' ? 'soft' : 'ghost'"
-          aria-label="Mobile preview"
-          @click="previewMode = 'mobile'"
-        />
-      </UFieldGroup>
+      </UDropdownMenu>
 
       <UDropdownMenu :items="addItems">
         <UButton
@@ -206,6 +277,15 @@ useHead({ title: () => `${name.value} · Email designer` })
           size="sm"
         />
       </UDropdownMenu>
+
+      <UButton
+        icon="i-lucide-layout-template"
+        label="Templates"
+        color="neutral"
+        variant="outline"
+        size="sm"
+        @click="templateOpen = true"
+      />
 
       <UButton
         icon="i-lucide-code-xml"
@@ -243,14 +323,24 @@ useHead({ title: () => `${name.value} · Email designer` })
           <p class="mt-1 text-xs text-muted">
             “A product launch announcement with a hero image, two feature columns and a CTA button.”
           </p>
+          <UButton
+            class="mt-4"
+            icon="i-lucide-layout-template"
+            label="Browse templates"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            @click="templateOpen = true"
+          />
         </div>
 
+        <!-- Chat Messages -->
         <UChatMessages
           v-else
           :messages="chat.messages"
           :status="chat.status"
           :assistant="{ avatar: { icon: 'i-lucide-sparkles' } }"
-          class="min-h-0 flex-1 py-4"
+          class="min-h-0 flex-1 py-4 overflow-auto"
           :spacing-offset="120"
         >
           <template #content="{ message }">
@@ -298,17 +388,17 @@ useHead({ title: () => `${name.value} · Email designer` })
 
       <!-- preview -->
       <main class="min-h-0">
-        <EmailEmailPreview
+        <EmailPreview
           :document="document"
           :selected-id="selectedId"
-          :mode="previewMode"
+          :device="previewDevice"
           @select="selectedId = $event"
         />
       </main>
 
       <!-- inspector -->
       <aside class="hidden min-h-0 flex-col border-l border-default lg:flex">
-        <EmailEmailInspector
+        <EmailInspector
           :document="document"
           :selected-id="selectedId"
           @update:document="document = $event"
@@ -341,5 +431,20 @@ useHead({ title: () => `${name.value} · Email designer` })
         </div>
       </aside>
     </div>
+
+    <EmailUploadModal
+      v-model:open="uploadOpen"
+      :title="uploadMode === 'image' ? 'Upload an image' : 'Upload a file'"
+      :accept="uploadMode === 'image' ? 'image/*' : undefined"
+      @uploaded="onUploaded"
+    />
+
+    <EmailTemplatePicker
+      v-model:open="templateOpen"
+      title="Start from a template"
+      description="Pick a structure for this email, or keep the blank starter."
+      @select="applyTemplate"
+      @blank="applyBlank"
+    />
   </div>
 </template>

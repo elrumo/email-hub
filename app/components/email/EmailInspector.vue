@@ -5,9 +5,16 @@
  * immutably via the doc-ops helpers and bubbled up through the `update:*`
  * events; the parent owns the document state and autosave.
  */
-import type { Align, EmailBlock, EmailDocument } from '#shared/email/blocks'
-import { findBlock } from '#shared/email/blocks'
+import type { Align, EmailBlock, EmailDocument, PaddingSide } from '#shared/email/blocks'
+import {
+  coerceNumberLike,
+  findBlock,
+  getPaddingSides,
+  getUniformPaddingValue,
+  isPaddingSides
+} from '#shared/email/blocks'
 import { removeBlock, updateBlock, updateSettings } from '#shared/email/ops'
+import type { UploadedAsset } from '~/composables/useEmailAssets'
 
 const props = defineProps<{
   document: EmailDocument
@@ -29,6 +36,13 @@ const alignItems = [
   { label: 'Right', value: 'right', icon: 'i-lucide-align-right' }
 ] satisfies Array<{ label: string, value: Align, icon: string }>
 
+const paddingItems = [
+  { side: 'top', label: 'Top', icon: 'i-lucide-arrow-up' },
+  { side: 'right', label: 'Right', icon: 'i-lucide-arrow-right' },
+  { side: 'bottom', label: 'Bottom', icon: 'i-lucide-arrow-down' },
+  { side: 'left', label: 'Left', icon: 'i-lucide-arrow-left' }
+] satisfies Array<{ side: PaddingSide, label: string, icon: string }>
+
 function patch(field: string, value: unknown) {
   if (!props.selectedId) return
   emit('update:document', updateBlock(props.document, props.selectedId, { [field]: value }).doc)
@@ -36,6 +50,31 @@ function patch(field: string, value: unknown) {
 
 function patchSettings(field: string, value: unknown) {
   emit('update:document', updateSettings(props.document, { [field]: value }).doc)
+}
+
+function patchNumber(field: string, value: unknown, fallback = 0) {
+  patch(field, coerceNumberLike(value, fallback))
+}
+
+function patchSettingNumber(field: string, value: unknown, fallback = 0) {
+  patchSettings(field, coerceNumberLike(value, fallback))
+}
+
+function patchPadding(value: unknown) {
+  const fallback = getUniformPaddingValue(selected.value?.padding) ?? 0
+  patch('padding', coerceNumberLike(value, fallback))
+}
+
+function patchPaddingSide(side: PaddingSide, value: unknown) {
+  if (!props.selectedId || !selected.value || selected.value.type === 'spacer') return
+
+  const current = getPaddingSides(selected.value.padding)
+  emit('update:document', updateBlock(props.document, props.selectedId, {
+    padding: {
+      ...current,
+      [side]: coerceNumberLike(value, current[side])
+    }
+  }).doc)
 }
 
 function removeSelected() {
@@ -47,6 +86,34 @@ function removeSelected() {
 const typeLabel: Record<string, string> = {
   heading: 'Heading', text: 'Text', button: 'Button', image: 'Image',
   divider: 'Divider', spacer: 'Spacer', columns: 'Columns', html: 'Custom HTML'
+}
+
+const paddingPopoverOpen = ref(false)
+
+const hasIndividualPadding = computed(() => (
+  !!selected.value
+  && isPaddingSides(selected.value.padding)
+  && getUniformPaddingValue(selected.value.padding) == null
+))
+
+const paddingSummary = computed(() => {
+  if (!selected.value) return ''
+  const { top, right, bottom, left } = getPaddingSides(selected.value.padding)
+  return `Top ${top}px, right ${right}px, bottom ${bottom}px, left ${left}px`
+})
+
+watch(() => props.selectedId, () => {
+  paddingPopoverOpen.value = false
+})
+
+// Image upload: replace the selected image block's src (and alt, if empty) with
+// the uploaded asset.
+const uploadOpen = ref(false)
+function onImageUploaded(asset: UploadedAsset) {
+  if (!props.selectedId || !selected.value || selected.value.type !== 'image') return
+  const patchObj: Record<string, unknown> = { src: asset.url }
+  if (!selected.value.alt) patchObj.alt = asset.name.replace(/\.[a-z0-9]+$/i, '')
+  emit('update:document', updateBlock(props.document, props.selectedId, patchObj).doc)
 }
 </script>
 
@@ -110,7 +177,7 @@ const typeLabel: Record<string, string> = {
             <UInputNumber
               :model-value="selected.fontSize ?? 15"
               class="w-full"
-              @update:model-value="patch('fontSize', $event)"
+              @update:model-value="patchNumber('fontSize', $event, selected.fontSize ?? 15)"
             />
           </UFormField>
         </template>
@@ -153,13 +220,21 @@ const typeLabel: Record<string, string> = {
             <UInputNumber
               :model-value="selected.radius ?? 6"
               class="w-full"
-              @update:model-value="patch('radius', $event)"
+              @update:model-value="patchNumber('radius', $event, selected.radius ?? 6)"
             />
           </UFormField>
         </template>
 
         <!-- Image -->
         <template v-else-if="selected.type === 'image'">
+          <UButton
+            label="Upload image"
+            icon="i-lucide-upload"
+            color="neutral"
+            variant="outline"
+            block
+            @click="uploadOpen = true"
+          />
           <UFormField label="Image URL">
             <UInput
               :model-value="selected.src"
@@ -185,7 +260,7 @@ const typeLabel: Record<string, string> = {
             <UInputNumber
               :model-value="selected.width ?? 0"
               class="w-full"
-              @update:model-value="patch('width', $event)"
+              @update:model-value="patchNumber('width', $event, selected.width ?? 0)"
             />
           </UFormField>
         </template>
@@ -204,7 +279,7 @@ const typeLabel: Record<string, string> = {
             <UInputNumber
               :model-value="selected.thickness ?? 1"
               class="w-full"
-              @update:model-value="patch('thickness', $event)"
+              @update:model-value="patchNumber('thickness', $event, selected.thickness ?? 1)"
             />
           </UFormField>
         </template>
@@ -215,7 +290,7 @@ const typeLabel: Record<string, string> = {
             <UInputNumber
               :model-value="selected.height"
               class="w-full"
-              @update:model-value="patch('height', $event)"
+              @update:model-value="patchNumber('height', $event, selected.height)"
             />
           </UFormField>
         </template>
@@ -226,7 +301,7 @@ const typeLabel: Record<string, string> = {
             <UInputNumber
               :model-value="selected.gap ?? 16"
               class="w-full"
-              @update:model-value="patch('gap', $event)"
+              @update:model-value="patchNumber('gap', $event, selected.gap ?? 16)"
             />
           </UFormField>
           <UAlert
@@ -256,7 +331,7 @@ const typeLabel: Record<string, string> = {
         <!-- Shared: alignment + padding + background (where applicable) -->
         <template v-if="'align' in selected">
           <UFormField label="Alignment">
-            <UButtonGroup class="w-full">
+            <UFieldGroup class="w-full">
               <UButton
                 v-for="a in alignItems"
                 :key="a.value"
@@ -266,7 +341,7 @@ const typeLabel: Record<string, string> = {
                 class="flex-1 justify-center"
                 @click="patch('align', a.value)"
               />
-            </UButtonGroup>
+            </UFieldGroup>
           </UFormField>
         </template>
 
@@ -274,11 +349,50 @@ const typeLabel: Record<string, string> = {
           v-if="selected.type !== 'spacer'"
           label="Padding (px)"
         >
-          <UInputNumber
-            :model-value="selected.padding ?? 0"
-            class="w-full"
-            @update:model-value="patch('padding', $event)"
-          />
+          <div class="space-y-2">
+            <UFieldGroup class="w-full">
+              <UInputNumber
+                :model-value="getUniformPaddingValue(selected.padding) ?? undefined"
+                class="min-w-0 flex-1"
+                @update:model-value="patchPadding($event)"
+              />
+
+              <UPopover v-model:open="paddingPopoverOpen">
+                <UButton
+                  icon="i-lucide-sliders-horizontal"
+                  color="neutral"
+                  variant="outline"
+                  aria-label="Edit individual padding"
+                />
+
+                <template #content>
+                  <div class="w-80 space-y-3 p-4">
+                    <div class="grid grid-cols-2 gap-3">
+                      <UFormField
+                        v-for="item in paddingItems"
+                        :key="item.side"
+                        :label="item.label"
+                      >
+                        <UInputNumber
+                          :model-value="getPaddingSides(selected.padding)[item.side]"
+                          class="w-full"
+                          :icon="item.icon"
+                          @update:model-value="patchPaddingSide(item.side, $event)"
+                        />
+                      </UFormField>
+                    </div>
+                  </div>
+                </template>
+              </UPopover>
+            </UFieldGroup>
+
+            <p
+              v-if="hasIndividualPadding"
+              class="text-xs text-muted"
+            >
+              {{ paddingSummary }}
+            </p>
+          </div>
         </UFormField>
       </div>
     </template>
@@ -340,7 +454,7 @@ const typeLabel: Record<string, string> = {
           <UInputNumber
             :model-value="document.settings.contentWidth"
             class="w-full"
-            @update:model-value="patchSettings('contentWidth', $event)"
+            @update:model-value="patchSettingNumber('contentWidth', $event, document.settings.contentWidth)"
           />
         </UFormField>
         <UAlert
@@ -352,5 +466,12 @@ const typeLabel: Record<string, string> = {
         />
       </div>
     </template>
+
+    <EmailUploadModal
+      v-model:open="uploadOpen"
+      title="Upload an image"
+      accept="image/*"
+      @uploaded="onImageUploaded"
+    />
   </div>
 </template>

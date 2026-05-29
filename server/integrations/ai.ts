@@ -156,6 +156,48 @@ export async function chat(config: Record<string, unknown>, args: ChatArgs, sign
   return data.choices?.[0]?.message?.content ?? ''
 }
 
+export interface AiModelOption {
+  id: string
+  label: string
+}
+
+function modelLabel(raw: Record<string, unknown>, id: string): string {
+  const display = raw.display_name ?? raw.name
+  return typeof display === 'string' && display.trim() ? display : id
+}
+
+export async function listModels(config: Record<string, unknown>, signal: AbortSignal): Promise<AiModelOption[]> {
+  const { def } = providerOf(config)
+  const base = baseUrl(config)
+  if (def.needsBaseUrl && !base) throw new Error('Base URL is required for this provider')
+  if (def.needsKey && !String(config.apiKey ?? '')) throw new Error('API key is required for this provider')
+
+  const url = def.dialect === 'anthropic' ? `${base}/v1/models` : `${base}/models`
+  const res = await fetch(url, { headers: stripContentType(buildHeaders(config)), signal })
+  const text = await res.text()
+  let data: unknown = null
+  try {
+    data = text ? JSON.parse(text) : null
+  } catch { /* leave null */ }
+  if (res.status === 401 || res.status === 403) throw new Error('API key rejected')
+  if (!res.ok) {
+    const msg = (data as { error?: { message?: string } } | null)?.error?.message || text.slice(0, 200) || `HTTP ${res.status}`
+    throw new Error(`Could not list models (${res.status}): ${msg}`)
+  }
+
+  const rawModels = Array.isArray((data as { data?: unknown[] } | null)?.data) ? (data as { data: unknown[] }).data : []
+  const models = rawModels
+    .map((raw) => {
+      if (!raw || typeof raw !== 'object') return null
+      const model = raw as Record<string, unknown>
+      const id = String(model.id ?? '').trim()
+      return id ? { id, label: modelLabel(model, id) } : null
+    })
+    .filter((m): m is AiModelOption => Boolean(m))
+
+  return models.sort((a, b) => a.label.localeCompare(b.label))
+}
+
 async function embed(config: Record<string, unknown>, model: string, input: string, signal: AbortSignal): Promise<number[]> {
   const { def } = providerOf(config)
   if (def.dialect !== 'openai') throw new Error('Embeddings are only supported on OpenAI-style providers')
@@ -214,6 +256,13 @@ const connectionSchema: FieldSchema[] = [
     key: 'headers', label: 'Extra headers', type: 'keyValue', advanced: true,
     placeholder: 'Header name',
     help: 'Sent on every request. Useful for gateways (e.g. LiteLLM virtual keys, org ids).'
+  },
+  {
+    // Marks this AI connection as the default the flow assistant uses. Surfaced
+    // primarily as a switch on the Connections card; kept in the schema (under
+    // Advanced) so it survives validateAgainstSchema, which drops unknown keys.
+    key: 'defaultForAssist', label: 'Use for the flow assistant by default', type: 'boolean', advanced: true,
+    help: 'When you have several AI connections, the flow builder’s AI assist uses this one unless you pick another.'
   }
 ]
 

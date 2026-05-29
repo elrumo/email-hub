@@ -24,6 +24,7 @@ export default defineEventHandler(async (event) => {
     name,
     description: body?.description ? String(body.description) : null,
     enabled: body?.enabled !== false,
+    publicTrigger: !!body?.publicTrigger,
     definition: body.definition,
     cron: validation.cron,
     runAt: validation.runAt,

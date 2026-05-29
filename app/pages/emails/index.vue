@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import type { EmailDocument } from '#shared/email/blocks'
+import type { EmailTemplateDefinition } from '#shared/email/templates'
+
 /**
  * Email designer landing page: a project gallery. Create a blank project,
  * duplicate or delete existing ones, and open one in the 3-pane editor.
@@ -18,6 +21,7 @@ const { data: projects, refresh } = await useFetch<EmailProjectSummary[]>('/api/
 })
 const toast = useToast()
 const busy = ref(false)
+const templateOpen = ref(false)
 
 function relTime(ts: number): string {
   const diff = Date.now() - ts
@@ -29,16 +33,22 @@ function relTime(ts: number): string {
   return `${Math.round(h / 24)}d ago`
 }
 
-async function createProject() {
+async function createProject(document?: EmailDocument, name?: string) {
   busy.value = true
   try {
-    const res = await $fetch<{ id: string }>('/api/email-projects', { method: 'POST', body: {} })
+    const body = document ? { document, name: name || document.settings.title } : {}
+    const res = await $fetch<{ id: string }>('/api/email-projects', { method: 'POST', body })
+    templateOpen.value = false
     await navigateTo(`/emails/${res.id}`)
   } catch {
     toast.add({ title: 'Could not create project', color: 'error' })
   } finally {
     busy.value = false
   }
+}
+
+function createFromTemplate(payload: { template: EmailTemplateDefinition, document: EmailDocument }) {
+  createProject(payload.document, payload.template.name)
 }
 
 async function duplicate(p: EmailProjectSummary) {
@@ -88,7 +98,7 @@ function menuItems(p: EmailProjectSummary) {
         icon="i-lucide-plus"
         label="New email"
         :loading="busy"
-        @click="createProject"
+        @click="templateOpen = true"
       />
     </div>
 
@@ -169,9 +179,16 @@ function menuItems(p: EmailProjectSummary) {
         icon="i-lucide-plus"
         label="New email"
         :loading="busy"
-        @click="createProject"
+        @click="templateOpen = true"
       />
     </div>
+
+    <EmailEmailTemplatePicker
+      v-model:open="templateOpen"
+      :busy="busy"
+      @select="createFromTemplate"
+      @blank="createProject"
+    />
 
     <UModal
       :open="!!deleteTarget"

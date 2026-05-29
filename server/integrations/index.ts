@@ -8,6 +8,7 @@ import { kumaIntegration } from './kuma'
 import { mailgunIntegration } from './mailgun'
 import { mongoIntegration } from './mongo'
 import { notifyIntegration } from './notify'
+import { pingIntegration } from './ping'
 import { probeIntegration } from './probe'
 import { s3Integration } from './s3'
 import { telegramIntegration } from './telegram'
@@ -26,6 +27,7 @@ export function registerAllIntegrations(): void {
     bunnyIntegration,
     kumaIntegration,
     probeIntegration,
+    pingIntegration,
     notifyIntegration,
     browserIntegration,
     telegramIntegration,

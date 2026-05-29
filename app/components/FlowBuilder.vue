@@ -16,6 +16,8 @@ const router = useRouter()
 const name = ref(props.flow?.name ?? '')
 const description = ref(props.flow?.description ?? '')
 const enabled = ref(props.flow?.enabled ?? true)
+// allow unauthenticated visitors of a public board to run this flow
+const publicTrigger = ref(props.flow?.publicTrigger ?? false)
 
 // trigger: kind selector. We model 3 built-in kinds + integration poll triggers.
 type TriggerKind = 'manual' | 'cron' | 'webhook' | 'poll'
@@ -33,6 +35,39 @@ const triggerKind = ref<TriggerKind>(
 )
 
 const steps = ref<FlowStep[]>(props.flow?.definition?.steps ?? [])
+
+// build mode: hand-build the steps, or let the AI assistant draft them. The
+// assistant fills the very same name/trigger/steps refs, then drops the user
+// back into manual mode to review and tweak before saving.
+const mode = ref<'manual' | 'assist'>('manual')
+const modeItems = [
+  { label: 'Build manually', value: 'manual', icon: 'i-lucide-list-ordered' },
+  { label: 'AI assist', value: 'assist', icon: 'i-lucide-sparkles' }
+]
+
+function onAssistApply(draft: { name: string, description: string, trigger: FlowTrigger, steps: FlowStep[] }) {
+  if (draft.name) name.value = draft.name
+  if (draft.description) description.value = draft.description
+  trigger.value = draft.trigger
+  // re-derive the trigger-kind selector from the AI-proposed trigger
+  triggerKind.value
+    = trigger.value.integrationId === 'core' && trigger.value.triggerId === 'cron'
+      ? 'cron'
+      : trigger.value.triggerId === 'webhook'
+        ? 'webhook'
+        : trigger.value.triggerId === 'manual'
+          ? 'manual'
+          : 'poll'
+  steps.value = draft.steps
+  mode.value = 'manual'
+  toast.add({ title: 'Flow drafted — review and save', color: 'success', icon: 'i-lucide-sparkles' })
+}
+
+async function onConnectionCreated() {
+  // the assistant created an AI connection inline; refresh the shared list so
+  // the picker (and the rest of the builder) sees it
+  await refreshNuxtData('connections')
+}
 
 // browser-notification-on-run setting
 const { supported: pushSupported, enabled: pushEnabled, refresh: refreshPush } = usePush()
@@ -103,6 +138,13 @@ const pollConnItems = computed(() =>
 const pollItems = computed(() =>
   pollTriggers.value.map(p => ({ label: `${p.integration.name}: ${p.trigger.name}`, value: `${p.integration.id}:${p.trigger.id}` }))
 )
+const kumaTriggerSchema = useKumaMonitorSchema({
+  enabled: computed(() => triggerKind.value === 'poll' && trigger.value.integrationId === 'kuma'),
+  connectionId: computed(() => trigger.value.connectionId),
+  schema: computed(() => selectedPoll.value?.trigger.configSchema ?? []),
+  values: computed(() => trigger.value.config)
+})
+const renderedTriggerSchema = computed(() => kumaTriggerSchema.schema.value)
 function onPollSelect(v: string) {
   const [iid, tid] = v.split(':')
   trigger.value = { integrationId: iid!, triggerId: tid!, connectionId: null, config: {} }
@@ -147,14 +189,14 @@ async function save() {
     if (props.flow) {
       await $fetch(`/api/flows/${props.flow.id}`, {
         method: 'PUT',
-        body: { name: name.value, description: description.value, enabled: enabled.value, definition }
+        body: { name: name.value, description: description.value, enabled: enabled.value, publicTrigger: publicTrigger.value, definition }
       })
       toast.add({ title: 'Flow saved', color: 'success' })
       emit('saved', props.flow.id)
     } else {
       const res = await $fetch<{ id: string }>('/api/flows', {
         method: 'POST',
-        body: { name: name.value, description: description.value, enabled: enabled.value, definition }
+        body: { name: name.value, description: description.value, enabled: enabled.value, publicTrigger: publicTrigger.value, definition }
       })
       toast.add({ title: 'Flow created', color: 'success' })
       router.push(`/flows/${res.id}`)
@@ -193,8 +235,26 @@ async function save() {
       </div>
     </UCard>
 
+    <!-- build mode toggle -->
+    <UTabs
+      v-model="mode"
+      :items="modeItems"
+      :content="false"
+      color="primary"
+      class="w-full"
+    />
+
+    <!-- AI assistant -->
+    <FlowAssistant
+      v-show="mode === 'assist'"
+      :catalog="catalog"
+      :connections="connections"
+      @apply="onAssistApply"
+      @connection-created="onConnectionCreated"
+    />
+
     <!-- trigger -->
-    <div>
+    <div v-show="mode === 'manual'">
       <h2 class="mb-2 flex items-center gap-2 text-sm font-semibold text-highlighted">
         <UIcon
           name="i-lucide-zap"
@@ -268,7 +328,7 @@ async function save() {
             <SchemaForm
               v-if="selectedPoll && selectedPoll.trigger.configSchema.length"
               :model-value="trigger.config"
-              :schema="selectedPoll.trigger.configSchema"
+              :schema="renderedTriggerSchema"
               @update:model-value="trigger.config = $event"
             />
           </template>
@@ -284,7 +344,7 @@ async function save() {
     </div>
 
     <!-- steps -->
-    <div>
+    <div v-show="mode === 'manual'">
       <h2 class="mb-2 flex items-center gap-2 text-sm font-semibold text-highlighted">
         <UIcon
           name="i-lucide-list-ordered"
@@ -339,7 +399,7 @@ async function save() {
     </div>
 
     <!-- notify on run -->
-    <div>
+    <div v-show="mode === 'manual'">
       <h2 class="mb-2 flex items-center gap-2 text-sm font-semibold text-highlighted">
         <UIcon
           name="i-lucide-bell"
@@ -370,8 +430,31 @@ async function save() {
       </UCard>
     </div>
 
+    <!-- public triggering -->
+    <div v-show="mode === 'manual'">
+      <h2 class="mb-2 text-sm font-semibold text-highlighted">
+        Public triggering
+      </h2>
+      <UCard>
+        <div class="flex items-start justify-between gap-4">
+          <div class="space-y-1">
+            <p class="text-sm text-muted">
+              Let unauthenticated visitors run this flow when it appears on a public board.
+            </p>
+            <p class="text-xs text-dimmed">
+              A board marked “public trigger” overrides this and enables it for every flow on that board.
+            </p>
+          </div>
+          <USwitch v-model="publicTrigger" />
+        </div>
+      </UCard>
+    </div>
+
     <!-- footer actions -->
-    <div class="flex flex-wrap items-center justify-between gap-4 border-t border-default pt-5">
+    <div
+      v-show="mode === 'manual'"
+      class="flex flex-wrap items-center justify-between gap-4 border-t border-default pt-5"
+    >
       <div class="flex items-center gap-2">
         <USwitch v-model="enabled" />
         <span class="text-sm text-muted">{{ enabled ? 'Enabled' : 'Disabled' }}</span>

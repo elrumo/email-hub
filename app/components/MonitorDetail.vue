@@ -67,6 +67,32 @@ const num = (v: string | number | undefined | null): number | null => {
 const isGauges = computed(() => snapshot.value?.ok && snapshot.value.kind === 'gauges')
 const isStatus = computed(() => snapshot.value?.ok && snapshot.value.kind === 'status')
 
+/** One recorded ping (present in a constant-ping monitor's status snapshot raw). */
+interface PingSample { ts: number, latencyMs: number | null, ok: boolean, status: number }
+
+// constant-ping monitors attach their recent samples as raw.samples; extract
+// the latency series + summary so the status panel can show a live sparkline.
+const pingSamples = computed<PingSample[]>(() => {
+  const s = snapshot.value
+  if (!s?.ok || s.kind !== 'status') return []
+  const raw = s.raw as { samples?: unknown } | undefined
+  return Array.isArray(raw?.samples) ? (raw.samples as PingSample[]) : []
+})
+const hasPingSeries = computed(() => pingSamples.value.length > 0)
+const latencySeries = computed(() =>
+  pingSamples.value.map(p => p.latencyMs).filter((v): v is number => v != null)
+)
+const lastLatency = computed(() => latencySeries.value.at(-1) ?? null)
+const avgLatency = computed(() => {
+  const v = latencySeries.value
+  return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length) : null
+})
+const pingSuccessRate = computed(() => {
+  const s = pingSamples.value
+  if (!s.length) return null
+  return Math.round((s.filter(p => p.ok).length / s.length) * 100)
+})
+
 // Dokploy agent time-series, if the gauges snapshot carries it as `raw`.
 const series = computed<AgentSample[]>(() => {
   const s = snapshot.value
@@ -236,6 +262,29 @@ const updatedAgo = computed(() => {
           >
             {{ snapshot.detail }}
           </p>
+        </div>
+      </div>
+
+      <!-- constant-ping latency: live response-time sparkline + summary -->
+      <div
+        v-if="hasPingSeries"
+        class="rounded-md border border-default bg-elevated/10 p-3 space-y-2"
+      >
+        <div class="flex items-baseline justify-between">
+          <span class="text-xs text-muted">Response time</span>
+          <span class="text-lg font-semibold text-highlighted tabular-nums">
+            {{ lastLatency != null ? lastLatency : '—' }}<span class="text-xs text-dimmed"> ms</span>
+          </span>
+        </div>
+        <MetricSparkline
+          :values="latencySeries"
+          :color="snapshot.state === 'up' ? 'success' : 'error'"
+          :min="0"
+          :height="40"
+        />
+        <div class="flex items-center justify-between text-xs text-dimmed">
+          <span>avg {{ avgLatency != null ? `${avgLatency} ms` : '—' }}</span>
+          <span>{{ pingSuccessRate != null ? `${pingSuccessRate}% up` : '' }} · {{ pingSamples.length }} pings</span>
         </div>
       </div>
     </template>

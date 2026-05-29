@@ -17,7 +17,6 @@
  * `server/connectors/http.ts`.
  */
 
-import { load as loadYaml } from 'js-yaml'
 import type { FieldSchema } from '../engine/types'
 import {
   CONNECTOR_SCHEMA_VERSION,
@@ -127,7 +126,11 @@ export interface ConvertResult {
 // Parsing
 // ---------------------------------------------------------------------------
 
-/** Parse a raw spec string as JSON, falling back to YAML. */
+/**
+ * Parse a raw spec string as JSON, falling back to YAML. Uses Bun's native
+ * `Bun.YAML` (zero deps, like the S3 integration's use of Bun natives) — the
+ * server already runs under Bun for bun:sqlite.
+ */
 export function parseSpec(raw: string): OpenApiDoc | null {
   const trimmed = raw.trim()
   if (!trimmed) return null
@@ -135,7 +138,7 @@ export function parseSpec(raw: string): OpenApiDoc | null {
     return JSON.parse(trimmed) as OpenApiDoc
   } catch {
     try {
-      const doc = loadYaml(trimmed)
+      const doc = Bun.YAML.parse(trimmed)
       return doc && typeof doc === 'object' ? (doc as OpenApiDoc) : null
     } catch {
       return null
@@ -451,11 +454,26 @@ function buildAction(
 // Entry point
 // ---------------------------------------------------------------------------
 
+/**
+ * Some publishers wrap the spec in an envelope (e.g. a tRPC/openapi dump nests
+ * it under `result.data.json`, the same shape `server/integrations/dokploy-spec.ts`
+ * unwraps). Peel known wrappers so a wrapped URL/file imports cleanly.
+ */
+function unwrapEnvelope(doc: OpenApiDoc & { result?: { data?: { json?: OpenApiDoc } } }): OpenApiDoc {
+  const nested = doc?.result?.data?.json
+  if (nested && (nested.openapi || nested.swagger || nested.paths)) return nested
+  return doc
+}
+
 /** Convert a parsed (or raw-string) spec into a ConnectorDef. */
 export function convertOpenApi(input: string | OpenApiDoc, opts: ConvertOptions = {}): ConvertResult {
-  const doc = typeof input === 'string' ? parseSpec(input) : input
-  if (!doc || typeof doc !== 'object') {
+  const parsed = typeof input === 'string' ? parseSpec(input) : input
+  if (!parsed || typeof parsed !== 'object') {
     return { ok: false, error: 'could not parse spec as JSON or YAML' }
+  }
+  const doc = unwrapEnvelope(parsed)
+  if (!doc.openapi && !doc.swagger) {
+    return { ok: false, error: 'not an OpenAPI/Swagger document (missing "openapi"/"swagger" version field)' }
   }
   if (!doc.openapi && !doc.swagger) {
     return { ok: false, error: 'not an OpenAPI/Swagger document (missing "openapi"/"swagger" version field)' }

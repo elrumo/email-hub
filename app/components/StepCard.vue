@@ -52,6 +52,13 @@ const connectionItems = computed(() =>
     .filter(c => c.integrationId === asAction.value.integrationId)
     .map(c => ({ label: c.name, value: c.id }))
 )
+const kumaActionSchema = useKumaMonitorSchema({
+  enabled: computed(() => asAction.value.integrationId === 'kuma'),
+  connectionId: computed(() => asAction.value.connectionId),
+  schema: computed(() => currentAction.value?.inputSchema ?? []),
+  values: computed(() => asAction.value.input)
+})
+const renderedActionSchema = computed(() => kumaActionSchema.schema.value)
 
 function setIntegration(id: string) {
   patch({ integrationId: id, actionId: '', connectionId: null, input: {} } as Partial<ActionStep>)
@@ -188,7 +195,7 @@ const showGate = computed(() => showAmount.value)
           <USeparator label="Inputs" />
           <SchemaForm
             :model-value="asAction.input"
-            :schema="currentAction.inputSchema"
+            :schema="renderedActionSchema"
             allow-refs
             @update:model-value="setInput($event)"
           />

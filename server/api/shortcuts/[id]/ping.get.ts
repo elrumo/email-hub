@@ -1,6 +1,7 @@
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { getDb } from '../../../db'
 import { shortcuts } from '../../../db/schema'
+import { requireUser } from '../../../utils/auth'
 
 /**
  * Liveness check for a shortcut, proxied through the server so it works for any
@@ -13,9 +14,10 @@ import { shortcuts } from '../../../db/schema'
  * SSRF surface is accepted by design — the same as the flow HTTP actions.
  */
 export default defineEventHandler(async (event) => {
+  const user = await requireUser(event)
   const id = getRouterParam(event, 'id')!
   const db = getDb()
-  const rows = await db.select().from(shortcuts).where(eq(shortcuts.id, id))
+  const rows = await db.select().from(shortcuts).where(and(eq(shortcuts.id, id), eq(shortcuts.ownerId, user.id)))
   const shortcut = rows[0]
   if (!shortcut) throw createError({ statusCode: 404, statusMessage: 'shortcut not found' })
 

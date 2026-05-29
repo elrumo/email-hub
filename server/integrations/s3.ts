@@ -69,6 +69,13 @@ export const s3Integration: Integration = {
       help: 'Your MinIO/S3 endpoint. Leave blank for AWS S3 (it is inferred from the region).'
     },
     { key: 'bucket', label: 'Bucket', type: 'string', required: true, placeholder: 'backups' },
+    {
+      key: 'publicBaseUrl',
+      label: 'Public base URL',
+      type: 'string',
+      placeholder: 'https://cdn.example.com',
+      help: 'Optional. Where objects in this bucket are publicly served (e.g. a CDN or the bucket\'s public endpoint). Used by the email designer so uploaded images get a permanent public URL — {publicBaseUrl}/{key}. The bucket/prefix must be publicly readable.'
+    },
     { key: 'accessKeyId', label: 'Access key ID', type: 'string', required: true },
     { key: 'secretAccessKey', label: 'Secret access key', type: 'secret', required: true },
     {

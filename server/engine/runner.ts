@@ -27,6 +27,8 @@ export interface RunResult {
 export interface RunOptions {
   db: DB
   flowId: string
+  /** the flow's owner; connections are resolved scoped to this user (no session in the engine) */
+  ownerId: string | null
   definition: FlowDefinition
   triggerKind: RunTriggerKind
   triggerPayload: Record<string, unknown>
@@ -38,7 +40,7 @@ export interface RunOptions {
 class StopFlow extends Error {}
 
 export async function runFlow(opts: RunOptions): Promise<RunResult> {
-  const { db, flowId, definition, triggerPayload, now } = opts
+  const { db, flowId, ownerId, definition, triggerPayload, now } = opts
   const signal = opts.signal ?? new AbortController().signal
   const state = new FlowStateStore(db, flowId, now)
 
@@ -50,7 +52,7 @@ export async function runFlow(opts: RunOptions): Promise<RunResult> {
   const records: StepRecord[] = []
 
   try {
-    await runSteps(definition.steps, { db, scope, state, records, signal })
+    await runSteps(definition.steps, { db, ownerId, scope, state, records, signal })
     const anyError = records.some(r => r.status === 'error')
     return {
       status: anyError ? 'error' : 'success',
@@ -72,6 +74,7 @@ export async function runFlow(opts: RunOptions): Promise<RunResult> {
 
 interface ExecCtx {
   db: DB
+  ownerId: string | null
   scope: Scope
   state: FlowStateStore
   records: StepRecord[]
@@ -124,7 +127,7 @@ async function runAction(step: ActionStep, ctx: ExecCtx): Promise<StepRecord> {
     return { ...base, status: 'error', error: `action not found: ${step.integrationId}.${step.actionId}` }
   }
 
-  const connection = await resolveConnection(ctx.db, step.connectionId)
+  const connection = await resolveConnection(ctx.db, step.connectionId, ctx.ownerId)
   if (action.needsConnection && !connection) {
     return { ...base, status: 'error', error: `action ${step.actionId} requires a connection` }
   }

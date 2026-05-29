@@ -44,6 +44,7 @@ export async function executeFlow(
   const result = await runFlow({
     db,
     flowId,
+    ownerId: flow.ownerId,
     definition,
     triggerKind,
     triggerPayload,

@@ -30,13 +30,93 @@ export interface EmailSettings {
 
 export type Align = 'left' | 'center' | 'right'
 
+export const PADDING_SIDES = ['top', 'right', 'bottom', 'left'] as const
+export type PaddingSide = typeof PADDING_SIDES[number]
+
+export interface PaddingSides {
+  top?: number
+  right?: number
+  bottom?: number
+  left?: number
+}
+
+export type PaddingValue = number | PaddingSides
+
 interface BaseBlock {
   id: string
   type: string
-  /** outer padding in px, applied as a uniform cell padding */
-  padding?: number
+  /** outer padding in px, applied to all sides or per side */
+  padding?: PaddingValue
   /** per-block background override */
   background?: string
+}
+
+function readNumberish(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  if (typeof value === 'string') {
+    const parsed = Number.parseFloat(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  if (!value || typeof value !== 'object') return null
+
+  const record = value as {
+    value?: unknown
+    target?: { value?: unknown }
+    currentTarget?: { value?: unknown }
+  }
+
+  if ('value' in record) return readNumberish(record.value)
+  if (record.target && 'value' in record.target) return readNumberish(record.target.value)
+  if (record.currentTarget && 'value' in record.currentTarget) return readNumberish(record.currentTarget.value)
+  return null
+}
+
+export function coerceNumberLike(value: unknown, fallback = 0): number {
+  return readNumberish(value) ?? fallback
+}
+
+export function isPaddingSides(value: unknown): value is PaddingSides {
+  return !!value && typeof value === 'object' && !Array.isArray(value) && PADDING_SIDES.some(side => side in value)
+}
+
+export function getPaddingSides(padding: unknown): Required<PaddingSides> {
+  if (isPaddingSides(padding)) {
+    return {
+      top: coerceNumberLike(padding.top, 0),
+      right: coerceNumberLike(padding.right, 0),
+      bottom: coerceNumberLike(padding.bottom, 0),
+      left: coerceNumberLike(padding.left, 0)
+    }
+  }
+
+  const uniform = coerceNumberLike(padding, 0)
+  return { top: uniform, right: uniform, bottom: uniform, left: uniform }
+}
+
+export function normalizePadding(padding: unknown): PaddingValue | undefined {
+  if (padding == null || padding === '') return undefined
+  if (isPaddingSides(padding)) return getPaddingSides(padding)
+  return coerceNumberLike(padding, 0)
+}
+
+export function isUniformPadding(padding: unknown): boolean {
+  const { top, right, bottom, left } = getPaddingSides(padding)
+  return top === right && top === bottom && top === left
+}
+
+export function getUniformPaddingValue(padding: unknown): number | null {
+  if (!isUniformPadding(padding)) return null
+  return getPaddingSides(padding).top
+}
+
+export function paddingCssValue(padding: unknown): string {
+  const { top, right, bottom, left } = getPaddingSides(padding)
+  return `${top}px ${right}px ${bottom}px ${left}px`
+}
+
+export function paddingHorizontal(padding: unknown): number {
+  const { left, right } = getPaddingSides(padding)
+  return left + right
 }
 
 export interface HeadingBlock extends BaseBlock {

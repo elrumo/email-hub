@@ -21,8 +21,10 @@ export default defineNuxtConfig({
     kumaUrl: process.env.NUXT_KUMA_URL || '',
     kumaApiKey: process.env.NUXT_KUMA_API_KEY || '',
     bunnyApiKey: process.env.NUXT_BUNNY_API_KEY || '',
-    uiUsername: process.env.NUXT_UI_USERNAME || '',
-    uiPassword: process.env.NUXT_UI_PASSWORD || '',
+    // NUXT_UI_USERNAME/NUXT_UI_PASSWORD (the old shared HTTP Basic credential)
+    // are removed — auth is now per-user accounts with session cookies
+    // (server/middleware/auth.ts + server/utils/auth.ts). These env vars can be
+    // dropped from the deploy environment.
     discordWebhookUrl: process.env.NUXT_DISCORD_WEBHOOK_URL || '',
     notifyTransitions: process.env.NUXT_NOTIFY_TRANSITIONS || '',
     kumaErrorThreshold: process.env.NUXT_KUMA_ERROR_THRESHOLD || '',
@@ -86,8 +88,8 @@ export default defineNuxtConfig({
   // app.vue) on top of the manifest; the manifest alone is ignored by Safari.
   pwa: {
     registerType: 'autoUpdate',
-    // The app sits behind HTTP Basic auth — request the manifest with
-    // credentials so the browser sends the auth header and avoids a 401.
+    // The app is gated by a session cookie — request the manifest with
+    // credentials so the browser sends the cookie and avoids a 401.
     useCredentials: true,
     manifest: {
       name: 'Flow Hub',

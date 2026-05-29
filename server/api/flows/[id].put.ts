@@ -24,6 +24,7 @@ export default defineEventHandler(async (event) => {
     update.name = name
   }
   if (body?.description !== undefined) update.description = body.description ? String(body.description) : null
+  if (body?.publicTrigger !== undefined) update.publicTrigger = !!body.publicTrigger
   if (body?.enabled !== undefined) {
     update.enabled = !!body.enabled
     // Re-enabling clears the cron bookkeeping so a one-time 'at' (which

@@ -145,6 +145,40 @@ export const monitors = sqliteTable(
 )
 
 /**
+ * Time-series samples for a "constant ping" monitor (integrationId === "ping").
+ * Unlike Dokploy/Kuma — which are snapshotted on demand by the page — a ping
+ * monitor is driven by a server-side loop (server/utils/pingMonitor.ts, run from
+ * the scheduler): on its configured interval, for the configured duration, it
+ * fires one HTTP request and appends a row here. The monitor's snapshot action
+ * reads the latest row (current up/down) plus a recent window (latency series).
+ *
+ * Rows are pruned to a bounded retention window per monitor so the table can't
+ * grow without limit. `monitorId` cascades on monitor delete.
+ */
+export const pingSamples = sqliteTable(
+  'ping_samples',
+  {
+    id: text('id').primaryKey(),
+    monitorId: text('monitor_id')
+      .notNull()
+      .references(() => monitors.id, { onDelete: 'cascade' }),
+    /** epoch ms the ping was taken */
+    ts: integer('ts').notNull(),
+    /** true if the endpoint responded acceptably (per the monitor's success rule) */
+    ok: integer('ok', { mode: 'boolean' }).notNull(),
+    /** HTTP status code, or 0 when the request never completed (DNS/timeout/refused) */
+    status: integer('status').notNull(),
+    /** round-trip time in ms (null when the request failed before a response) */
+    latencyMs: integer('latency_ms'),
+    /** short failure reason when !ok (timeout / DNS / blocked / status), else null */
+    error: text('error')
+  },
+  t => [
+    index('ping_samples_monitor_ts_idx').on(t.monitorId, t.ts)
+  ]
+)
+
+/**
  * A user-defined automation: one trigger + an ordered list of steps. The
  * full definition lives in `definition` (validated by the engine), so the
  * engine schema can evolve without DB migrations.
@@ -166,6 +200,13 @@ export const flows = sqliteTable(
     name: text('name').notNull(),
     description: text('description'),
     enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+    /**
+     * Whether this flow may be triggered by unauthenticated visitors of a
+     * public board it appears on. A board's own `publicTrigger` flag takes
+     * precedence over this per-flow flag (board-on overrides flow-off and
+     * applies to every flow on the board).
+     */
+    publicTrigger: integer('public_trigger', { mode: 'boolean' }).notNull().default(false),
     /** JSON FlowDefinition */
     definition: text('definition', { mode: 'json' }).notNull().$type<unknown>(),
     /** cached cron expression (denormalized from definition.trigger) for the scheduler */
@@ -306,6 +347,44 @@ export const shortcuts = sqliteTable(
 )
 
 /**
+ * A board: one named home grid belonging to a user. A user can keep several
+ * boards and mark one as their `isDefault` (the one the home page opens on).
+ *
+ * A board can be made `isPublic`, in which case it is viewable read-only by
+ * unauthenticated visitors at `/b/<slug>` (slug is unique across all boards so
+ * the public URL is unambiguous). When `publicTrigger` is set, every flow tile
+ * on the board may be run by those public visitors — this board-level flag
+ * overrides the per-flow `flows.publicTrigger` flag and applies to all flows on
+ * the board. The public view only ever exposes display fields, never the
+ * underlying connection configs or webhook secrets.
+ */
+export const boards = sqliteTable(
+  'boards',
+  {
+    id: text('id').primaryKey(),
+    /** owning user (FK→users.id); nullable only as a migration artifact, always set on insert */
+    ownerId: text('owner_id').references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    /** url-safe unique identifier used for the public `/b/<slug>` view */
+    slug: text('slug').notNull(),
+    /** the board the home page opens on; exactly one per user is true */
+    isDefault: integer('is_default', { mode: 'boolean' }).notNull().default(false),
+    /** viewable read-only by unauthenticated visitors at /b/<slug> */
+    isPublic: integer('is_public', { mode: 'boolean' }).notNull().default(false),
+    /** allow public visitors to trigger every flow on this board (overrides per-flow flag) */
+    publicTrigger: integer('public_trigger', { mode: 'boolean' }).notNull().default(false),
+    /** ordering in the board switcher (ascending) */
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  t => [
+    index('boards_owner_idx').on(t.ownerId),
+    unique('boards_slug_uq').on(t.slug)
+  ]
+)
+
+/**
  * A tile on the home bento grid. `kind` selects how the tile renders and what
  * `refId` points at:
  *   - "shortcut" → refId = shortcuts.id (link tile, live ping if configured)
@@ -321,6 +400,8 @@ export const widgets = sqliteTable(
     id: text('id').primaryKey(),
     /** owning user (FK→users.id); nullable only as a migration artifact, always set on insert */
     ownerId: text('owner_id').references(() => users.id, { onDelete: 'cascade' }),
+    /** the board this tile lives on (FK→boards.id); nullable only as a migration artifact, always set on insert */
+    boardId: text('board_id').references(() => boards.id, { onDelete: 'cascade' }),
     /** "shortcut" | "flow" | "monitor" | "note" */
     kind: text('kind').notNull(),
     /** id of the referenced entity, or null for self-contained tiles (note) */
@@ -338,7 +419,8 @@ export const widgets = sqliteTable(
   },
   t => [
     index('widgets_sort_idx').on(t.sortOrder),
-    index('widgets_owner_idx').on(t.ownerId)
+    index('widgets_owner_idx').on(t.ownerId),
+    index('widgets_board_idx').on(t.boardId)
   ]
 )
 
@@ -429,6 +511,8 @@ export type ConnectorRow = typeof connectors.$inferSelect
 export type NewConnectorRow = typeof connectors.$inferInsert
 export type MonitorRow = typeof monitors.$inferSelect
 export type NewMonitorRow = typeof monitors.$inferInsert
+export type PingSampleRow = typeof pingSamples.$inferSelect
+export type NewPingSampleRow = typeof pingSamples.$inferInsert
 export type FlowRow = typeof flows.$inferSelect
 export type NewFlowRow = typeof flows.$inferInsert
 export type FlowRunRow = typeof flowRuns.$inferSelect
@@ -439,6 +523,8 @@ export type NewPushSubscriptionRow = typeof pushSubscriptions.$inferInsert
 export type AppKeyRow = typeof appKeys.$inferSelect
 export type ShortcutRow = typeof shortcuts.$inferSelect
 export type NewShortcutRow = typeof shortcuts.$inferInsert
+export type BoardRow = typeof boards.$inferSelect
+export type NewBoardRow = typeof boards.$inferInsert
 export type WidgetRow = typeof widgets.$inferSelect
 export type NewWidgetRow = typeof widgets.$inferInsert
 export type EmailProjectRow = typeof emailProjects.$inferSelect

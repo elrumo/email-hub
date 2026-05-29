@@ -67,6 +67,7 @@ function systemPrompt(doc: EmailDocument, selectedId?: string): string {
     '- When the user asks for a whole new email or a big redesign, prefer set_document with the full block list.',
     '- For targeted tweaks, use update_block / update_settings / add_block / remove_block / move_block.',
     '- Keep content width-friendly (~600px), use real, sensible copy, and accessible color contrast.',
+    '- IMAGES: never invent or hotlink random image URLs. If the user wants their own image/logo/file, tell them to upload it via the "Add block → Upload image/file" menu or the "Upload image" button in the image block inspector — uploads go to their S3 storage and get a permanent public URL you can then reference. You MAY use clearly-labelled placeholder URLs (e.g. via.placeholder.com) for layout, and tell the user to replace them by uploading.',
     '- After editing, briefly tell the user what you changed. Do not dump the JSON or HTML.',
     '',
     `Current document settings: ${JSON.stringify(doc.settings)}.`,

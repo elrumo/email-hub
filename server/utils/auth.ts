@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { and, eq, lt } from 'drizzle-orm'
+import { eq, lt } from 'drizzle-orm'
 import {
   createError,
   deleteCookie,
@@ -82,7 +82,7 @@ export function setSessionCookie(event: H3Event, token: string): void {
   })
 }
 
-export async function clearSession(event: H3Event): Promise<void> {
+export async function destroySession(event: H3Event): Promise<void> {
   const token = getCookie(event, SESSION_COOKIE)
   if (token) {
     await getDb().delete(sessions).where(eq(sessions.id, token))
@@ -173,6 +173,3 @@ export async function logActivity(
 export async function pruneExpiredSessions(): Promise<void> {
   await getDb().delete(sessions).where(lt(sessions.expiresAt, Date.now())).catch(() => {})
 }
-
-// re-export to keep `and` import honest for callers that compose filters
-export { and as _and }

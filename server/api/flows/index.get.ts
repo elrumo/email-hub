@@ -12,6 +12,7 @@ export default defineEventHandler(async (event) => {
     name: f.name,
     description: f.description,
     enabled: f.enabled,
+    publicTrigger: f.publicTrigger,
     definition: f.definition,
     cron: f.cron,
     runAt: f.runAt,

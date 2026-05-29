@@ -47,7 +47,7 @@ export async function schedulerTick(now: number, signal: AbortSignal): Promise<v
       // poll
       const triggerDef = getTrigger(trig.integrationId, trig.triggerId)
       if (triggerDef?.kind === 'poll' && triggerDef.poll) {
-        const connection = await resolveConnection(db, trig.connectionId)
+        const connection = await resolveConnection(db, trig.connectionId, flow.ownerId)
         const payload = await triggerDef.poll({ connection, config: trig.config || {}, signal })
         if (payload) {
           await executeFlow(flow.id, 'poll', payload, signal)

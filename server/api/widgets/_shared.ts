@@ -1,6 +1,35 @@
-import type { NewWidgetRow } from '../../db/schema'
+import { and, eq } from 'drizzle-orm'
+import type { DB } from '../../db'
+import { boards, type NewWidgetRow } from '../../db/schema'
 
 export const WIDGET_KINDS = ['shortcut', 'flow', 'monitor', 'note'] as const
+
+/**
+ * Resolve a board id that belongs to `ownerId`. When `boardId` is given it must
+ * be one of the user's boards; otherwise the user's default board is used (the
+ * first board as a fallback). Throws 400/404 on a missing/foreign board.
+ */
+export async function resolveOwnedBoard(
+  db: DB,
+  ownerId: string,
+  boardId: string | null | undefined
+): Promise<string> {
+  if (boardId) {
+    const rows = await db
+      .select({ id: boards.id })
+      .from(boards)
+      .where(and(eq(boards.id, boardId), eq(boards.ownerId, ownerId)))
+    if (!rows[0]) throw createError({ statusCode: 404, statusMessage: 'board not found' })
+    return rows[0].id
+  }
+  const owned = await db
+    .select({ id: boards.id, isDefault: boards.isDefault })
+    .from(boards)
+    .where(eq(boards.ownerId, ownerId))
+  const target = owned.find(b => b.isDefault) ?? owned[0]
+  if (!target) throw createError({ statusCode: 400, statusMessage: 'no board to add to' })
+  return target.id
+}
 export type WidgetKind = (typeof WIDGET_KINDS)[number]
 
 type WidgetFields = Pick<NewWidgetRow, 'kind' | 'refId' | 'content' | 'w' | 'h' | 'sortOrder'>

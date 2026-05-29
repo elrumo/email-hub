@@ -24,6 +24,9 @@ export default defineEventHandler(async (event) => {
   // allowlisted API endpoints that establish/inspect auth or self-authenticate
   if (path.startsWith('/api/auth/')) return
   if (path.startsWith('/api/hooks/')) return
+  // public board view + public flow triggering — these self-gate on the board's
+  // isPublic / publicTrigger flags (see server/api/public/*)
+  if (path.startsWith('/api/public/')) return
 
   const user = await getSessionUser(event)
   if (!user) {

@@ -36,7 +36,10 @@ export default defineEventHandler(async (event) => {
   const signal = (event.node.req as unknown as { signal?: AbortSignal }).signal ?? new AbortController().signal
   try {
     const client = connection ? await acquireClient(connection, signal) : null
-    const snapshot = await action.run({ connection, input: m.targetConfig, log: () => {}, signal, client })
+    // thread the monitor id in for integrations (e.g. ping) whose snapshot reads
+    // its own time-series; others simply ignore the extra key.
+    const input = { ...m.targetConfig, _monitorId: m.id }
+    const snapshot = await action.run({ connection, input, log: () => {}, signal, client })
     return { ok: true, ...snapshot }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) }

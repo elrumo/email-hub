@@ -68,10 +68,12 @@ const host = computed(() => {
 
 <template>
   <div class="group relative h-full">
-    <!-- edit-mode controls: drag handle + remove -->
+    <!-- edit-mode controls: drag handle + remove. The tile itself has
+         pointer-events disabled while editing (so it drags as one piece);
+         these controls opt back in. -->
     <div
       v-if="editMode"
-      class="absolute right-2 top-2 z-10 flex items-center gap-1"
+      class="pointer-events-auto absolute right-2 top-2 z-10 flex items-center gap-1"
     >
       <span
         class="drag-handle flex size-6 cursor-grab items-center justify-center rounded-md bg-default/80 text-dimmed backdrop-blur"
@@ -88,6 +90,7 @@ const host = computed(() => {
         variant="soft"
         size="xs"
         aria-label="Remove tile"
+        @pointerdown.stop
         @click="emit('remove')"
       />
     </div>

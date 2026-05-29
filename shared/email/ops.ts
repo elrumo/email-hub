@@ -6,8 +6,10 @@
  * returned `ok`/`message` so the AI gets useful tool feedback.
  */
 import {
+  coerceNumberLike,
   defaultBlock,
   findBlock,
+  normalizePadding,
   type EmailBlock,
   type EmailBlockType,
   type EmailDocument,
@@ -19,6 +21,9 @@ export interface OpResult {
   message: string
   doc: EmailDocument
 }
+
+const NUMERIC_BLOCK_FIELDS = new Set(['level', 'fontSize', 'radius', 'width', 'thickness', 'height', 'gap'])
+const NUMERIC_SETTINGS_FIELDS = new Set(['contentWidth'])
 
 function clone(doc: EmailDocument): EmailDocument {
   return structuredClone(doc)
@@ -77,7 +82,13 @@ export function setDocument(_doc: EmailDocument, next: EmailDocument): OpResult 
 /** Patch document-level settings (subject, colors, width, fonts…). */
 export function updateSettings(doc: EmailDocument, patch: Partial<EmailDocument['settings']>): OpResult {
   const next = clone(doc)
-  next.settings = { ...next.settings, ...patch }
+  const normalized = { ...patch } as Record<string, unknown>
+  for (const field of NUMERIC_SETTINGS_FIELDS) {
+    if (field in normalized) {
+      normalized[field] = coerceNumberLike(normalized[field], next.settings[field as keyof EmailDocument['settings']] as number)
+    }
+  }
+  next.settings = { ...next.settings, ...normalized }
   return { ok: true, message: 'Updated email settings.', doc: next }
 }
 
@@ -87,6 +98,12 @@ export function updateBlock(doc: EmailDocument, id: string, patch: Record<string
   const target = findBlock(next.blocks, id)
   if (!target) return { ok: false, message: `No block with id "${id}".`, doc }
   const { id: _id, type: _type, ...safe } = patch as Record<string, unknown>
+  if ('padding' in safe) safe.padding = normalizePadding(safe.padding)
+  for (const field of NUMERIC_BLOCK_FIELDS) {
+    if (field in safe) {
+      safe[field] = coerceNumberLike(safe[field], (target as Record<string, unknown>)[field] as number ?? 0)
+    }
+  }
   Object.assign(target, safe)
   replaceBlock(next.blocks, target)
   return { ok: true, message: `Updated ${target.type} block "${id}".`, doc: next }
