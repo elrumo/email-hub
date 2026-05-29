@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Board, Flow, Monitor, Shortcut, Widget, WidgetKind } from '~/types'
+import type { Board, Connection, Flow, Monitor, Shortcut, Widget, WidgetKind } from '~/types'
 
 // ── boards (multiple home grids) ──────────────────────────────────────────────
 const { data: boards, refresh: refreshBoards } = await useFetch<Board[]>('/api/boards', {
@@ -38,7 +38,23 @@ const { data: monitors } = await useFetch<Monitor[]>('/api/monitors', {
   default: () => []
 })
 const { data: catalog } = useCatalog()
+const { data: connections } = await useFetch<Connection[]>('/api/connections', {
+  key: 'connections',
+  default: () => []
+})
 const toast = useToast()
+
+// Connections whose integration can track public boards (Plausible / GA),
+// offered as the analytics provider in board settings.
+const analyticsConnItems = computed(() => [
+  { label: 'None', value: '' },
+  ...connections.value
+    .filter(c => catalog.value?.find(i => i.id === c.integrationId)?.webAnalytics)
+    .map(c => ({
+      label: `${c.name} · ${catalog.value?.find(i => i.id === c.integrationId)?.name ?? c.integrationId}`,
+      value: c.id
+    }))
+])
 
 // only ping shortcuts that actually appear on the grid (and are ping-enabled)
 const gridShortcuts = computed(() => {
@@ -132,10 +148,10 @@ async function removeWidget(w: Widget) {
 const boardModalOpen = ref(false)
 const boardBusy = ref(false)
 // draft for create/edit; `id` empty means "create new"
-const boardDraft = reactive({ id: '', name: '', isDefault: false, isPublic: false, publicTrigger: false })
+const boardDraft = reactive({ id: '', name: '', isDefault: false, isPublic: false, publicTrigger: false, analyticsConnectionId: '' })
 
 function openNewBoard() {
-  Object.assign(boardDraft, { id: '', name: '', isDefault: false, isPublic: false, publicTrigger: false })
+  Object.assign(boardDraft, { id: '', name: '', isDefault: false, isPublic: false, publicTrigger: false, analyticsConnectionId: '' })
   boardModalOpen.value = true
 }
 function openEditBoard() {
@@ -146,7 +162,8 @@ function openEditBoard() {
     name: b.name,
     isDefault: b.isDefault,
     isPublic: b.isPublic,
-    publicTrigger: b.publicTrigger
+    publicTrigger: b.publicTrigger,
+    analyticsConnectionId: b.analyticsConnectionId ?? ''
   })
   boardModalOpen.value = true
 }
@@ -165,7 +182,8 @@ async function saveBoard() {
           name: boardDraft.name,
           isDefault: boardDraft.isDefault,
           isPublic: boardDraft.isPublic,
-          publicTrigger: boardDraft.publicTrigger
+          publicTrigger: boardDraft.publicTrigger,
+          analyticsConnectionId: boardDraft.analyticsConnectionId || null
         }
       })
     } else {
@@ -174,7 +192,8 @@ async function saveBoard() {
         body: {
           name: boardDraft.name,
           isPublic: boardDraft.isPublic,
-          publicTrigger: boardDraft.publicTrigger
+          publicTrigger: boardDraft.publicTrigger,
+          analyticsConnectionId: boardDraft.analyticsConnectionId || null
         }
       })
       activeBoardId.value = res.id
@@ -804,6 +823,20 @@ function spanFor(w: Widget) {
             description="Public visitors can run every flow on this board. Overrides each flow's own setting."
           >
             <USwitch v-model="boardDraft.publicTrigger" />
+          </UFormField>
+
+          <UFormField
+            v-if="boardDraft.isPublic"
+            label="Analytics"
+            description="Track visits to this public board with Plausible or Google Analytics. Add a connection on the Connections page first."
+          >
+            <USelect
+              v-model="boardDraft.analyticsConnectionId"
+              :items="analyticsConnItems"
+              value-key="value"
+              placeholder="None"
+              class="w-full"
+            />
           </UFormField>
 
           <div

@@ -85,6 +85,12 @@ const serverSelection = computed({
 
 const machineMonitors = computed(() => monitors.value.filter(m => m.integrationId === 'dokploy'))
 const uptimeMonitors = computed(() => monitors.value.filter(m => m.integrationId === 'kuma'))
+const ANALYTICS_INTEGRATIONS = ['plausible', 'google-analytics']
+const analyticsMonitors = computed(() => monitors.value.filter(m => ANALYTICS_INTEGRATIONS.includes(m.integrationId)))
+// any monitor not handled by a dedicated section above (keeps new integrations visible)
+const otherMonitors = computed(() =>
+  monitors.value.filter(m => m.integrationId !== 'dokploy' && m.integrationId !== 'kuma' && !ANALYTICS_INTEGRATIONS.includes(m.integrationId))
+)
 
 async function discover(connectionId: string) {
   dokployInfo.value = null
@@ -431,6 +437,48 @@ const connItems = computed(() => monitorableConns.value.map(c => ({
           <!-- <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"> -->
           <MonitorCard
             v-for="m in uptimeMonitors"
+            :key="m.id"
+            :monitor="m"
+            :icon="findIntegration(catalog, m.integrationId)?.icon"
+            :img="findIntegration(catalog, m.integrationId)?.img"
+            @edit="openEdit(m)"
+            @remove="deleteTarget = m"
+            @open="detailTarget = m"
+          />
+        </div>
+      </div>
+
+      <div
+        v-if="analyticsMonitors.length > 0"
+        class="flex flex-col gap-3"
+      >
+        <h2 class="text-base font-semibold tracking-tight text-highlighted">
+          Analytics
+        </h2>
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <MonitorCard
+            v-for="m in analyticsMonitors"
+            :key="m.id"
+            :monitor="m"
+            :icon="findIntegration(catalog, m.integrationId)?.icon"
+            :img="findIntegration(catalog, m.integrationId)?.img"
+            @edit="openEdit(m)"
+            @remove="deleteTarget = m"
+            @open="detailTarget = m"
+          />
+        </div>
+      </div>
+
+      <div
+        v-if="otherMonitors.length > 0"
+        class="flex flex-col gap-3"
+      >
+        <h2 class="text-base font-semibold tracking-tight text-highlighted">
+          Other
+        </h2>
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <MonitorCard
+            v-for="m in otherMonitors"
             :key="m.id"
             :monitor="m"
             :icon="findIntegration(catalog, m.integrationId)?.icon"

@@ -117,6 +117,41 @@ watch(
     </div>
 
     <div
+      v-else-if="snapshot?.kind === 'stats'"
+      class="space-y-2"
+    >
+      <div class="grid grid-cols-2 gap-2">
+        <div
+          v-for="s in snapshot.stats"
+          :key="s.key"
+          class="rounded-lg bg-elevated/40 p-2"
+        >
+          <span class="flex items-center gap-1 text-xs text-muted">
+            <UIcon
+              v-if="s.icon"
+              :name="s.icon"
+              class="size-3"
+            />
+            {{ s.label }}
+          </span>
+          <span class="mt-0.5 block text-base font-semibold text-highlighted tabular-nums">
+            {{ s.value == null ? '—' : (typeof s.value === 'number' ? s.value.toLocaleString() : s.value)
+            }}<span
+              v-if="s.unit && s.value != null"
+              class="text-xs text-dimmed"
+            > {{ s.unit }}</span>
+          </span>
+        </div>
+      </div>
+      <p
+        v-if="snapshot.detail"
+        class="text-xs text-dimmed"
+      >
+        {{ snapshot.detail }}
+      </p>
+    </div>
+
+    <div
       v-else-if="snapshot?.kind === 'status'"
       class="mt-auto flex items-center gap-2"
     >

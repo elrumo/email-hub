@@ -376,6 +376,14 @@ export const boards = sqliteTable(
     isPublic: integer('is_public', { mode: 'boolean' }).notNull().default(false),
     /** allow public visitors to trigger every flow on this board (overrides per-flow flag) */
     publicTrigger: integer('public_trigger', { mode: 'boolean' }).notNull().default(false),
+    /**
+     * Optional analytics provider for this board: a connection of an integration
+     * with a `webAnalytics` capability (e.g. Plausible, Google Analytics). When
+     * set and the board is public, the public `/b/<slug>` page injects that
+     * provider's tracking script so board visits are counted. Cleared (set null)
+     * if the connection is deleted.
+     */
+    analyticsConnectionId: text('analytics_connection_id').references(() => connections.id, { onDelete: 'set null' }),
     /** ordering in the board switcher (ascending) */
     sortOrder: integer('sort_order').notNull().default(0),
     createdAt: integer('created_at').notNull(),

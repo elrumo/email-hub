@@ -17,6 +17,8 @@ export default defineEventHandler(() => {
     monitoring: i.monitoring
       ? { kind: i.monitoring.kind, snapshotAction: i.monitoring.snapshotAction, targetSchema: i.monitoring.targetSchema }
       : undefined,
+    // whether this integration can track public boards (Plausible / GA)
+    webAnalytics: !!i.webAnalytics,
     connectionSchema: i.connectionSchema,
     triggers: i.triggers.map(t => ({
       id: t.id,

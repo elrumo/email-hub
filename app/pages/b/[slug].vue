@@ -31,6 +31,15 @@ useSeoMeta({
   robots: 'noindex'
 })
 
+// Inject the board's analytics provider tracking script(s), if one is set. The
+// public endpoint only ever returns public-safe tags (a script URL + a domain /
+// measurement id) — never an API key. `attrs` (e.g. data-domain) are flattened
+// onto the tag so useHead emits them verbatim.
+const analyticsScripts = computed(() =>
+  (data.value?.analytics?.tags ?? []).map(({ attrs, ...tag }) => ({ ...tag, ...(attrs ?? {}) }))
+)
+useHead({ script: analyticsScripts })
+
 const toast = useToast()
 const running = ref<string | null>(null)
 async function runFlow(flowId: string) {

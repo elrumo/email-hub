@@ -141,13 +141,26 @@ export type MonitorSnapshot
     detail?: string
     raw?: unknown
   }
+  | {
+    /**
+     * Free-form numeric/string readings rendered as labelled "stat" cards (e.g.
+     * web-analytics figures: visitors, pageviews, live users). Unlike "gauges"
+     * these are NOT percentages — each carries its own value + optional unit, so
+     * the page shows the number verbatim instead of a 0–100 progress bar.
+     */
+    kind: 'stats'
+    stats: Array<{ key: string, label: string, icon?: string, value: number | string | null, unit?: string, hint?: string }>
+    /** short line shown under the stats, e.g. "Last 30 days · example.com" */
+    detail?: string
+    raw?: unknown
+  }
 
 export interface MonitoringCapability {
   /**
    * Which snapshot shape this integration produces. Lets the UI lay out the
    * "add monitor" affordance sensibly even before any snapshot is fetched.
    */
-  kind: 'gauges' | 'status'
+  kind: 'gauges' | 'status' | 'stats'
   /**
    * Id of the action (on this same integration) that returns a `MonitorSnapshot`.
    * It receives the monitor's `targetConfig` as `ctx.input` and the resolved
@@ -160,6 +173,40 @@ export interface MonitoringCapability {
    * target. These are exactly the inputs `snapshotAction` consumes.
    */
   targetSchema: FieldSchema[]
+}
+
+/**
+ * A single `<script>` tag an analytics integration wants injected on a tracked
+ * public page (a shared board). Built from a connection's config by
+ * `Integration.webAnalytics.scriptTags` — which MUST return only public-safe
+ * values (a site domain, a measurement id, a script URL) and NEVER a secret
+ * such as an API key. The public board endpoint forwards these verbatim and the
+ * board page renders them via `useHead`.
+ */
+export interface AnalyticsScriptTag {
+  /** external script URL (e.g. the Plausible script.js / GA gtag.js) */
+  src?: string
+  async?: boolean
+  defer?: boolean
+  /** inline script body (e.g. the GA gtag bootstrap snippet) */
+  innerHTML?: string
+  /** extra HTML attributes, e.g. { 'data-domain': 'example.com' } */
+  attrs?: Record<string, string>
+}
+
+/**
+ * Opt an integration into tracking shared (public) boards. When a board picks a
+ * connection of this integration as its analytics provider, the public board
+ * page injects the script tags this returns, so visits to the board are counted
+ * by the provider. Kept separate from `monitoring` (which reads stats back).
+ */
+export interface WebAnalyticsCapability {
+  /**
+   * Build the public-safe script tags to inject on a tracked board. Receives the
+   * connection's stored config. Return `[]` to inject nothing (e.g. when the
+   * config lacks the bits needed to track).
+   */
+  scriptTags: (config: Record<string, unknown>) => AnalyticsScriptTag[]
 }
 
 export interface Integration {
@@ -200,6 +247,12 @@ export interface Integration {
    * against it. See `MonitoringCapability`.
    */
   monitoring?: MonitoringCapability
+  /**
+   * Optional: opt this integration into tracking public boards. When set, a
+   * connection of this integration can be chosen as a board's analytics
+   * provider and its `scriptTags` are injected on the public board page.
+   */
+  webAnalytics?: WebAnalyticsCapability
 }
 
 // ---------------------------------------------------------------------------

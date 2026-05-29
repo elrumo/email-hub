@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AnalyticsMonitor from './monitors/AnalyticsMonitor.vue'
 import MachineMonitor from './monitors/MachineMonitor.vue'
 import UptimeMonitor from './monitors/UptimeMonitor.vue'
 
@@ -7,8 +8,11 @@ import type { Monitor, SnapshotResponse } from '../types'
 /**
  * Dispatcher for one monitor on the Monitoring page. Owns the snapshot fetch and
  * routes to the per-kind card that owns the full shell (header, actions, body):
- * Dokploy → MachineMonitor (gauges), Uptime Kuma → UptimeMonitor (status).
+ * Dokploy → MachineMonitor (gauges), Uptime Kuma → UptimeMonitor (status),
+ * Plausible / Google Analytics → AnalyticsMonitor (stats).
  */
+
+const ANALYTICS_INTEGRATIONS = ['plausible', 'google-analytics']
 const props = defineProps<{
   monitor: Monitor
   /** iconify icon / image for the integration, shown in the card header */
@@ -64,5 +68,18 @@ const error = computed(() => (response.value && !response.value.ok ? response.va
     @refresh="load"
     @edit="$emit('edit')"
     @remove="$emit('remove')"
+  />
+  <AnalyticsMonitor
+    v-else-if="ANALYTICS_INTEGRATIONS.includes(monitor.integrationId)"
+    :monitor="monitor"
+    :icon="icon"
+    :img="img"
+    :snapshot="snapshot?.kind === 'stats' ? snapshot : null"
+    :error="error"
+    :loading="loading"
+    @refresh="load"
+    @edit="$emit('edit')"
+    @remove="$emit('remove')"
+    @open="$emit('open')"
   />
 </template>
