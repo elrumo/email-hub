@@ -42,7 +42,7 @@ const expandedRun = ref<string | null>(null)
     <div class="mb-8 flex items-start justify-between gap-4">
       <div>
         <UButton
-          to="/"
+          to="/home"
           icon="i-lucide-arrow-left"
           label="Flows"
           color="neutral"

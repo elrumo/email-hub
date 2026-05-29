@@ -14,7 +14,7 @@ async function submit() {
   try {
     await auth.setup(username.value, password.value, email.value || undefined)
     toast.add({ title: 'Admin account created', color: 'success' })
-    await router.replace('/')
+    await router.replace('/home')
   } catch (e) {
     const msg = (e as { data?: { statusMessage?: string } })?.data?.statusMessage ?? 'Setup failed'
     toast.add({ title: msg, color: 'error' })

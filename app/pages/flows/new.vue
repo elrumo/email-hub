@@ -32,7 +32,7 @@ function clearExample() {
   <UContainer class="max-w-6xl py-10 sm:py-14">
     <div class="mb-8">
       <UButton
-        to="/"
+        to="/home"
         icon="i-lucide-arrow-left"
         label="Flows"
         color="neutral"
