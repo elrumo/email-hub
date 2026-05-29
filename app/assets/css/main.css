@@ -17,11 +17,16 @@
 }
 
 /*
- * Installed mobile PWAs can render beneath the status bar / notch. Add a bit
- * of breathing room to the app header only in standalone mode.
+ * Installed mobile PWAs render beneath the translucent status bar / notch, so
+ * the header needs to reserve the top safe-area inset or it gets overlapped by
+ * the OS clock and battery indicator. We can't rely on the
+ * `display-mode: standalone` media query here: iOS apps launched via
+ * `apple-mobile-web-app-capable` don't reliably match it. The `.pwa-standalone`
+ * class is toggled at runtime by the pwa-standalone client plugin, which also
+ * checks iOS's non-standard `navigator.standalone`.
  */
-@media (max-width: 767px) and (display-mode: standalone) {
-  .app-header {
+@media (max-width: 767px) {
+  .pwa-standalone .app-header {
     padding-top: calc(env(safe-area-inset-top, 0px) + 0.5rem);
   }
 }
