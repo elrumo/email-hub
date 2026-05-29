@@ -2,10 +2,13 @@ import { and, eq } from 'drizzle-orm'
 import type { DB } from '../../db'
 import { boards, type NewWidgetRow } from '../../db/schema'
 
-export const WIDGET_KINDS = ['shortcut', 'flow', 'monitor', 'note', 'section'] as const
+export const WIDGET_KINDS = ['shortcut', 'flow', 'monitor', 'note', 'section', 'image', 'iframe'] as const
 
 /** Tile kinds that carry their own `content` instead of pointing at an entity. */
-export const SELF_CONTAINED_KINDS = ['note', 'section'] as const
+export const SELF_CONTAINED_KINDS = ['note', 'section', 'image', 'iframe'] as const
+
+/** Self-contained kinds whose `content` is a URL (image src / iframe src). */
+export const URL_KINDS = ['image', 'iframe'] as const
 
 /** Allowed per-tile card chrome. */
 export const CARD_STYLES = ['shadow', 'outline', 'none'] as const
@@ -51,6 +54,35 @@ function isSelfContained(kind: WidgetKind): boolean {
   return (SELF_CONTAINED_KINDS as readonly string[]).includes(kind)
 }
 
+function isUrlKind(kind: WidgetKind): boolean {
+  return (URL_KINDS as readonly string[]).includes(kind)
+}
+
+/**
+ * Validate the URL stored in an image/iframe tile's `content`. Rejects unsafe
+ * schemes (e.g. `javascript:`) since this content is rendered as an `<img src>`
+ * / `<iframe src>`, including on public boards. Images may also use a
+ * `data:image/…` URI; iframes must be http(s) (or protocol-relative).
+ */
+function normalizeUrlContent(kind: WidgetKind, content: string | null): string {
+  const url = (content ?? '').trim()
+  if (!url) {
+    throw createError({ statusCode: 400, statusMessage: `${kind} tiles need a URL` })
+  }
+  const ok = kind === 'image'
+    ? /^(https?:\/\/|\/\/|data:image\/)/i.test(url)
+    : /^(https?:\/\/|\/\/)/i.test(url)
+  if (!ok) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: kind === 'image'
+        ? 'image URL must start with http(s):// or be a data:image/ URI'
+        : 'iframe URL must start with http(s)://'
+    })
+  }
+  return url
+}
+
 /**
  * Validate + coerce a widget create/update body, merging over `existing` for
  * partial PUTs. Throws createError on bad input. `kind` is immutable after
@@ -75,9 +107,11 @@ export function normalizeWidgetBody(
     throw createError({ statusCode: 400, statusMessage: `${kind} widgets need a refId` })
   }
 
-  const content = b.content !== undefined
+  let content = b.content !== undefined
     ? (b.content === null ? null : String(b.content))
     : existing.content ?? null
+
+  if (isUrlKind(kind)) content = normalizeUrlContent(kind, content)
 
   const cardStyle = (b.cardStyle !== undefined ? String(b.cardStyle) : existing.cardStyle ?? 'shadow') as CardStyle
   if (!CARD_STYLES.includes(cardStyle)) {
