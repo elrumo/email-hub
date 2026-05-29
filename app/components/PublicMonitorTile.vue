@@ -53,15 +53,16 @@ watch(
 </script>
 
 <template>
-  <UCard
-    class="h-full"
-    :ui="{ body: 'flex h-full flex-col gap-3' }"
+  <div
+    class="bento-card flex h-full flex-col gap-3 bg-default p-4 ring-1 ring-default"
   >
     <div class="flex items-center gap-2 font-medium text-highlighted">
-      <UIcon
-        name="i-lucide-activity"
-        class="size-4 shrink-0 text-dimmed"
-      />
+      <span class="flex size-8 shrink-0 items-center justify-center rounded-xl bg-elevated text-muted">
+        <UIcon
+          name="i-lucide-activity"
+          class="size-4"
+        />
+      </span>
       <span class="truncate">{{ monitor.name }}</span>
     </div>
 
@@ -146,5 +147,5 @@ watch(
     >
       No data yet.
     </p>
-  </UCard>
+  </div>
 </template>
