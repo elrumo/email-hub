@@ -30,6 +30,11 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuth()
 
+// Apply the persisted accent palette app-wide. Called here (not only inside
+// ThemePicker) so the theme is applied on every page — including the auth
+// pages, where the header chrome and its picker aren't rendered.
+useTheme()
+
 // Hide the app chrome (header/footer/nav) on pages that render standalone: the
 // auth pages (centered card) and public board views at /b/<slug> (no sign-in,
 // their own minimal header).
@@ -116,6 +121,8 @@ useSeoMeta({
 
         <template #right>
           <PushToggle />
+
+          <ThemePicker />
 
           <UColorModeButton />
 
