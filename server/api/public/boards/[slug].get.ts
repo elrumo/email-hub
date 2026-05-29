@@ -81,6 +81,9 @@ export default defineEventHandler(async (event) => {
       refId: t.refId,
       content: t.content,
       cardStyle: t.cardStyle,
+      bg: t.bg,
+      bgLight: t.bgLight,
+      bgDark: t.bgDark,
       w: t.w,
       h: t.h,
       sortOrder: t.sortOrder

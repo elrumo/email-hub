@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Board, CardStyle, Connection, Flow, Monitor, Shortcut, Widget, WidgetKind } from '~/types'
+import type { Board, CardBg, CardStyle, Connection, Flow, Monitor, Shortcut, Widget, WidgetKind } from '~/types'
 
 // ── boards (multiple home grids) ──────────────────────────────────────────────
 const { data: boards, refresh: refreshBoards } = await useFetch<Board[]>('/api/boards', {
@@ -79,11 +79,28 @@ const editMode = ref(false)
 const addOpen = ref(false)
 const adding = ref(false)
 const editingId = ref<string | null>(null)
-const draft = reactive<{ kind: WidgetKind, refId: string, content: string, cardStyle: CardStyle, w: number, h: number }>({
+// Default swatches offered when a tile first switches to a solid background —
+// a near-white surface in light theme, a deep neutral in dark theme.
+const DEFAULT_BG_LIGHT = '#f4f4f5'
+const DEFAULT_BG_DARK = '#27272a'
+const draft = reactive<{
+  kind: WidgetKind
+  refId: string
+  content: string
+  cardStyle: CardStyle
+  bg: CardBg
+  bgLight: string
+  bgDark: string
+  w: number
+  h: number
+}>({
   kind: 'shortcut',
   refId: '',
   content: '',
   cardStyle: 'shadow',
+  bg: 'none',
+  bgLight: DEFAULT_BG_LIGHT,
+  bgDark: DEFAULT_BG_DARK,
   w: 1,
   h: 1
 })
@@ -105,6 +122,19 @@ const CARD_STYLE_OPTIONS = [
   { label: 'Outline', value: 'outline', icon: 'i-lucide-square-dashed' },
   { label: 'None', value: 'none', icon: 'i-lucide-ban' }
 ] as const
+
+const CARD_BG_OPTIONS = [
+  { label: 'None', value: 'none', icon: 'i-lucide-ban' },
+  { label: 'Solid', value: 'solid', icon: 'i-lucide-paint-bucket' }
+] as const
+
+// Clear a tile's custom background: drop back to the default surface and restore
+// the default swatches so re-picking "Solid" starts from a sensible colour.
+function resetBg() {
+  draft.bg = 'none'
+  draft.bgLight = DEFAULT_BG_LIGHT
+  draft.bgDark = DEFAULT_BG_DARK
+}
 
 // kinds whose card chrome (shadow/outline/none) is configurable
 const hasCardStyle = computed(() => draft.kind !== 'section')
@@ -141,7 +171,16 @@ watch(() => draft.kind, (kind) => {
 
 function openAdd() {
   editingId.value = null
-  Object.assign(draft, { kind: 'shortcut', refId: '', content: '', cardStyle: 'shadow', ...defaultSpan('shortcut') })
+  Object.assign(draft, {
+    kind: 'shortcut',
+    refId: '',
+    content: '',
+    cardStyle: 'shadow',
+    bg: 'none',
+    bgLight: DEFAULT_BG_LIGHT,
+    bgDark: DEFAULT_BG_DARK,
+    ...defaultSpan('shortcut')
+  })
   addOpen.value = true
 }
 
@@ -152,6 +191,9 @@ function openEdit(w: Widget) {
     refId: w.refId ?? '',
     content: w.content ?? '',
     cardStyle: w.cardStyle ?? 'shadow',
+    bg: w.bg ?? 'none',
+    bgLight: w.bgLight ?? DEFAULT_BG_LIGHT,
+    bgDark: w.bgDark ?? DEFAULT_BG_DARK,
     w: w.w,
     h: w.h
   })
@@ -178,6 +220,9 @@ async function saveWidget() {
     refId: isReferenceKind.value ? draft.refId : null,
     content: isReferenceKind.value ? null : draft.content,
     cardStyle: draft.cardStyle,
+    bg: draft.bg,
+    bgLight: draft.bg === 'solid' ? draft.bgLight : null,
+    bgDark: draft.bg === 'solid' ? draft.bgDark : null,
     w: draft.w,
     h: draft.h
   }
@@ -906,6 +951,80 @@ function spanFor(w: Widget) {
             </div>
           </UFormField>
 
+          <!-- background fill: none (default surface) or a solid colour, with a
+               separate swatch per theme so it reads well in light and dark -->
+          <UFormField
+            v-if="hasCardStyle"
+            label="Background"
+            description="Keep the default surface, or fill the card with a solid colour."
+          >
+            <div class="space-y-3">
+              <div class="grid grid-cols-2 gap-2">
+                <button
+                  v-for="opt in CARD_BG_OPTIONS"
+                  :key="opt.value"
+                  type="button"
+                  class="flex items-center justify-center gap-1.5 rounded-lg border p-2 text-sm transition-colors"
+                  :class="draft.bg === opt.value
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-default text-muted hover:bg-elevated'"
+                  @click="draft.bg = opt.value"
+                >
+                  <UIcon
+                    :name="opt.icon"
+                    class="size-4"
+                  />
+                  {{ opt.label }}
+                </button>
+              </div>
+
+              <div
+                v-if="draft.bg === 'solid'"
+                class="space-y-3 rounded-lg border border-default p-3"
+              >
+                <div class="flex items-center justify-between">
+                  <span class="text-sm font-medium text-highlighted">Colours</span>
+                  <UButton
+                    label="Reset"
+                    icon="i-lucide-rotate-ccw"
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    @click="resetBg"
+                  />
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                  <div class="space-y-2">
+                    <span class="flex items-center gap-1.5 text-sm text-muted">
+                      <UIcon
+                        name="i-lucide-sun"
+                        class="size-4"
+                      />
+                      Light theme
+                    </span>
+                    <UColorPicker
+                      v-model="draft.bgLight"
+                      class="w-full"
+                    />
+                  </div>
+                  <div class="space-y-2">
+                    <span class="flex items-center gap-1.5 text-sm text-muted">
+                      <UIcon
+                        name="i-lucide-moon"
+                        class="size-4"
+                      />
+                      Dark theme
+                    </span>
+                    <UColorPicker
+                      v-model="draft.bgDark"
+                      class="w-full"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </UFormField>
+
           <!-- span (sections are always full-width single-row) -->
           <div
             v-if="draft.kind !== 'section'"
@@ -1171,6 +1290,22 @@ function spanFor(w: Widget) {
 }
 .resize-handle:hover {
   color: var(--ui-primary);
+}
+
+/* Touch devices have no hover to reveal the handle, so it was effectively
+   invisible (and thus unusable) on mobile. Surface it whenever a tile is in
+   edit mode, and give it a larger, easier-to-hit target. */
+@media (hover: none), (pointer: coarse) {
+  .resize-handle {
+    width: 1.75rem;
+    height: 1.75rem;
+    background: color-mix(in oklab, var(--ui-bg) 92%, transparent);
+    color: var(--ui-primary);
+  }
+  .tile-cell.is-edit .resize-handle {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /* live W×H readout shown while dragging the handle */

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "7b94b7b6-b252-4463-a97a-8a28de451561",
+  "id": "842b117e-5e58-4228-8cbe-358a907407ec",
   "prevId": "cbdd7965-350a-40dc-936d-4e0997ec3b28",
   "tables": {
     "activity_log": {
@@ -180,13 +180,6 @@
         },
         "analytics_connection_id": {
           "name": "analytics_connection_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "analytics_domain": {
-          "name": "analytics_domain",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -1415,6 +1408,28 @@
           "notNull": true,
           "autoincrement": false,
           "default": "'shadow'"
+        },
+        "bg": {
+          "name": "bg",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'none'"
+        },
+        "bg_light": {
+          "name": "bg_light",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "bg_dark": {
+          "name": "bg_dark",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         },
         "w": {
           "name": "w",

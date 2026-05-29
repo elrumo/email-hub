@@ -138,7 +138,8 @@ function hostOf(url: string) {
                 :key="w.id"
                 :style="{
                   gridColumn: w.kind === 'section' ? '1 / -1' : `span ${w.w}`,
-                  gridRow: w.kind === 'section' ? 'span 1' : `span ${w.h}`
+                  gridRow: w.kind === 'section' ? 'span 1' : `span ${w.h}`,
+                  ...bentoCardVars(w)
                 }"
               >
                 <!-- section heading band -->
@@ -158,7 +159,7 @@ function hostOf(url: string) {
                   :href="shortcutOf(w.refId)!.url"
                   target="_blank"
                   rel="noopener noreferrer"
-                  :class="`${bentoCardClass(w.cardStyle)} group flex h-full flex-col justify-between bg-default p-4`"
+                  :class="`${bentoCardClass(w.cardStyle, w.bg)} group flex h-full flex-col justify-between bg-default p-4`"
                 >
                   <span class="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-elevated text-muted">
                     <img
@@ -188,7 +189,7 @@ function hostOf(url: string) {
                 <!-- flow -->
                 <div
                   v-else-if="w.kind === 'flow' && flowOf(w.refId)"
-                  :class="`${bentoCardClass(w.cardStyle)} flex h-full flex-col gap-2 bg-default p-4`"
+                  :class="`${bentoCardClass(w.cardStyle, w.bg)} flex h-full flex-col gap-2 bg-default p-4`"
                 >
                   <div class="flex items-center gap-2 font-medium text-highlighted">
                     <span class="flex size-8 shrink-0 items-center justify-center rounded-xl bg-elevated text-muted">
@@ -232,13 +233,13 @@ function hostOf(url: string) {
                   v-else-if="w.kind === 'monitor' && monitorOf(w.refId)"
                   :board-slug="board.slug"
                   :monitor="monitorOf(w.refId)!"
-                  :card-class="bentoCardClass(w.cardStyle)"
+                  :card-class="bentoCardClass(w.cardStyle, w.bg)"
                 />
 
                 <!-- note (rich text) -->
                 <div
                   v-else-if="w.kind === 'note'"
-                  :class="`${bentoCardClass(w.cardStyle)} h-full bg-default p-4`"
+                  :class="`${bentoCardClass(w.cardStyle, w.bg)} h-full bg-default p-4`"
                 >
                   <!-- eslint-disable vue/no-v-html -- author-owned content from the Nuxt UI editor -->
                   <div
@@ -258,7 +259,7 @@ function hostOf(url: string) {
                 <!-- image -->
                 <div
                   v-else-if="w.kind === 'image' && w.content"
-                  :class="`${bentoCardClass(w.cardStyle)} h-full overflow-hidden bg-elevated`"
+                  :class="`${bentoCardClass(w.cardStyle, w.bg)} h-full overflow-hidden bg-elevated`"
                 >
                   <img
                     :src="w.content"
@@ -272,7 +273,7 @@ function hostOf(url: string) {
                 <!-- iframe / embed -->
                 <div
                   v-else-if="w.kind === 'iframe' && w.content"
-                  :class="`${bentoCardClass(w.cardStyle)} h-full overflow-hidden bg-default`"
+                  :class="`${bentoCardClass(w.cardStyle, w.bg)} h-full overflow-hidden bg-default`"
                 >
                   <iframe
                     :src="w.content"
