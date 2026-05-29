@@ -3,8 +3,12 @@ services:
     build: .
     image: flow-hub
     restart: unless-stopped
-    ports:
-      - "${PORT:-3000}:3000"
+    # No host `ports:` mapping — Dokploy's Traefik proxy reaches the
+    # container internally on port 3000 via the shared Docker network and
+    # routes by domain. Exposing a host port only causes conflicts
+    # (e.g. another container already bound 0.0.0.0:3000).
+    expose:
+      - "3000"
     env_file:
       - .env
     environment:
