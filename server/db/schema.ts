@@ -425,6 +425,12 @@ export const widgets = sqliteTable(
     content: text('content'),
     /** per-tile card chrome: "shadow" | "outline" | "none" */
     cardStyle: text('card_style').notNull().default('shadow'),
+    /** per-tile background fill: "none" (default surface) | "solid" (custom colour) */
+    bg: text('bg').notNull().default('none'),
+    /** solid background colour (hex) for light theme; used when bg === "solid" */
+    bgLight: text('bg_light'),
+    /** solid background colour (hex) for dark theme; used when bg === "solid" */
+    bgDark: text('bg_dark'),
     /** column span on the bento grid (1–4) */
     w: integer('w').notNull().default(1),
     /** row span on the bento grid (1–4) */
