@@ -22,4 +22,4 @@ services:
       start_period: 10s
 
 volumes:
-  dokploy_doctor_data:
+  flow_hub_data:
