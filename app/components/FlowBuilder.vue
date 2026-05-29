@@ -436,7 +436,7 @@ async function save() {
           label="Cancel"
           color="neutral"
           variant="outline"
-          to="/"
+          to="/home"
         />
         <UButton
           :label="flow ? 'Save changes' : 'Create flow'"

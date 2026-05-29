@@ -2,14 +2,23 @@
  * Client/server route guard for the multi-user app.
  *
  *  - Before any user exists, every route funnels to /setup (create first admin).
- *  - Unauthenticated visitors are sent to /login (signup lives on that page).
- *  - Authenticated users are bounced off /login and /setup back to the app.
+ *  - `/` is the public marketing landing page — open to unauthenticated visitors.
+ *  - Authenticated users are bounced off `/`, /login and /setup to the app home (/home).
+ *  - Unauthenticated visitors to any other route are sent to /login (signup lives there).
  *  - /admin requires the admin role.
  *
  * The API itself is independently gated server-side (server/middleware/auth.ts),
  * so this is UX, not the security boundary.
  */
-const PUBLIC_ROUTES = new Set(['/login', '/setup'])
+const LANDING = '/'
+// Auth pages (no app chrome). The landing page `/` is handled separately: it's
+// public, but logged-in users are redirected off it to the app home.
+const AUTH_ROUTES = new Set(['/login', '/setup'])
+
+// Routes an unauthenticated visitor is allowed to see (everything else → /login).
+function isPublic(path: string) {
+  return path === LANDING || AUTH_ROUTES.has(path)
+}
 
 export default defineNuxtRouteMiddleware(async (to) => {
   // public board views are open to unauthenticated visitors — skip the guard
@@ -22,8 +31,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
   try {
     await auth.ensureLoaded()
   } catch {
-    if (!PUBLIC_ROUTES.has(to.path)) return navigateTo('/login')
-    return
+    return isPublic(to.path) ? undefined : navigateTo('/login')
   }
 
   if (auth.needsSetup.value) {
@@ -31,14 +39,14 @@ export default defineNuxtRouteMiddleware(async (to) => {
   }
 
   if (!auth.user.value) {
-    return PUBLIC_ROUTES.has(to.path) ? undefined : navigateTo('/login')
+    return isPublic(to.path) ? undefined : navigateTo('/login')
   }
 
-  // logged in: keep them out of the auth pages
-  if (PUBLIC_ROUTES.has(to.path)) return navigateTo('/')
+  // logged in: keep them off the marketing landing + auth pages, send to the app
+  if (to.path === LANDING || AUTH_ROUTES.has(to.path)) return navigateTo('/home')
 
   // admin-only area
   if (to.path.startsWith('/admin') && auth.user.value.role !== 'admin') {
-    return navigateTo('/')
+    return navigateTo('/home')
   }
 })

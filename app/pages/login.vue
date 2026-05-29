@@ -18,7 +18,7 @@ async function submit() {
     } else {
       await auth.signup(username.value, password.value, email.value || undefined)
     }
-    await router.replace('/')
+    await router.replace('/home')
   } catch (e) {
     const msg = (e as { data?: { statusMessage?: string }, statusMessage?: string })?.data?.statusMessage
       ?? (e as { statusMessage?: string })?.statusMessage
