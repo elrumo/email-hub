@@ -96,7 +96,33 @@ function hostOf(url: string) {
         <div class="lg:grid lg:grid-cols-[16rem_1fr] lg:gap-12">
           <!-- bento.me-style profile header (left column, sticky on desktop) -->
           <header class="mb-10 flex flex-col items-center text-center lg:sticky lg:top-20 lg:mb-0 lg:items-start lg:self-start lg:text-left">
-            <span class="avatar-monogram flex size-20 items-center justify-center rounded-full text-3xl font-semibold text-inverted">
+            <!-- uploaded image avatar -->
+            <span
+              v-if="isImageIcon(board.icon)"
+              class="flex size-20 items-center justify-center overflow-hidden rounded-full bg-elevated ring-1 ring-default"
+            >
+              <img
+                :src="board.icon!"
+                alt=""
+                class="size-full object-cover"
+                referrerpolicy="no-referrer"
+              >
+            </span>
+            <!-- picked icon avatar -->
+            <span
+              v-else-if="board.icon"
+              class="avatar-monogram flex size-20 items-center justify-center rounded-full text-inverted"
+            >
+              <UIcon
+                :name="board.icon"
+                class="size-9"
+              />
+            </span>
+            <!-- name monogram (default) -->
+            <span
+              v-else
+              class="avatar-monogram flex size-20 items-center justify-center rounded-full text-3xl font-semibold text-inverted"
+            >
               {{ initial }}
             </span>
             <h1 class="mt-5 text-3xl font-semibold tracking-tight text-highlighted">

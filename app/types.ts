@@ -178,6 +178,8 @@ export interface Board {
   name: string
   /** url-safe unique id used for the public /b/<slug> view */
   slug: string
+  /** lucide icon name or an image URL / data: URI used as the board avatar; null = monogram */
+  icon?: string | null
   /** the board the home page opens on (one per user) */
   isDefault: boolean
   /** viewable read-only by unauthenticated visitors */
@@ -193,7 +195,7 @@ export interface Board {
 
 /** Shape returned by the public board endpoint (display-only, no secrets). */
 export interface PublicBoard {
-  board: { id: string, name: string, slug: string, publicTrigger: boolean }
+  board: { id: string, name: string, slug: string, icon?: string | null, publicTrigger: boolean }
   /** public-safe analytics script tags to inject on the board page (may be empty) */
   analytics?: { tags: AnalyticsScriptTag[] }
   widgets: Array<Pick<Widget, 'id' | 'kind' | 'refId' | 'content' | 'cardStyle' | 'bg' | 'bgLight' | 'bgDark' | 'w' | 'h' | 'sortOrder'>>

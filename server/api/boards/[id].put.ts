@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm'
 import { getDb } from '../../db'
 import { boards } from '../../db/schema'
 import { logActivity, requireUser } from '../../utils/auth'
-import { clearOtherDefaults, resolveAnalyticsConnectionId, uniqueSlug } from './_shared'
+import { clearOtherDefaults, normalizeBoardIcon, resolveAnalyticsConnectionId, uniqueSlug } from './_shared'
 
 /** Update a board (rename, slug, default/public/publicTrigger flags). */
 export default defineEventHandler(async (event) => {
@@ -25,6 +25,7 @@ export default defineEventHandler(async (event) => {
   if (body?.slug !== undefined) {
     update.slug = await uniqueSlug(db, String(body.slug || existing.name), id)
   }
+  if (body?.icon !== undefined) update.icon = normalizeBoardIcon(body.icon)
   if (body?.isPublic !== undefined) update.isPublic = !!body.isPublic
   if (body?.publicTrigger !== undefined) update.publicTrigger = !!body.publicTrigger
   if (body?.analyticsConnectionId !== undefined) {
