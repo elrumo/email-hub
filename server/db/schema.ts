@@ -384,6 +384,14 @@ export const boards = sqliteTable(
      * if the connection is deleted.
      */
     analyticsConnectionId: text('analytics_connection_id').references(() => connections.id, { onDelete: 'set null' }),
+    /**
+     * Optional site domain for the board's analytics provider, when that provider
+     * tracks a specific site rather than being keyed solely by its connection
+     * config — e.g. Plausible's `data-domain` (the domain is chosen per board now,
+     * not on the connection). Providers like Google Analytics ignore this. Only
+     * meaningful alongside `analyticsConnectionId`.
+     */
+    analyticsDomain: text('analytics_domain'),
     /** ordering in the board switcher (ascending) */
     sortOrder: integer('sort_order').notNull().default(0),
     createdAt: integer('created_at').notNull(),
