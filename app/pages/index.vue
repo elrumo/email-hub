@@ -590,7 +590,7 @@ function spanFor(w: Widget) {
       ref="gridRef"
       tag="div"
       name="tile"
-      class="grid auto-rows-[8rem] grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4"
+      class="grid auto-rows-[8.5rem] grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4"
       :class="{ 'is-editing': editMode }"
     >
       <div

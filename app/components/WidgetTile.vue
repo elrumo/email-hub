@@ -98,7 +98,7 @@ const host = computed(() => {
     <!-- missing reference -->
     <UCard
       v-if="missing"
-      class="h-full"
+      class="bento-card h-full"
       :ui="{ body: 'flex h-full flex-col items-center justify-center gap-2 text-center' }"
     >
       <UIcon
@@ -120,7 +120,7 @@ const host = computed(() => {
     <!-- shortcut -->
     <UCard
       v-else-if="widget.kind === 'shortcut' && shortcut"
-      class="h-full"
+      class="bento-card h-full"
       :ui="{ body: 'flex h-full flex-col gap-2' }"
     >
       <a
@@ -131,7 +131,7 @@ const host = computed(() => {
         :class="isLarge ? 'flex flex-col gap-3' : 'flex items-center gap-2.5'"
       >
         <span
-          class="flex shrink-0 items-center justify-center rounded-md bg-elevated text-muted"
+          class="flex shrink-0 items-center justify-center rounded-2xl bg-elevated text-muted"
           :class="isLarge ? 'size-12' : 'size-9'"
         >
           <UIcon
@@ -143,8 +143,8 @@ const host = computed(() => {
           <span class="flex items-center gap-1 font-medium">
             <span class="truncate">{{ shortcut.name }}</span>
             <UIcon
-              name="i-lucide-external-link"
-              class="size-3.5 shrink-0 text-dimmed"
+              name="i-lucide-arrow-up-right"
+              class="size-3.5 shrink-0 text-dimmed transition-all duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary"
             />
           </span>
           <span class="block truncate text-sm text-dimmed">{{ host }}</span>
@@ -160,7 +160,7 @@ const host = computed(() => {
     <!-- flow -->
     <UCard
       v-else-if="widget.kind === 'flow' && flow"
-      class="h-full"
+      class="bento-card h-full"
       :ui="{ body: 'flex h-full flex-col gap-2' }"
     >
       <div class="flex items-start justify-between gap-2">
@@ -168,10 +168,12 @@ const host = computed(() => {
           :to="`/flows/${flow.id}`"
           class="flex items-center gap-2 font-medium text-highlighted hover:text-primary"
         >
-          <UIcon
-            name="i-lucide-workflow"
-            class="size-4 shrink-0 text-dimmed"
-          />
+          <span class="flex size-8 shrink-0 items-center justify-center rounded-xl bg-elevated text-muted">
+            <UIcon
+              name="i-lucide-workflow"
+              class="size-4"
+            />
+          </span>
           <span class="truncate">{{ flow.name }}</span>
         </NuxtLink>
         <UBadge
@@ -207,7 +209,7 @@ const host = computed(() => {
     <!-- monitor (reuses the Monitoring page card, self-fetches its snapshot) -->
     <MonitorCard
       v-else-if="widget.kind === 'monitor' && monitor"
-      class="h-full"
+      class="bento-card h-full"
       :monitor="monitor"
       :icon="metaFor(monitor.integrationId)?.icon"
       :img="metaFor(monitor.integrationId)?.img"
@@ -216,7 +218,7 @@ const host = computed(() => {
     <!-- note -->
     <UCard
       v-else-if="widget.kind === 'note'"
-      class="h-full"
+      class="bento-card h-full"
       :ui="{ body: 'h-full' }"
     >
       <p

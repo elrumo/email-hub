@@ -56,6 +56,43 @@
 }
 
 /*
+ * ──────────────────────────────────────────────────────────────────────────
+ * Bento boards
+ * The home grid and the public /b/<slug> link-sharing page share a
+ * bento.me-inspired tile: a generously-rounded surface that rests on a faint
+ * shadow and gently lifts toward the pointer on hover. Built on Nuxt UI's
+ * surface tokens so it tracks light/dark automatically.
+ * ──────────────────────────────────────────────────────────────────────────
+ */
+.bento-card {
+  border-radius: 1.5rem;
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.04),
+    0 10px 30px -18px rgb(0 0 0 / 0.22);
+  transition:
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.28s ease,
+    border-color 0.28s ease;
+}
+
+@media (hover: hover) {
+  .bento-card:hover {
+    transform: translateY(-4px);
+    box-shadow:
+      0 2px 4px rgb(0 0 0 / 0.05),
+      0 22px 48px -22px rgb(0 0 0 / 0.4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bento-card,
+  .bento-card:hover {
+    transform: none;
+    transition: none;
+  }
+}
+
+/*
  * Comark renders AI chat markdown in the email designer; its `highlight` plugin
  * emits Shiki dual-theme tokens (light + dark CSS vars). Swap to the dark vars
  * when the app is in dark mode so code blocks in the AI copilot are legible.
