@@ -8,7 +8,7 @@ export interface FieldSchema {
   label: string
   type: FieldType
   required?: boolean
-  options?: Array<{ label: string, value: string | number }>
+  options?: Array<{ label: string, value: string | number, icon?: string, img?: string }>
   placeholder?: string
   help?: string
   default?: string | number | boolean | Record<string, string>

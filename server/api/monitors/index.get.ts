@@ -1,14 +1,17 @@
+import { eq } from 'drizzle-orm'
 import { getDb } from '../../db'
 import { monitors } from '../../db/schema'
 import { getIntegration } from '../../engine/registry'
 import { redactTargetConfig, targetSchemaFor } from '../../engine/monitoring'
 import { registerAllIntegrations } from '../../integrations'
+import { requireUser } from '../../utils/auth'
 
-/** List monitors. Secret values in targetConfig are redacted. */
-export default defineEventHandler(async () => {
+/** List the current user's monitors. Secret values in targetConfig are redacted. */
+export default defineEventHandler(async (event) => {
   registerAllIntegrations()
+  const user = await requireUser(event)
   const db = getDb()
-  const rows = await db.select().from(monitors)
+  const rows = await db.select().from(monitors).where(eq(monitors.ownerId, user.id))
   return rows.map(m => ({
     id: m.id,
     connectionId: m.connectionId,

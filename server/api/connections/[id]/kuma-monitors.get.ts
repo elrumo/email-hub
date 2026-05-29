@@ -1,6 +1,7 @@
 import { getDb } from '../../../db'
 import { resolveConnection } from '../../../engine/connections'
 import { discoverKumaMonitors } from '../../../integrations/kuma'
+import { requireUser } from '../../../utils/auth'
 
 /**
  * Auto-discovery for the "Add monitor" form (Uptime Kuma path). Given a Kuma
@@ -9,9 +10,10 @@ import { discoverKumaMonitors } from '../../../integrations/kuma'
  * the user can add many monitors at once instead of typing names by hand.
  */
 export default defineEventHandler(async (event) => {
+  const user = await requireUser(event)
   const id = getRouterParam(event, 'id')!
   const db = getDb()
-  const conn = await resolveConnection(db, id)
+  const conn = await resolveConnection(db, id, user.id)
   if (!conn || conn.integrationId !== 'kuma') {
     throw createError({ statusCode: 400, statusMessage: 'not an Uptime Kuma connection' })
   }

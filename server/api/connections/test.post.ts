@@ -1,9 +1,10 @@
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { getDb } from '../../db'
 import { connections } from '../../db/schema'
 import { getIntegration } from '../../engine/registry'
 import { mergeSecrets } from '../../engine/validate'
 import { registerAllIntegrations } from '../../integrations'
+import { requireUser } from '../../utils/auth'
 
 /**
  * Test a connection's credentials without saving. Body:
@@ -14,6 +15,7 @@ import { registerAllIntegrations } from '../../integrations'
  */
 export default defineEventHandler(async (event) => {
   registerAllIntegrations()
+  const user = await requireUser(event)
   const body = await readBody(event)
   const integrationId = String(body?.integrationId ?? '')
   const integration = getIntegration(integrationId)
@@ -26,7 +28,10 @@ export default defineEventHandler(async (event) => {
 
   if (body?.connectionId) {
     const db = getDb()
-    const existing = (await db.select().from(connections).where(eq(connections.id, String(body.connectionId))))[0]
+    const existing = (await db
+      .select()
+      .from(connections)
+      .where(and(eq(connections.id, String(body.connectionId)), eq(connections.ownerId, user.id))))[0]
     if (existing) config = mergeSecrets(config, existing.config, integration.connectionSchema)
   }
 

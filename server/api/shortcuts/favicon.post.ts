@@ -77,7 +77,7 @@ export default defineEventHandler(async (event) => {
       signal: controller.signal,
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; flow-hub-favicon/1.0)',
-        Accept: 'text/html,application/xhtml+xml'
+        'Accept': 'text/html,application/xhtml+xml'
       }
     })
 

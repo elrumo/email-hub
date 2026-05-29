@@ -39,12 +39,12 @@ const PROVIDERS: Record<string, ProviderDef> = {
 }
 
 const PROVIDER_OPTIONS = [
-  { label: 'OpenAI', value: 'openai' },
-  { label: 'Anthropic', value: 'anthropic' },
-  { label: 'LiteLLM (proxy)', value: 'litellm' },
-  { label: 'OpenAI-compatible', value: 'openai-compatible' },
-  { label: 'Anthropic-compatible', value: 'anthropic-compatible' },
-  { label: 'LM Studio (local)', value: 'lmstudio' }
+  { label: 'OpenAI', value: 'openai', icon: 'i-simple-icons-openai' },
+  { label: 'Anthropic', value: 'anthropic', icon: 'i-simple-icons-anthropic' },
+  { label: 'LiteLLM (proxy)', value: 'litellm', img: 'https://avatars.githubusercontent.com/u/121462774' },
+  { label: 'OpenAI-compatible', value: 'openai-compatible', icon: 'i-simple-icons-openai' },
+  { label: 'Anthropic-compatible', value: 'anthropic-compatible', icon: 'i-simple-icons-claude' },
+  { label: 'LM Studio (local)', value: 'lmstudio', img: 'https://lmstudio.ai/favicon.ico' }
 ]
 
 const ANTHROPIC_VERSION = '2023-06-01'
@@ -104,7 +104,7 @@ async function postJson<T = unknown>(
 
 // ---- dialect-specific chat ------------------------------------------------
 
-interface ChatArgs {
+export interface ChatArgs {
   system?: string
   user: string
   model: string
@@ -114,7 +114,13 @@ interface ChatArgs {
   json?: boolean
 }
 
-async function chat(config: Record<string, unknown>, args: ChatArgs, signal: AbortSignal): Promise<string> {
+/**
+ * Send a single user turn (with optional system prompt) to a saved AI
+ * connection's provider and return the model's text. Exported so other server
+ * code (e.g. the flow-assist route) can reuse the same multi-provider/dialect
+ * plumbing instead of duplicating fetch logic.
+ */
+export async function chat(config: Record<string, unknown>, args: ChatArgs, signal: AbortSignal): Promise<string> {
   const { def } = providerOf(config)
   const headers = buildHeaders(config)
   const base = baseUrl(config)
@@ -161,8 +167,6 @@ async function embed(config: Record<string, unknown>, model: string, input: stri
 
 // ---- connection schema (conditional fields) -------------------------------
 
-const openaiStyle = ['openai', 'litellm', 'openai-compatible', 'lmstudio']
-const anthropicStyle = ['anthropic', 'anthropic-compatible']
 const needsBaseUrlProviders = Object.entries(PROVIDERS).filter(([, d]) => d.needsBaseUrl).map(([id]) => id)
 const needsKeyOptional = ['litellm', 'openai-compatible', 'anthropic-compatible', 'lmstudio']
 

@@ -6,12 +6,13 @@ import type { FieldSchema } from '~/types'
 // State lives in the parent; helpers are passed in so there's a single source
 // of truth for the values object.
 interface Row { k: string, v: string }
-defineProps<{
+interface SelectItem { label: string, value: string | number, icon?: string, img?: string }
+const props = defineProps<{
   field: FieldSchema
   modelValue: Record<string, unknown>
   allowRefs?: boolean
   refHint: string
-  selectItems: (f: FieldSchema) => Array<{ label: string, value: string | number }>
+  selectItems: (f: FieldSchema) => SelectItem[]
   rowsFor: (key: string) => Row[]
   commitRows: (key: string) => void
   addRow: (key: string) => void
@@ -19,6 +20,12 @@ defineProps<{
 }>()
 const emit = defineEmits<{ set: [key: string, value: unknown] }>()
 const set = (key: string, value: unknown) => emit('set', key, value)
+
+// any select option carrying a logo means we render leading/item logos
+const hasOptionLogos = computed(() => props.selectItems(props.field).some(o => o.icon || o.img))
+function optionByValue(v: unknown): SelectItem | undefined {
+  return props.selectItems(props.field).find(o => o.value === v)
+}
 </script>
 
 <template>
@@ -35,7 +42,45 @@ const set = (key: string, value: unknown) => emit('set', key, value)
       :placeholder="field.placeholder || 'Choose…'"
       class="w-full"
       @update:model-value="set(field.key, $event)"
-    />
+    >
+      <template
+        v-if="hasOptionLogos"
+        #leading="{ modelValue: mv }"
+      >
+        <img
+          v-if="optionByValue(mv)?.img"
+          :src="optionByValue(mv)?.img"
+          alt=""
+          class="size-4.5"
+        >
+        <UIcon
+          v-else-if="optionByValue(mv)?.icon"
+          :name="optionByValue(mv)?.icon || ''"
+          class="size-4"
+        />
+      </template>
+      <!--
+        Own the leading area so the logo renders consistently: USelect draws the
+        `icon` field natively but not `img`, so we render either ourselves and
+        avoid the doubled-icon that a #item-label override caused.
+      -->
+      <template
+        v-if="hasOptionLogos"
+        #item-leading="{ item }"
+      >
+        <img
+          v-if="item?.img"
+          :src="item.img"
+          alt=""
+          class="size-4.5"
+        >
+        <UIcon
+          v-else-if="item?.icon"
+          :name="item.icon"
+          class="size-4"
+        />
+      </template>
+    </USelect>
     <USwitch
       v-else-if="field.type === 'boolean'"
       :model-value="modelValue[field.key] !== false"

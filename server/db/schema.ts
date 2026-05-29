@@ -8,6 +8,79 @@ import {
 } from 'drizzle-orm/sqlite-core'
 
 /**
+ * A user account. Authentication is username + password (argon2id hash via
+ * Bun.password). `role` gates the admin overview. The instance is bootstrapped
+ * by creating the first user as an `admin` (the first-run setup flow), which
+ * also adopts any pre-existing ownerless rows. Signup after that is open and
+ * creates `user`-role accounts.
+ */
+export const users = sqliteTable(
+  'users',
+  {
+    id: text('id').primaryKey(),
+    username: text('username').notNull(),
+    email: text('email'),
+    /** argon2id hash (full encoded string from Bun.password.hash) */
+    passwordHash: text('password_hash').notNull(),
+    /** "admin" | "user" */
+    role: text('role').notNull().default('user'),
+    lastLoginAt: integer('last_login_at'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  t => [unique('users_username_uq').on(t.username)]
+)
+
+/**
+ * An opaque server-side session. The row `id` is the random token stored in the
+ * `dd_session` cookie — there is no JWT and no signing secret; validity is a DB
+ * lookup. Expired rows are rejected and pruned on access.
+ */
+export const sessions = sqliteTable(
+  'sessions',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** epoch ms after which the session is invalid */
+    expiresAt: integer('expires_at').notNull(),
+    /** optional UA string, to show the device in the account page later */
+    userAgent: text('user_agent'),
+    createdAt: integer('created_at').notNull()
+  },
+  t => [index('sessions_user_idx').on(t.userId)]
+)
+
+/**
+ * An audit/activity entry. One row per meaningful action a user takes
+ * (auth.login, connection.create, flow.run, …). Powers the per-user activity
+ * log on the account page and the admin overview. `detail` is an optional JSON
+ * blob with action-specific context (e.g. flow run status).
+ */
+export const activityLog = sqliteTable(
+  'activity_log',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** dotted action key, e.g. "connection.create", "flow.run", "auth.login" */
+    action: text('action').notNull(),
+    /** optional entity kind/id the action targeted */
+    entityType: text('entity_type'),
+    entityId: text('entity_id'),
+    /** optional JSON context */
+    detail: text('detail', { mode: 'json' }).$type<Record<string, unknown>>(),
+    createdAt: integer('created_at').notNull()
+  },
+  t => [
+    index('activity_user_idx').on(t.userId),
+    index('activity_created_idx').on(t.createdAt)
+  ]
+)
+
+/**
  * A saved set of credentials for one integration (e.g. a single Dokploy
  * instance, a Bunny account, a Discord webhook). `integrationId` matches the
  * `id` of a registered integration module; `config` holds that integration's
@@ -21,6 +94,8 @@ export const connections = sqliteTable(
   'connections',
   {
     id: text('id').primaryKey(),
+    /** owning user (FK→users.id); nullable only as a migration artifact, always set on insert */
+    ownerId: text('owner_id').references(() => users.id, { onDelete: 'cascade' }),
     integrationId: text('integration_id').notNull(),
     name: text('name').notNull(),
     /** JSON blob of the integration's connection fields */
@@ -30,7 +105,9 @@ export const connections = sqliteTable(
   },
   t => [
     index('connections_integration_idx').on(t.integrationId),
-    unique('connections_integration_name_uq').on(t.integrationId, t.name)
+    index('connections_owner_idx').on(t.ownerId),
+    // names are unique per owner+integration, not globally
+    unique('connections_owner_integration_name_uq').on(t.ownerId, t.integrationId, t.name)
   ]
 )
 
@@ -49,6 +126,8 @@ export const monitors = sqliteTable(
   'monitors',
   {
     id: text('id').primaryKey(),
+    /** owning user (FK→users.id); nullable only as a migration artifact, always set on insert */
+    ownerId: text('owner_id').references(() => users.id, { onDelete: 'cascade' }),
     connectionId: text('connection_id')
       .notNull()
       .references(() => connections.id, { onDelete: 'cascade' }),
@@ -59,7 +138,10 @@ export const monitors = sqliteTable(
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull()
   },
-  t => [index('monitors_connection_idx').on(t.connectionId)]
+  t => [
+    index('monitors_connection_idx').on(t.connectionId),
+    index('monitors_owner_idx').on(t.ownerId)
+  ]
 )
 
 /**
@@ -74,6 +156,13 @@ export const flows = sqliteTable(
   'flows',
   {
     id: text('id').primaryKey(),
+    /**
+     * owning user (FK→users.id). This is the source of truth for unattended
+     * runs: the scheduler/runner loads connections scoped to this owner, so no
+     * session is needed inside the engine. Nullable only as a migration
+     * artifact — always set on insert.
+     */
+    ownerId: text('owner_id').references(() => users.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     description: text('description'),
     enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
@@ -90,7 +179,10 @@ export const flows = sqliteTable(
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull()
   },
-  t => [index('flows_enabled_idx').on(t.enabled)]
+  t => [
+    index('flows_enabled_idx').on(t.enabled),
+    index('flows_owner_idx').on(t.ownerId)
+  ]
 )
 
 /**
@@ -190,6 +282,8 @@ export const shortcuts = sqliteTable(
   'shortcuts',
   {
     id: text('id').primaryKey(),
+    /** owning user (FK→users.id); nullable only as a migration artifact, always set on insert */
+    ownerId: text('owner_id').references(() => users.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     url: text('url').notNull(),
     /** optional lucide icon name (e.g. "i-lucide-globe") */
@@ -205,7 +299,10 @@ export const shortcuts = sqliteTable(
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull()
   },
-  t => [index('shortcuts_sort_idx').on(t.sortOrder)]
+  t => [
+    index('shortcuts_sort_idx').on(t.sortOrder),
+    index('shortcuts_owner_idx').on(t.ownerId)
+  ]
 )
 
 /**
@@ -222,6 +319,8 @@ export const widgets = sqliteTable(
   'widgets',
   {
     id: text('id').primaryKey(),
+    /** owning user (FK→users.id); nullable only as a migration artifact, always set on insert */
+    ownerId: text('owner_id').references(() => users.id, { onDelete: 'cascade' }),
     /** "shortcut" | "flow" | "monitor" | "note" */
     kind: text('kind').notNull(),
     /** id of the referenced entity, or null for self-contained tiles (note) */
@@ -237,13 +336,97 @@ export const widgets = sqliteTable(
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull()
   },
-  t => [index('widgets_sort_idx').on(t.sortOrder)]
+  t => [
+    index('widgets_sort_idx').on(t.sortOrder),
+    index('widgets_owner_idx').on(t.ownerId)
+  ]
+)
+
+/**
+ * An email design project: a named document made of email blocks (see
+ * app/email/blocks.ts EmailDocument). The block tree lives in `document` as a
+ * JSON blob so the block schema can evolve without DB migrations — the renderer
+ * (app/email/render.ts) turns it into email-safe, table-based, inline-styled
+ * HTML. The AI chat (server/api/email-projects/[id]/chat.post.ts) edits this
+ * document via tool calls and the editor saves it back via PUT.
+ */
+export const emailProjects = sqliteTable(
+  'email_projects',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    /** JSON EmailDocument: { settings, blocks: [...] } */
+    document: text('document', { mode: 'json' }).notNull().$type<Record<string, unknown>>(),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  t => [index('email_projects_updated_idx').on(t.updatedAt)]
+)
+
+/**
+ * One message in an email project's AI chat history. Stores the Vercel AI SDK
+ * `UIMessage` shape directly: `role` ('user' | 'assistant' | 'system') plus the
+ * full `parts` array (text / reasoning / tool-invocation parts) as JSON, so the
+ * client can rehydrate the conversation verbatim on reload. Ordered by
+ * `createdAt`; cascade-deleted with the project.
+ */
+export const emailChatMessages = sqliteTable(
+  'email_chat_messages',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => emailProjects.id, { onDelete: 'cascade' }),
+    /** "user" | "assistant" | "system" */
+    role: text('role').notNull(),
+    /** JSON array of AI SDK UIMessage parts */
+    parts: text('parts', { mode: 'json' }).notNull().$type<unknown[]>(),
+    createdAt: integer('created_at').notNull()
+  },
+  t => [index('email_chat_messages_project_idx').on(t.projectId, t.createdAt)]
+)
+
+/**
+ * A user-uploaded declarative connector (community connector). `def` holds the
+ * full `ConnectorDef` JSON (see server/connectors/types.ts) — pure data, no
+ * code. At boot and on every change, each enabled row is validated, compiled
+ * into an `Integration` (server/connectors/compile.ts) and registered under the
+ * namespaced id `x-<connectorId>`, so it shows up in the catalog and is usable
+ * in flows exactly like a built-in integration.
+ *
+ * `connectorId` is the un-prefixed id from the def (unique); `enabled` lets a
+ * user keep a connector installed without registering it.
+ */
+export const connectors = sqliteTable(
+  'connectors',
+  {
+    id: text('id').primaryKey(),
+    /** the ConnectorDef.id (un-prefixed); unique across installed connectors */
+    connectorId: text('connector_id').notNull(),
+    name: text('name').notNull(),
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+    /** full ConnectorDef JSON */
+    def: text('def', { mode: 'json' }).notNull().$type<Record<string, unknown>>(),
+    /** optional marketplace provenance (source URL / author), informational */
+    source: text('source'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  t => [unique('connectors_connector_id_uq').on(t.connectorId)]
 )
 
 export const schemaSql = sql // re-export marker to keep tree-shaking honest
 
+export type UserRow = typeof users.$inferSelect
+export type NewUserRow = typeof users.$inferInsert
+export type SessionRow = typeof sessions.$inferSelect
+export type NewSessionRow = typeof sessions.$inferInsert
+export type ActivityLogRow = typeof activityLog.$inferSelect
+export type NewActivityLogRow = typeof activityLog.$inferInsert
 export type ConnectionRow = typeof connections.$inferSelect
 export type NewConnectionRow = typeof connections.$inferInsert
+export type ConnectorRow = typeof connectors.$inferSelect
+export type NewConnectorRow = typeof connectors.$inferInsert
 export type MonitorRow = typeof monitors.$inferSelect
 export type NewMonitorRow = typeof monitors.$inferInsert
 export type FlowRow = typeof flows.$inferSelect
@@ -258,3 +441,7 @@ export type ShortcutRow = typeof shortcuts.$inferSelect
 export type NewShortcutRow = typeof shortcuts.$inferInsert
 export type WidgetRow = typeof widgets.$inferSelect
 export type NewWidgetRow = typeof widgets.$inferInsert
+export type EmailProjectRow = typeof emailProjects.$inferSelect
+export type NewEmailProjectRow = typeof emailProjects.$inferInsert
+export type EmailChatMessageRow = typeof emailChatMessages.$inferSelect
+export type NewEmailChatMessageRow = typeof emailChatMessages.$inferInsert

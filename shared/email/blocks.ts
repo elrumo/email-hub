@@ -1,0 +1,199 @@
+/**
+ * The email block model — the single source of truth shared by the client
+ * editor (preview + inspector), the server AI chat tools, and the HTML
+ * renderer. An EmailDocument is a flat, ordered list of blocks plus
+ * document-level settings; the renderer (./render.ts) turns it into email-safe,
+ * table-based, inline-styled HTML.
+ *
+ * Design note: blocks are intentionally flat (no nesting) EXCEPT for `columns`,
+ * which holds its own per-column block lists. A flat list keeps selection,
+ * reordering and AI edits simple — the AI references a block by its stable `id`.
+ */
+
+/** Document-level settings applied to the email wrapper. */
+export interface EmailSettings {
+  /** outer page background (around the content card) */
+  backgroundColor: string
+  /** the content card background */
+  contentBackground: string
+  /** max content width in px (typically 600 for email) */
+  contentWidth: number
+  /** base font family stack */
+  fontFamily: string
+  /** default text color */
+  textColor: string
+  /** the email's <title> / preheader-ish subject used in exports */
+  title: string
+  /** hidden preheader text shown in inbox previews */
+  preheader: string
+}
+
+export type Align = 'left' | 'center' | 'right'
+
+interface BaseBlock {
+  id: string
+  type: string
+  /** outer padding in px, applied as a uniform cell padding */
+  padding?: number
+  /** per-block background override */
+  background?: string
+}
+
+export interface HeadingBlock extends BaseBlock {
+  type: 'heading'
+  text: string
+  level: 1 | 2 | 3
+  align: Align
+  color?: string
+}
+
+export interface TextBlock extends BaseBlock {
+  type: 'text'
+  /** inline HTML allowed (b, i, a, br) — sanitized at render time */
+  html: string
+  align: Align
+  color?: string
+  fontSize?: number
+}
+
+export interface ButtonBlock extends BaseBlock {
+  type: 'button'
+  label: string
+  href: string
+  align: Align
+  backgroundColor: string
+  color: string
+  radius?: number
+}
+
+export interface ImageBlock extends BaseBlock {
+  type: 'image'
+  src: string
+  alt: string
+  href?: string
+  align: Align
+  /** width in px; omit/0 for full content width */
+  width?: number
+}
+
+export interface DividerBlock extends BaseBlock {
+  type: 'divider'
+  color?: string
+  thickness?: number
+}
+
+export interface SpacerBlock extends BaseBlock {
+  type: 'spacer'
+  height: number
+}
+
+export interface ColumnsBlock extends BaseBlock {
+  type: 'columns'
+  /** 2 or 3 columns, each an independent list of blocks */
+  columns: EmailBlock[][]
+  /** gap between columns in px */
+  gap?: number
+}
+
+/**
+ * Escape hatch: raw email HTML the AI (or user) provides verbatim. The renderer
+ * emits it inside a table cell unchanged — the AI is instructed to keep it
+ * email-safe (tables + inline styles). Use sparingly; structured blocks are
+ * preferred for everything the typed blocks can express.
+ */
+export interface HtmlBlock extends BaseBlock {
+  type: 'html'
+  html: string
+}
+
+export type EmailBlock
+  = | HeadingBlock
+    | TextBlock
+    | ButtonBlock
+    | ImageBlock
+    | DividerBlock
+    | SpacerBlock
+    | ColumnsBlock
+    | HtmlBlock
+
+export type EmailBlockType = EmailBlock['type']
+
+export interface EmailDocument {
+  settings: EmailSettings
+  blocks: EmailBlock[]
+}
+
+export const DEFAULT_SETTINGS: EmailSettings = {
+  backgroundColor: '#f4f4f5',
+  contentBackground: '#ffffff',
+  contentWidth: 600,
+  fontFamily: '-apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, Helvetica, Arial, sans-serif',
+  textColor: '#18181b',
+  title: 'Untitled email',
+  preheader: ''
+}
+
+/** A blank starter document with a friendly placeholder block. */
+export function emptyDocument(): EmailDocument {
+  return {
+    settings: { ...DEFAULT_SETTINGS },
+    blocks: [
+      {
+        id: 'blk_welcome',
+        type: 'heading',
+        text: 'Your headline here',
+        level: 1,
+        align: 'center',
+        padding: 24
+      } as HeadingBlock,
+      {
+        id: 'blk_intro',
+        type: 'text',
+        html: 'Start by describing the email you want in the chat — or click a block to edit it directly.',
+        align: 'center',
+        padding: 16
+      } as TextBlock
+    ]
+  }
+}
+
+/** Defaults for a freshly-inserted block of each type (id filled by caller). */
+export function defaultBlock(type: EmailBlockType, id: string): EmailBlock {
+  switch (type) {
+    case 'heading':
+      return { id, type, text: 'Heading', level: 2, align: 'left', padding: 16 }
+    case 'text':
+      return { id, type, html: 'Some text.', align: 'left', padding: 16 }
+    case 'button':
+      return { id, type, label: 'Click me', href: 'https://example.com', align: 'center', backgroundColor: '#2563eb', color: '#ffffff', radius: 6, padding: 16 }
+    case 'image':
+      return { id, type, src: 'https://via.placeholder.com/600x200', alt: '', align: 'center', padding: 16 }
+    case 'divider':
+      return { id, type, color: '#e4e4e7', thickness: 1, padding: 8 }
+    case 'spacer':
+      return { id, type, height: 24 }
+    case 'columns':
+      return { id, type, columns: [[], []], gap: 16, padding: 8 }
+    case 'html':
+      return { id, type, html: '<!-- custom html -->' }
+  }
+}
+
+/** Walk every block including those nested in columns. */
+export function walkBlocks(blocks: EmailBlock[], fn: (b: EmailBlock) => void): void {
+  for (const b of blocks) {
+    fn(b)
+    if (b.type === 'columns') {
+      for (const col of b.columns) walkBlocks(col, fn)
+    }
+  }
+}
+
+/** Find a block by id anywhere in the document (including inside columns). */
+export function findBlock(blocks: EmailBlock[], id: string): EmailBlock | null {
+  let found: EmailBlock | null = null
+  walkBlocks(blocks, (b) => {
+    if (b.id === id) found = b
+  })
+  return found
+}

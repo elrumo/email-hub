@@ -44,3 +44,16 @@
     opacity: 1 !important;
   }
 }
+
+/*
+ * Comark renders AI chat markdown in the email designer; its `highlight` plugin
+ * emits Shiki dual-theme tokens (light + dark CSS vars). Swap to the dark vars
+ * when the app is in dark mode so code blocks in the AI copilot are legible.
+ */
+html.dark .shiki span {
+  color: var(--shiki-dark) !important;
+  background-color: var(--shiki-dark-bg) !important;
+  font-style: var(--shiki-dark-font-style) !important;
+  font-weight: var(--shiki-dark-font-weight) !important;
+  text-decoration: var(--shiki-dark-text-decoration) !important;
+}

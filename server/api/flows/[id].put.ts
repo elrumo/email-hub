@@ -1,16 +1,18 @@
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { getDb } from '../../db'
 import { flows } from '../../db/schema'
 import { validateFlowDefinition } from '../../engine/validateFlow'
 import { registerAllIntegrations } from '../../integrations'
+import { logActivity, requireUser } from '../../utils/auth'
 
 export default defineEventHandler(async (event) => {
   registerAllIntegrations()
+  const user = await requireUser(event)
   const id = getRouterParam(event, 'id')!
   const body = await readBody(event)
 
   const db = getDb()
-  const rows = await db.select().from(flows).where(eq(flows.id, id))
+  const rows = await db.select().from(flows).where(and(eq(flows.id, id), eq(flows.ownerId, user.id)))
   const existing = rows[0]
   if (!existing) throw createError({ statusCode: 404, statusMessage: 'flow not found' })
 
@@ -43,6 +45,7 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  await db.update(flows).set(update).where(eq(flows.id, id))
+  await db.update(flows).set(update).where(and(eq(flows.id, id), eq(flows.ownerId, user.id)))
+  await logActivity(user.id, 'flow.update', { entityType: 'flow', entityId: id })
   return { id, updated: true }
 })

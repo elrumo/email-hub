@@ -4,9 +4,11 @@ import { connections } from '../../db/schema'
 import { getIntegration } from '../../engine/registry'
 import { validateAgainstSchema } from '../../engine/validate'
 import { registerAllIntegrations } from '../../integrations'
+import { logActivity, requireUser } from '../../utils/auth'
 
 export default defineEventHandler(async (event) => {
   registerAllIntegrations()
+  const user = await requireUser(event)
   const body = await readBody(event)
   const integrationId = String(body?.integrationId ?? '')
   const name = String(body?.name ?? '').trim()
@@ -30,6 +32,7 @@ export default defineEventHandler(async (event) => {
   try {
     await db.insert(connections).values({
       id,
+      ownerId: user.id,
       integrationId,
       name,
       config: validated.value,
@@ -40,6 +43,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 409, statusMessage: `a ${integrationId} connection named "${name}" already exists` })
   }
 
+  await logActivity(user.id, 'connection.create', { entityType: 'connection', entityId: id, detail: { integrationId, name } })
   setResponseStatus(event, 201)
   return { id, integrationId, name }
 })

@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { getDb } from '../../db'
 import { connections, monitors } from '../../db/schema'
 import { resolveConnection } from '../../engine/connections'
 import { discoverDokployMonitoring } from '../../integrations/dokploy-monitoring'
+import { requireUser } from '../../utils/auth'
 
 /**
  * Create monitor(s) for a Dokploy connection straight from the API — no UI.
@@ -19,17 +20,21 @@ import { discoverDokployMonitoring } from '../../integrations/dokploy-monitoring
  * is skipped, not duplicated. Returns { created: [...], skipped: [...] }.
  */
 export default defineEventHandler(async (event) => {
+  const user = await requireUser(event)
   const body = await readBody(event)
   const connectionId = String(body?.connectionId ?? '')
   const onlyServerId: string | undefined = body?.serverId !== undefined ? String(body.serverId) : undefined
 
   const db = getDb()
-  const conn = (await db.select().from(connections).where(eq(connections.id, connectionId)))[0]
+  const conn = (await db
+    .select()
+    .from(connections)
+    .where(and(eq(connections.id, connectionId), eq(connections.ownerId, user.id))))[0]
   if (!conn || conn.integrationId !== 'dokploy') {
     throw createError({ statusCode: 400, statusMessage: 'connectionId must reference a Dokploy connection' })
   }
 
-  const connection = await resolveConnection(db, connectionId)
+  const connection = await resolveConnection(db, connectionId, user.id)
   const ac = new AbortController()
   const timer = setTimeout(() => ac.abort(), 15_000)
   let info
@@ -63,7 +68,10 @@ export default defineEventHandler(async (event) => {
   }
 
   // Existing monitors for this connection, keyed by serverId, to stay idempotent.
-  const existing = await db.select().from(monitors).where(eq(monitors.connectionId, connectionId))
+  const existing = await db
+    .select()
+    .from(monitors)
+    .where(and(eq(monitors.connectionId, connectionId), eq(monitors.ownerId, user.id)))
   const existingServerIds = new Set(
     existing.map(m => String((m.targetConfig as Record<string, unknown>)?.serverId ?? ''))
   )
@@ -80,6 +88,7 @@ export default defineEventHandler(async (event) => {
     const id = randomUUID()
     await db.insert(monitors).values({
       id,
+      ownerId: user.id,
       connectionId,
       integrationId: 'dokploy',
       name: t.name,

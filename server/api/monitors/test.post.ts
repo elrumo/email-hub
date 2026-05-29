@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { getDb } from '../../db'
 import { connections, monitors } from '../../db/schema'
 import { acquireClient } from '../../engine/clientPool'
@@ -6,6 +6,7 @@ import { resolveConnection } from '../../engine/connections'
 import { getAction, getIntegration } from '../../engine/registry'
 import { mergeSecrets } from '../../engine/validate'
 import { registerAllIntegrations } from '../../integrations'
+import { requireUser } from '../../utils/auth'
 import type { MonitorSnapshot } from '../../engine/types'
 
 /**
@@ -16,24 +17,31 @@ import type { MonitorSnapshot } from '../../engine/types'
  */
 export default defineEventHandler(async (event) => {
   registerAllIntegrations()
+  const user = await requireUser(event)
   const body = await readBody(event)
   const connectionId = String(body?.connectionId ?? '')
   let targetConfig: Record<string, unknown> = (body?.targetConfig && typeof body.targetConfig === 'object') ? body.targetConfig : {}
 
   const db = getDb()
-  const conn = (await db.select().from(connections).where(eq(connections.id, connectionId)))[0]
+  const conn = (await db
+    .select()
+    .from(connections)
+    .where(and(eq(connections.id, connectionId), eq(connections.ownerId, user.id))))[0]
   if (!conn) return { ok: false, message: 'Pick a valid connection first.' }
 
   const integration = getIntegration(conn.integrationId)
   if (!integration?.monitoring) return { ok: false, message: `${conn.integrationId} connections can't be monitored` }
 
   if (body?.monitorId) {
-    const existing = (await db.select().from(monitors).where(eq(monitors.id, String(body.monitorId))))[0]
+    const existing = (await db
+      .select()
+      .from(monitors)
+      .where(and(eq(monitors.id, String(body.monitorId)), eq(monitors.ownerId, user.id))))[0]
     if (existing) targetConfig = mergeSecrets(targetConfig, existing.targetConfig, integration.monitoring.targetSchema)
   }
 
   const action = getAction(conn.integrationId, integration.monitoring.snapshotAction)!
-  const connection = await resolveConnection(db, connectionId)
+  const connection = await resolveConnection(db, connectionId, user.id)
   const ac = new AbortController()
   const timer = setTimeout(() => ac.abort(), 10_000)
   try {

@@ -1,6 +1,7 @@
 import { getDb } from '../../../db'
 import { resolveConnection } from '../../../engine/connections'
 import { discoverDokployMonitoring } from '../../../integrations/dokploy-monitoring'
+import { requireUser } from '../../../utils/auth'
 
 /**
  * Auto-discovery for the "Add monitor" form (Dokploy path). Given a Dokploy
@@ -10,9 +11,10 @@ import { discoverDokployMonitoring } from '../../../integrations/dokploy-monitor
  * "name + pick server".
  */
 export default defineEventHandler(async (event) => {
+  const user = await requireUser(event)
   const id = getRouterParam(event, 'id')!
   const db = getDb()
-  const conn = await resolveConnection(db, id)
+  const conn = await resolveConnection(db, id, user.id)
   if (!conn || conn.integrationId !== 'dokploy') {
     throw createError({ statusCode: 400, statusMessage: 'not a Dokploy connection' })
   }

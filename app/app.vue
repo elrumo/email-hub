@@ -30,6 +30,7 @@ const route = useRoute()
 const nav = [
   { label: 'Home', to: '/', icon: 'i-lucide-layout-grid' },
   { label: 'Flows', to: '/flows', icon: 'i-lucide-workflow' },
+  { label: 'Emails', to: '/emails', icon: 'i-lucide-mail' },
   { label: 'Shortcuts', to: '/shortcuts', icon: 'i-lucide-link' },
   { label: 'Connections', to: '/connections', icon: 'i-lucide-plug' },
   { label: 'Monitoring', to: '/monitoring', icon: 'i-lucide-activity' }

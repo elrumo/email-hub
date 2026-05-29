@@ -31,9 +31,17 @@ const form = reactive({
   pingInterval: 30
 })
 
+// favicon auto-fetch state
+const fetchingFavicon = ref(false)
+const fetchedFavicon = ref<string | null>(null)
+// only auto-apply a fetched favicon while the user hasn't picked their own icon
+const iconTouched = ref(false)
+
 function openAdd() {
   editing.value = null
   Object.assign(form, { name: '', url: '', icon: 'i-lucide-link', pingEnabled: false, pingUrl: '', pingInterval: 30 })
+  fetchedFavicon.value = null
+  iconTouched.value = false
   open.value = true
 }
 
@@ -47,7 +55,47 @@ function openEdit(s: Shortcut) {
     pingUrl: s.pingUrl || '',
     pingInterval: s.pingInterval
   })
+  fetchedFavicon.value = isImageIcon(s.icon) ? s.icon : null
+  // treat an existing icon as user-chosen so we don't clobber it on open
+  iconTouched.value = true
   open.value = true
+}
+
+/** Resolve the site's favicon via the server, applying it unless the user has
+ * already chosen a custom icon. */
+async function fetchFavicon(url: string, { auto = false }: { auto?: boolean } = {}) {
+  if (!/^https?:\/\//i.test(url)) return
+  fetchingFavicon.value = true
+  try {
+    const { icon } = await $fetch<{ icon: string | null }>('/api/shortcuts/favicon', {
+      method: 'POST',
+      body: { url }
+    })
+    if (!icon) {
+      if (!auto) toast.add({ title: 'No favicon found for that site', color: 'warning' })
+      return
+    }
+    fetchedFavicon.value = icon
+    // auto-apply only when the user hasn't manually overridden the icon
+    if (!auto || !iconTouched.value) form.icon = icon
+  } catch {
+    if (!auto) toast.add({ title: 'Could not fetch favicon', color: 'error' })
+  } finally {
+    fetchingFavicon.value = false
+  }
+}
+
+// debounced auto-fetch as the URL is typed in the modal
+let faviconTimer: ReturnType<typeof setTimeout> | undefined
+watch(() => form.url, (url) => {
+  if (!open.value) return
+  clearTimeout(faviconTimer)
+  faviconTimer = setTimeout(() => fetchFavicon(url, { auto: true }), 600)
+})
+
+function chooseIcon(value: string) {
+  iconTouched.value = true
+  form.icon = value
 }
 
 async function save() {
@@ -180,20 +228,32 @@ async function confirmDelete() {
             />
           </UFormField>
 
-          <UFormField label="Icon">
+          <UFormField
+            label="Icon"
+            description="Auto-filled from the site's favicon. Pick a different icon any time."
+          >
             <div class="flex items-center gap-2">
               <span class="flex size-9 shrink-0 items-center justify-center rounded-md bg-elevated">
+                <img
+                  v-if="isImageIcon(form.icon)"
+                  :src="form.icon"
+                  alt=""
+                  class="size-5 rounded"
+                >
                 <UIcon
+                  v-else
                   :name="form.icon || 'i-lucide-link'"
                   class="size-5 text-muted"
                 />
               </span>
               <USelectMenu
-                v-model="form.icon"
+                :model-value="isImageIcon(form.icon) ? undefined : form.icon"
                 :items="ICON_CHOICES"
                 create-item
+                placeholder="Favicon"
                 class="w-full"
-                @create="(v: string) => (form.icon = v)"
+                @update:model-value="chooseIcon"
+                @create="chooseIcon"
               >
                 <template #item-leading="{ item }">
                   <UIcon
@@ -202,6 +262,34 @@ async function confirmDelete() {
                   />
                 </template>
               </USelectMenu>
+              <UButton
+                icon="i-lucide-image-down"
+                color="neutral"
+                variant="outline"
+                square
+                :loading="fetchingFavicon"
+                :disabled="!/^https?:\/\//i.test(form.url)"
+                aria-label="Fetch favicon"
+                @click="fetchFavicon(form.url)"
+              />
+            </div>
+            <div
+              v-if="fetchedFavicon && form.icon !== fetchedFavicon"
+              class="mt-2"
+            >
+              <UButton
+                color="neutral"
+                variant="soft"
+                size="xs"
+                @click="chooseIcon(fetchedFavicon)"
+              >
+                <img
+                  :src="fetchedFavicon"
+                  alt=""
+                  class="size-4 rounded"
+                >
+                Use site favicon
+              </UButton>
             </div>
           </UFormField>
 

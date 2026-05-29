@@ -3,9 +3,11 @@ import { getDb } from '../../db'
 import { flows } from '../../db/schema'
 import { validateFlowDefinition } from '../../engine/validateFlow'
 import { registerAllIntegrations } from '../../integrations'
+import { logActivity, requireUser } from '../../utils/auth'
 
 export default defineEventHandler(async (event) => {
   registerAllIntegrations()
+  const user = await requireUser(event)
   const body = await readBody(event)
   const name = String(body?.name ?? '').trim()
   if (!name) throw createError({ statusCode: 400, statusMessage: 'name is required' })
@@ -18,6 +20,7 @@ export default defineEventHandler(async (event) => {
   const id = randomUUID()
   await db.insert(flows).values({
     id,
+    ownerId: user.id,
     name,
     description: body?.description ? String(body.description) : null,
     enabled: body?.enabled !== false,
@@ -29,6 +32,7 @@ export default defineEventHandler(async (event) => {
     updatedAt: now
   })
 
+  await logActivity(user.id, 'flow.create', { entityType: 'flow', entityId: id, detail: { name } })
   setResponseStatus(event, 201)
   return { id, name }
 })

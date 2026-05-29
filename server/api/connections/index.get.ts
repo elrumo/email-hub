@@ -1,16 +1,19 @@
+import { eq } from 'drizzle-orm'
 import { getDb } from '../../db'
 import { connections } from '../../db/schema'
 import { getIntegration } from '../../engine/registry'
 import { registerAllIntegrations } from '../../integrations'
+import { requireUser } from '../../utils/auth'
 
 /**
- * List connections. Secret fields are redacted (replaced with a "set" marker)
- * so tokens never leave the server in plaintext to the client.
+ * List the current user's connections. Secret fields are redacted (replaced
+ * with a "set" marker) so tokens never leave the server in plaintext.
  */
-export default defineEventHandler(async () => {
+export default defineEventHandler(async (event) => {
   registerAllIntegrations()
+  const user = await requireUser(event)
   const db = getDb()
-  const rows = await db.select().from(connections)
+  const rows = await db.select().from(connections).where(eq(connections.ownerId, user.id))
   return rows.map((row) => {
     const integration = getIntegration(row.integrationId)
     const secretKeys = new Set(

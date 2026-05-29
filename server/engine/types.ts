@@ -18,8 +18,8 @@ export interface FieldSchema {
   label: string
   type: FieldType
   required?: boolean
-  /** for type: "select" */
-  options?: Array<{ label: string, value: string | number }>
+  /** for type: "select"; an option may carry a logo (iconify name or image URL) */
+  options?: Array<{ label: string, value: string | number, icon?: string, img?: string }>
   placeholder?: string
   help?: string
   default?: string | number | boolean | Record<string, string>

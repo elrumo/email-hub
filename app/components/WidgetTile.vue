@@ -19,7 +19,17 @@ const props = defineProps<{
   ping?: PingState
   /** drag-reorder affordance is shown only in edit mode */
   editMode?: boolean
+  /** effective grid span (col/row count) so the body can adapt to its size */
+  span?: { w: number, h: number }
 }>()
+
+// Size buckets derived from the tile's grid span. Bodies use these to decide
+// how much detail to show — e.g. a 1×1 tile stays compact, a wide/tall tile
+// can breathe. `area` is a coarse small/medium/large signal.
+const sizeW = computed(() => props.span?.w ?? props.widget.w)
+const sizeH = computed(() => props.span?.h ?? props.widget.h)
+const isTall = computed(() => sizeH.value >= 2)
+const isLarge = computed(() => sizeW.value * sizeH.value >= 4)
 
 const emit = defineEmits<{ remove: [], run: [shortcut: Flow] }>()
 
@@ -57,10 +67,7 @@ const host = computed(() => {
 </script>
 
 <template>
-  <div
-    class="group relative h-full"
-    :style="{ gridColumn: `span ${widget.w}`, gridRow: `span ${widget.h}` }"
-  >
+  <div class="group relative h-full">
     <!-- edit-mode controls: drag handle + remove -->
     <div
       v-if="editMode"
@@ -117,12 +124,16 @@ const host = computed(() => {
         :href="shortcut.url"
         target="_blank"
         rel="noopener noreferrer"
-        class="flex items-center gap-2.5 text-highlighted hover:text-primary"
+        class="text-highlighted hover:text-primary"
+        :class="isLarge ? 'flex flex-col gap-3' : 'flex items-center gap-2.5'"
       >
-        <span class="flex size-9 shrink-0 items-center justify-center rounded-md bg-elevated text-muted">
+        <span
+          class="flex shrink-0 items-center justify-center rounded-md bg-elevated text-muted"
+          :class="isLarge ? 'size-12' : 'size-9'"
+        >
           <UIcon
             :name="shortcut.icon || 'i-lucide-link'"
-            class="size-5"
+            :class="isLarge ? 'size-7' : 'size-5'"
           />
         </span>
         <span class="min-w-0">
@@ -168,6 +179,13 @@ const host = computed(() => {
           {{ flow.enabled ? 'On' : 'Off' }}
         </UBadge>
       </div>
+      <p
+        v-if="isTall && flow.description"
+        class="text-sm text-muted"
+        :class="isLarge ? 'line-clamp-3' : 'line-clamp-2'"
+      >
+        {{ flow.description }}
+      </p>
       <p class="text-sm text-dimmed">
         last run {{ relTime(flow.lastRunAt) }}
       </p>
@@ -198,7 +216,10 @@ const host = computed(() => {
       class="h-full"
       :ui="{ body: 'h-full' }"
     >
-      <p class="h-full whitespace-pre-wrap text-sm text-muted">
+      <p
+        class="h-full overflow-auto whitespace-pre-wrap text-muted"
+        :class="isLarge ? 'text-base' : 'text-sm'"
+      >
         {{ widget.content || 'Empty note' }}
       </p>
     </UCard>

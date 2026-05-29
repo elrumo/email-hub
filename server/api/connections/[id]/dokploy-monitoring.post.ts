@@ -1,6 +1,7 @@
 import { getDb } from '../../../db'
 import { resolveConnection } from '../../../engine/connections'
 import { discoverDokployMonitoring, enableDokployMonitoring } from '../../../integrations/dokploy-monitoring'
+import { requireUser } from '../../../utils/auth'
 
 /**
  * Enable monitoring for a Dokploy target via the API (the "Enable it for me"
@@ -13,11 +14,12 @@ import { discoverDokployMonitoring, enableDokployMonitoring } from '../../../int
  * Body: { serverId?: string } — blank/absent means the Dokploy host itself.
  */
 export default defineEventHandler(async (event) => {
+  const user = await requireUser(event)
   const id = getRouterParam(event, 'id')!
   const { serverId = '' } = await readBody<{ serverId?: string }>(event) ?? {}
 
   const db = getDb()
-  const conn = await resolveConnection(db, id)
+  const conn = await resolveConnection(db, id, user.id)
   if (!conn || conn.integrationId !== 'dokploy') {
     throw createError({ statusCode: 400, statusMessage: 'not a Dokploy connection' })
   }

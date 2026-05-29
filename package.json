@@ -13,13 +13,20 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "3.0.81",
+    "@ai-sdk/openai": "3.0.67",
+    "@ai-sdk/vue": "3.0.193",
+    "@comark/nuxt": "0.3.1",
     "@iconify-json/lucide": "^1.2.108",
     "@iconify-json/simple-icons": "^1.2.83",
     "@nuxt/ui": "^4.7.1",
+    "@vueuse/nuxt": "14.3.0",
+    "ai": "^6.0.193",
     "drizzle-orm": "^0.45.2",
     "mongodb": "^7.2.0",
     "nuxt": "^4.4.6",
     "tailwindcss": "^4.3.0",
+    "vue": "^3.5.0",
     "web-push": "^3.6.7"
   },
   "devDependencies": {

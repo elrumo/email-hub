@@ -1,10 +1,11 @@
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { getDb } from '../../../db'
 import { monitors } from '../../../db/schema'
 import { acquireClient } from '../../../engine/clientPool'
 import { resolveConnection } from '../../../engine/connections'
 import { getAction, getIntegration } from '../../../engine/registry'
 import { registerAllIntegrations } from '../../../integrations'
+import { requireUser } from '../../../utils/auth'
 
 /**
  * On-demand snapshot for one monitor. Resolves the connection and runs the
@@ -16,9 +17,10 @@ import { registerAllIntegrations } from '../../../integrations'
  */
 export default defineEventHandler(async (event) => {
   registerAllIntegrations()
+  const user = await requireUser(event)
   const id = getRouterParam(event, 'id')!
   const db = getDb()
-  const m = (await db.select().from(monitors).where(eq(monitors.id, id)))[0]
+  const m = (await db.select().from(monitors).where(and(eq(monitors.id, id), eq(monitors.ownerId, user.id))))[0]
   if (!m) throw createError({ statusCode: 404, statusMessage: 'monitor not found' })
 
   const integration = getIntegration(m.integrationId)
@@ -30,7 +32,7 @@ export default defineEventHandler(async (event) => {
     return { ok: false, error: 'monitoring action unavailable' }
   }
 
-  const connection = await resolveConnection(db, m.connectionId)
+  const connection = await resolveConnection(db, m.connectionId, user.id)
   const signal = (event.node.req as unknown as { signal?: AbortSignal }).signal ?? new AbortController().signal
   try {
     const client = connection ? await acquireClient(connection, signal) : null

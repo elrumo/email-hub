@@ -14,6 +14,26 @@ export function registerIntegration(integration: Integration): void {
   integrations.set(integration.id, integration)
 }
 
+/**
+ * Add or replace an integration. Unlike `registerIntegration`, this does NOT
+ * throw on an existing id — it overwrites. Used to (re)load user-uploaded
+ * connectors, which can change at runtime (create/update). Never use it for
+ * built-ins (their ids are static and a collision is a bug).
+ */
+export function upsertIntegration(integration: Integration): void {
+  integrations.set(integration.id, integration)
+}
+
+/** Remove an integration by id (e.g. when a user deletes/disables a connector). */
+export function unregisterIntegration(id: string): void {
+  integrations.delete(id)
+}
+
+/** True if an integration with this id is currently registered. */
+export function hasIntegration(id: string): boolean {
+  return integrations.has(id)
+}
+
 export function listIntegrations(): Integration[] {
   return [...integrations.values()]
 }

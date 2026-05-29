@@ -23,7 +23,7 @@ function set(key: string, value: unknown) {
 }
 
 function selectItems(f: FieldSchema) {
-  return (f.options ?? []).map(o => ({ label: o.label, value: o.value }))
+  return (f.options ?? []).map(o => ({ label: o.label, value: o.value, icon: o.icon, img: o.img }))
 }
 
 // A field is shown only if it has no showIf, or its controlling field's current

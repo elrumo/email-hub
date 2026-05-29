@@ -1,17 +1,22 @@
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { getDb } from '../../db'
 import { connections } from '../../db/schema'
 import { getIntegration } from '../../engine/registry'
 import { mergeSecrets, validateAgainstSchema } from '../../engine/validate'
 import { registerAllIntegrations } from '../../integrations'
+import { logActivity, requireUser } from '../../utils/auth'
 
 export default defineEventHandler(async (event) => {
   registerAllIntegrations()
+  const user = await requireUser(event)
   const id = getRouterParam(event, 'id')!
   const body = await readBody(event)
 
   const db = getDb()
-  const rows = await db.select().from(connections).where(eq(connections.id, id))
+  const rows = await db
+    .select()
+    .from(connections)
+    .where(and(eq(connections.id, id), eq(connections.ownerId, user.id)))
   const existing = rows[0]
   if (!existing) throw createError({ statusCode: 404, statusMessage: 'connection not found' })
 
@@ -29,7 +34,8 @@ export default defineEventHandler(async (event) => {
   await db
     .update(connections)
     .set({ name, config: validated.value, updatedAt: Date.now() })
-    .where(eq(connections.id, id))
+    .where(and(eq(connections.id, id), eq(connections.ownerId, user.id)))
 
+  await logActivity(user.id, 'connection.update', { entityType: 'connection', entityId: id, detail: { name } })
   return { id, integrationId: existing.integrationId, name }
 })

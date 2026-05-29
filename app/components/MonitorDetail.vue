@@ -81,8 +81,32 @@ function pick(field: keyof AgentSample): number[] {
 
 const cpuSeries = computed(() => pick('cpu'))
 const memSeries = computed(() => pick('memUsed'))
-const netInSeries = computed(() => pick('networkIn'))
-const netOutSeries = computed(() => pick('networkOut'))
+
+// networkIn/Out are CUMULATIVE MB since boot (gopsutil BytesRecv/Sent), not a
+// rate. A monotonically-increasing counter is meaningless to plot, so convert
+// to MB/s from consecutive samples using their timestamps. The first sample has
+// no predecessor and is dropped; counter resets (reboot) clamp to 0.
+function rateSeries(field: 'networkIn' | 'networkOut'): number[] {
+  const out: number[] = []
+  for (let i = 1; i < series.value.length; i++) {
+    const cur = num(series.value[i]![field])
+    const prev = num(series.value[i - 1]![field])
+    const dt = (Date.parse(series.value[i]!.timestamp ?? '') - Date.parse(series.value[i - 1]!.timestamp ?? '')) / 1000
+    if (cur != null && prev != null && Number.isFinite(dt) && dt > 0) {
+      out.push(Math.max(0, (cur - prev) / dt))
+    }
+  }
+  return out
+}
+const netInSeries = computed(() => rateSeries('networkIn'))
+const netOutSeries = computed(() => rateSeries('networkOut'))
+const netInRate = computed(() => netInSeries.value.at(-1) ?? null)
+const netOutRate = computed(() => netOutSeries.value.at(-1) ?? null)
+function fmtRate(mbPerSec: number | null): string {
+  if (mbPerSec == null) return '—'
+  if (mbPerSec < 1) return `${Math.round(mbPerSec * 1024)} KB/s`
+  return `${mbPerSec.toFixed(1)} MB/s`
+}
 // NOTE: the Dokploy agent's `diskUsed` is the USED PERCENT of `/`, NOT
 // gigabytes; `totalDisk` is the partition size in GB. So used% is `diskUsed`
 // directly and the GB figures are derived from it (mirrors the server's
@@ -277,7 +301,7 @@ const updatedAgo = computed(() => {
       <!-- network -->
       <div>
         <h4 class="text-xs font-medium text-muted mb-2">
-          Network (MB/s)
+          Network throughput
         </h4>
         <div class="grid grid-cols-2 gap-3">
           <div class="rounded-md border border-default bg-elevated/10 p-3 space-y-1">
@@ -288,7 +312,7 @@ const updatedAgo = computed(() => {
                   class="size-3"
                 /> In
               </span>
-              <span class="text-sm font-medium text-highlighted tabular-nums">{{ latest.networkIn }}</span>
+              <span class="text-sm font-medium text-highlighted tabular-nums">{{ fmtRate(netInRate) }}</span>
             </div>
             <MetricSparkline
               :values="netInSeries"
@@ -306,7 +330,7 @@ const updatedAgo = computed(() => {
                   class="size-3"
                 /> Out
               </span>
-              <span class="text-sm font-medium text-highlighted tabular-nums">{{ latest.networkOut }}</span>
+              <span class="text-sm font-medium text-highlighted tabular-nums">{{ fmtRate(netOutRate) }}</span>
             </div>
             <MetricSparkline
               :values="netOutSeries"

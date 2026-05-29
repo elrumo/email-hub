@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { syncUserConnectors } from '../connectors/registry'
 import { initDb } from '../db'
 import { drainPool } from '../engine/clientPool'
 import { registerAllIntegrations } from '../integrations'
@@ -25,7 +26,8 @@ export default async function (nitroApp?: { hooks?: { hook: (name: string, fn: (
   try {
     initDb({ dbFile, migrationsDir })
     registerAllIntegrations()
-    console.log(`[engine] db ready at ${dbFile}; integrations registered`)
+    const userCount = await syncUserConnectors()
+    console.log(`[engine] db ready at ${dbFile}; integrations registered (${userCount} user connector(s))`)
   } catch (e) {
     console.error('[engine] boot failed:', e instanceof Error ? e.message : e)
     return

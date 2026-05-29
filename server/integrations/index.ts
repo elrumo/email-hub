@@ -3,11 +3,13 @@ import { aiIntegration } from './ai'
 import { browserIntegration } from './browser'
 import { bunnyIntegration } from './bunny'
 import { dokployIntegration } from './dokploy'
+import { homeAssistantIntegration } from './homeassistant'
 import { kumaIntegration } from './kuma'
 import { mailgunIntegration } from './mailgun'
 import { mongoIntegration } from './mongo'
 import { notifyIntegration } from './notify'
 import { probeIntegration } from './probe'
+import { s3Integration } from './s3'
 import { telegramIntegration } from './telegram'
 
 let registered = false
@@ -29,7 +31,9 @@ export function registerAllIntegrations(): void {
     telegramIntegration,
     mailgunIntegration,
     mongoIntegration,
-    aiIntegration
+    s3Integration,
+    aiIntegration,
+    homeAssistantIntegration
   ]) {
     registerIntegration(i)
   }
