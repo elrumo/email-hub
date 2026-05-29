@@ -1,6 +1,6 @@
-import { and, eq } from "drizzle-orm";
-import type { DB } from "../db";
-import { flowState } from "../db/schema";
+import { and, eq } from 'drizzle-orm'
+import type { DB } from '../db'
+import { flowState } from '../db/schema'
 
 /**
  * Per-flow named state, backing the "state" step primitive and the
@@ -19,8 +19,8 @@ export class FlowStateStore {
     const rows = await this.db
       .select()
       .from(flowState)
-      .where(and(eq(flowState.flowId, this.flowId), eq(flowState.key, key)));
-    return rows[0]?.value;
+      .where(and(eq(flowState.flowId, this.flowId), eq(flowState.key, key)))
+    return rows[0]?.value
   }
 
   async set(key: string, value: unknown): Promise<void> {
@@ -30,22 +30,22 @@ export class FlowStateStore {
       .onConflictDoUpdate({
         target: [flowState.flowId, flowState.key],
         set: { value, updatedAt: this.now }
-      });
+      })
   }
 
   async increment(key: string, by = 1): Promise<number> {
-    const cur = Number((await this.get(key)) ?? 0) || 0;
-    const next = cur + by;
-    await this.set(key, next);
-    return next;
+    const cur = Number((await this.get(key)) ?? 0) || 0
+    const next = cur + by
+    await this.set(key, next)
+    return next
   }
 
   async reset(key: string): Promise<void> {
-    await this.set(key, 0);
+    await this.set(key, 0)
   }
 
   async stampNow(key: string): Promise<void> {
-    await this.set(key, this.now);
+    await this.set(key, this.now)
   }
 
   /**
@@ -54,13 +54,13 @@ export class FlowStateStore {
    * the caller stamps explicitly when the guarded action actually fires.
    */
   async cooldownPassed(key: string, windowMs: number): Promise<boolean> {
-    const last = Number((await this.get(key)) ?? 0) || 0;
-    return this.now - last >= windowMs;
+    const last = Number((await this.get(key)) ?? 0) || 0
+    return this.now - last >= windowMs
   }
 
   /** Threshold gate: passes when the counter at `key` is >= count. */
   async thresholdReached(key: string, count: number): Promise<boolean> {
-    const cur = Number((await this.get(key)) ?? 0) || 0;
-    return cur >= count;
+    const cur = Number((await this.get(key)) ?? 0) || 0
+    return cur >= count
   }
 }

@@ -10,12 +10,38 @@ export default defineAppConfig({
     // Softer, more generous geometry across the surfaces that frame content.
     card: {
       slots: {
-        root: 'rounded-2xl'
+        root: 'rounded-md'
+      },
+      variants: {
+        variant: {
+          xs: {
+            body: 'px-2! py-1.5!',
+            root: 'bg-default ring ring-default divide-y divide-default rounded-sm'
+          },
+          sm: {
+            body: 'px-4! py-3!',
+            root: 'bg-default ring ring-default divide-y divide-default'
+          },
+          solid: {
+            root: 'bg-inverted text-inverted',
+            title: 'text-inverted',
+            description: 'text-dimmed'
+          },
+          outline: {
+            root: 'bg-default ring ring-default divide-y divide-default'
+          },
+          soft: {
+            root: 'bg-elevated/50 divide-y divide-default'
+          },
+          subtle: {
+            root: 'bg-elevated/50 ring ring-default divide-y divide-default'
+          }
+        }
       }
     },
     modal: {
       slots: {
-        content: 'rounded-2xl'
+        content: 'rounded-xl'
       }
     },
     // Quietly confident buttons — medium weight, never shouty.

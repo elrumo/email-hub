@@ -1,5 +1,5 @@
-import https from "node:https";
-import type { Integration } from "../engine/types";
+import https from 'node:https'
+import type { Integration } from '../engine/types'
 
 /**
  * HTTPS probe with explicit Host header + SNI — lets a flow check whether a
@@ -18,55 +18,55 @@ function probe(
       {
         host: ip,
         port: 443,
-        path: pathPart || "/",
-        method: "GET",
-        headers: { Host: fqdn, "User-Agent": "dokploy-doctor/flow" },
+        path: pathPart || '/',
+        method: 'GET',
+        headers: { 'Host': fqdn, 'User-Agent': 'dokploy-doctor/flow' },
         servername: fqdn,
         rejectUnauthorized: false,
         timeout: timeoutMs
       },
       (res) => {
-        resolve(res.statusCode != null && res.statusCode < 500);
-        res.resume();
+        resolve(res.statusCode != null && res.statusCode < 500)
+        res.resume()
       }
-    );
-    req.on("error", () => resolve(false));
-    req.on("timeout", () => {
-      req.destroy();
-      resolve(false);
-    });
-    req.end();
-  });
+    )
+    req.on('error', () => resolve(false))
+    req.on('timeout', () => {
+      req.destroy()
+      resolve(false)
+    })
+    req.end()
+  })
 }
 
 export const probeIntegration: Integration = {
-  id: "probe",
-  name: "HTTP Probe",
-  icon: "i-lucide-radio-tower",
+  id: 'probe',
+  name: 'HTTP Probe',
+  icon: 'i-lucide-radio-tower',
   connectionSchema: [], // no credentials
   triggers: [],
   actions: [
     {
-      id: "httpsProbe",
-      name: "Check if a host is reachable",
+      id: 'httpsProbe',
+      name: 'Check if a host is reachable',
       description:
-        "Sends an HTTPS request to a specific IP using the given hostname, and reports whether it responded.",
+        'Sends an HTTPS request to a specific IP using the given hostname, and reports whether it responded.',
       inputSchema: [
-        { key: "fqdn", label: "Hostname", type: "string", required: true, placeholder: "app.example.com" },
-        { key: "ip", label: "IP address", type: "string", required: true, placeholder: "203.0.113.10" },
-        { key: "path", label: "Path", type: "string", default: "/", placeholder: "/health" },
-        { key: "timeoutMs", label: "Timeout (ms)", type: "number", default: 5000 }
+        { key: 'fqdn', label: 'Hostname', type: 'string', required: true, placeholder: 'app.example.com' },
+        { key: 'ip', label: 'IP address', type: 'string', required: true, placeholder: '203.0.113.10' },
+        { key: 'path', label: 'Path', type: 'string', default: '/', placeholder: '/health' },
+        { key: 'timeoutMs', label: 'Timeout (ms)', type: 'number', default: 5000 }
       ],
-      outputKeys: ["alive", "ip"],
+      outputKeys: ['alive', 'ip'],
       run: async (ctx) => {
-        const fqdn = String(ctx.input.fqdn ?? "");
-        const ip = String(ctx.input.ip ?? "");
-        const path = String(ctx.input.path ?? "/");
-        const timeoutMs = Number(ctx.input.timeoutMs ?? 5000) || 5000;
-        const alive = await probe(fqdn, ip, path, timeoutMs);
-        ctx.log(`probe ${ip} as ${fqdn}${path} → ${alive ? "alive" : "down"}`);
-        return { alive, ip };
+        const fqdn = String(ctx.input.fqdn ?? '')
+        const ip = String(ctx.input.ip ?? '')
+        const path = String(ctx.input.path ?? '/')
+        const timeoutMs = Number(ctx.input.timeoutMs ?? 5000) || 5000
+        const alive = await probe(fqdn, ip, path, timeoutMs)
+        ctx.log(`probe ${ip} as ${fqdn}${path} → ${alive ? 'alive' : 'down'}`)
+        return { alive, ip }
       }
     }
   ]
-};
+}

@@ -3,9 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "nuxt build",
-    "dev": "nuxt dev",
-    "preview": "nuxt preview",
+    "build": "bun --bun nuxt build",
+    "dev": "bun --bun nuxt dev",
+    "preview": "bun --bun nuxt preview",
     "postinstall": "nuxt prepare",
     "lint": "eslint .",
     "typecheck": "nuxt typecheck",
@@ -17,11 +17,13 @@
     "@iconify-json/simple-icons": "^1.2.83",
     "@nuxt/ui": "^4.7.1",
     "drizzle-orm": "^0.45.2",
+    "mongodb": "^7.2.0",
     "nuxt": "^4.4.6",
     "tailwindcss": "^4.3.0"
   },
   "devDependencies": {
     "@nuxt/eslint": "^1.15.2",
+    "@vite-pwa/nuxt": "^1.1.1",
     "bun-types": "^1.3.14",
     "drizzle-kit": "^0.31.10",
     "eslint": "^10.4.0",

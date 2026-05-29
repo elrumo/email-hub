@@ -15,3 +15,32 @@
   --ui-radius: 0.625rem;
   --ui-container: 56rem;
 }
+
+/*
+ * iOS Safari zooms the viewport whenever a focused form control renders below
+ * 16px. Nuxt UI inputs default to text-sm (14px) — and the sm/xs variants go
+ * smaller still — so any field would trigger that zoom-and-pan on focus. Force
+ * the real control elements to 16px on touch-capable, narrow screens only; on
+ * pointer devices the design's smaller type is kept. Targeting the underlying
+ * input/select/textarea covers every Nuxt UI size variant in one rule.
+ */
+@media (max-width: 767px) {
+  input:not([type='checkbox']):not([type='radio']),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/*
+ * Card actions are revealed on hover on pointer devices (opacity-0 +
+ * group-hover:opacity-100). Touch devices can't hover, so those controls would
+ * be permanently invisible. On any device without a real hover pointer, force
+ * them visible. Apply `.reveal-on-hover` to the action group that uses the
+ * group-hover opacity pattern.
+ */
+@media (hover: none) {
+  .reveal-on-hover {
+    opacity: 1 !important;
+  }
+}

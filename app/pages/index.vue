@@ -1,126 +1,189 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { type Mapping, useStatus } from '~/composables/useStatus'
+import type { Flow } from '~/types'
+import { relTime } from '~/composables/format'
 
-const { data, offline, refresh } = await useStatus(5000)
-
-const fqdns = computed(() => Object.keys(data.value.mappings || {}))
-const footerInfo = computed(() => {
-  const n = fqdns.value.length
-  return [
-    `${n} ${n === 1 ? 'mapping' : 'mappings'}`,
-    `Poll ${Math.round(data.value.pollIntervalMs / 1000)}s`,
-    `Cooldown ${Math.round(data.value.cooldownMs / 60_000)}m`
-  ].join(' · ')
+const { data: flows, refresh } = await useFetch<Flow[]>('/api/flows', {
+  key: 'flows',
+  default: () => []
 })
+const toast = useToast()
+const running = ref<string | null>(null)
 
-// editor / delete modal state
-const editorOpen = ref(false)
-const editingMapping = ref<Mapping | null>(null)
-const deleteTarget = ref<string | null>(null)
+function triggerSummary(f: Flow): string {
+  const t = f.definition?.trigger
+  if (!t) return 'No trigger'
+  if (f.cron) return `Schedule · ${f.cron}`
+  if (t.triggerId === 'manual') return 'Manual'
+  if (t.triggerId === 'webhook') return 'Webhook'
+  return `${t.integrationId} · ${t.triggerId}`
+}
 
-function openAdd() {
-  editingMapping.value = null
-  editorOpen.value = true
+async function runNow(f: Flow) {
+  running.value = f.id
+  try {
+    const res = await $fetch<{ status: string }>(`/api/flows/${f.id}/run`, { method: 'POST', body: {} })
+    toast.add({
+      title: `Ran “${f.name}”`,
+      description: `Result: ${res.status}`,
+      color: res.status === 'error' ? 'error' : 'success'
+    })
+    await refresh()
+  } catch {
+    toast.add({ title: 'Run failed', color: 'error' })
+  } finally {
+    running.value = null
+  }
 }
-async function openEdit(fqdn: string) {
-  // fetch the canonical mapping (snapshot doesn't contain bunnyZoneId/recordName/healthPath)
-  const res = await fetch('/api/mappings')
-  const all: Mapping[] = await res.json()
-  editingMapping.value = all.find(m => m.fqdn === fqdn) ?? null
-  if (editingMapping.value) editorOpen.value = true
-}
-function closeEditor() {
-  editorOpen.value = false
-  editingMapping.value = null
-}
-async function onSaved() {
-  closeEditor()
+
+async function toggle(f: Flow) {
+  await $fetch(`/api/flows/${f.id}`, { method: 'PUT', body: { enabled: !f.enabled } })
   await refresh()
 }
-function askDelete(fqdn: string) {
-  deleteTarget.value = fqdn
-}
-async function onDeleted() {
+
+const deleteTarget = ref<Flow | null>(null)
+async function confirmDelete() {
+  if (!deleteTarget.value) return
+  await $fetch(`/api/flows/${deleteTarget.value.id}`, { method: 'DELETE' })
   deleteTarget.value = null
   await refresh()
+  toast.add({ title: 'Flow deleted', color: 'success' })
 }
 </script>
 
 <template>
   <UContainer class="py-10 sm:py-14">
-    <AppHeader
-      :data="data"
-      :offline="offline"
-      @add="openAdd"
-      @check="refresh"
-    />
+    <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div>
+        <h1 class="text-xl font-semibold tracking-tight text-highlighted">
+          Flows
+        </h1>
+        <p class="mt-1 text-sm text-muted">
+          Automations that run on a schedule, a webhook, or a button. Each is a trigger followed by a list of actions.
+        </p>
+      </div>
+      <UButton
+        icon="i-lucide-plus"
+        label="New flow"
+        to="/flows/new"
+        class="self-start"
+      />
+    </div>
 
-    <main>
-      <div
-        v-if="fqdns.length === 0"
-        class="flex flex-col items-center gap-5 rounded-2xl border border-dashed border-default py-20 text-center"
+    <div
+      v-if="flows.length === 0"
+      class="flex flex-col items-center gap-5 rounded-2xl border border-dashed border-default py-20 text-center"
+    >
+      <span class="flex size-12 items-center justify-center rounded-2xl bg-elevated text-dimmed">
+        <UIcon
+          name="i-lucide-workflow"
+          class="size-6"
+        />
+      </span>
+      <div class="space-y-1">
+        <p class="font-medium text-highlighted">
+          No flows yet
+        </p>
+        <p class="text-sm text-muted">
+          Build one from scratch, or start from a template like DNS failover.
+        </p>
+      </div>
+      <UButton
+        icon="i-lucide-plus"
+        label="New flow"
+        to="/flows/new"
+      />
+    </div>
+
+    <div
+      v-else
+      class="space-y-3"
+    >
+      <UCard
+        v-for="f in flows"
+        :key="f.id"
+        :ui="{ body: 'flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4' }"
       >
-        <span class="flex size-12 items-center justify-center rounded-2xl bg-elevated text-dimmed">
-          <UIcon
-            name="i-lucide-radio-tower"
-            class="size-6"
-          />
-        </span>
-        <div class="space-y-1">
-          <p class="text-base font-medium text-highlighted">
-            No mappings yet
-          </p>
-          <p class="text-sm text-muted">
-            Add a hostname to start watching it for failover.
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-2">
+            <NuxtLink
+              :to="`/flows/${f.id}`"
+              class="truncate font-medium text-highlighted hover:text-primary"
+            >
+              {{ f.name }}
+            </NuxtLink>
+            <UBadge
+              :color="f.enabled ? 'success' : 'neutral'"
+              variant="soft"
+              size="sm"
+            >
+              {{ f.enabled ? 'Enabled' : 'Disabled' }}
+            </UBadge>
+          </div>
+          <p class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-muted">
+            <UIcon
+              name="i-lucide-zap"
+              class="size-3.5"
+            />
+            {{ triggerSummary(f) }}
+            <span class="text-dimmed">·</span>
+            <span class="text-dimmed">last run {{ relTime(f.lastRunAt) }}</span>
           </p>
         </div>
+
+        <div class="flex items-center gap-1 self-end sm:self-auto">
+          <UButton
+            icon="i-lucide-play"
+            label="Run now"
+            color="neutral"
+            variant="soft"
+            size="sm"
+            :loading="running === f.id"
+            @click="runNow(f)"
+          />
+          <USwitch
+            :model-value="f.enabled"
+            @update:model-value="toggle(f)"
+          />
+          <UButton
+            icon="i-lucide-pencil"
+            color="neutral"
+            variant="ghost"
+            size="sm"
+            aria-label="Edit"
+            :to="`/flows/${f.id}`"
+          />
+          <UButton
+            icon="i-lucide-trash-2"
+            color="error"
+            variant="ghost"
+            size="sm"
+            aria-label="Delete"
+            @click="deleteTarget = f"
+          />
+        </div>
+      </UCard>
+    </div>
+
+    <UModal
+      :open="!!deleteTarget"
+      title="Delete flow?"
+      :description="`“${deleteTarget?.name}” and its run history will be permanently removed.`"
+      :ui="{ footer: 'justify-end' }"
+      @update:open="(v) => { if (!v) deleteTarget = null }"
+    >
+      <template #footer>
         <UButton
-          label="Add Your First Mapping"
-          icon="i-lucide-plus"
-          color="primary"
-          @click="openAdd"
+          label="Cancel"
+          color="neutral"
+          variant="outline"
+          @click="deleteTarget = null"
         />
-      </div>
-
-      <div
-        v-else
-        class="flex flex-col gap-4"
-      >
-        <MappingCard
-          v-for="fqdn in fqdns"
-          :key="fqdn"
-          :fqdn="fqdn"
-          :snapshot="data.mappings[fqdn]!"
-          :history="data.history[fqdn] || []"
-          :cooldown-ms="data.cooldownMs"
-          @edit="openEdit(fqdn)"
-          @delete="askDelete(fqdn)"
+        <UButton
+          label="Delete"
+          color="error"
+          @click="confirmDelete"
         />
-      </div>
-
-      <MonitorsPanel
-        v-if="data.monitors.length"
-        :monitors="data.monitors"
-        class="mt-4"
-      />
-    </main>
-
-    <p class="mt-10 text-center font-mono text-xs tabular-nums text-dimmed">
-      {{ footerInfo }}
-    </p>
-
-    <MappingEditor
-      v-if="editorOpen"
-      :existing="editingMapping"
-      @close="closeEditor"
-      @saved="onSaved"
-    />
-    <DeleteConfirm
-      v-if="deleteTarget"
-      :fqdn="deleteTarget"
-      @close="deleteTarget = null"
-      @confirmed="onDeleted"
-    />
+      </template>
+    </UModal>
   </UContainer>
 </template>

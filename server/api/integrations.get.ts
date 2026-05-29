@@ -1,5 +1,5 @@
-import { listIntegrations } from "../engine/registry";
-import { registerAllIntegrations } from "../integrations";
+import { listIntegrations } from '../engine/registry'
+import { registerAllIntegrations } from '../integrations'
 
 /**
  * Returns the integration catalog (with connection schemas, triggers, actions
@@ -7,13 +7,18 @@ import { registerAllIntegrations } from "../integrations";
  * `poll` functions are stripped — only serializable metadata is sent.
  */
 export default defineEventHandler(() => {
-  registerAllIntegrations(); // idempotent; ensures registry is populated even if plugin hasn't run
-  return listIntegrations().map((i) => ({
+  registerAllIntegrations() // idempotent; ensures registry is populated even if plugin hasn't run
+  return listIntegrations().map(i => ({
     id: i.id,
     name: i.name,
     icon: i.icon,
+    img: i.img,
+    canTest: !!i.testConnection,
+    monitoring: i.monitoring
+      ? { kind: i.monitoring.kind, snapshotAction: i.monitoring.snapshotAction, targetSchema: i.monitoring.targetSchema }
+      : undefined,
     connectionSchema: i.connectionSchema,
-    triggers: i.triggers.map((t) => ({
+    triggers: i.triggers.map(t => ({
       id: t.id,
       name: t.name,
       description: t.description,
@@ -21,7 +26,7 @@ export default defineEventHandler(() => {
       needsConnection: t.needsConnection ?? false,
       configSchema: t.configSchema
     })),
-    actions: i.actions.map((a) => ({
+    actions: i.actions.map(a => ({
       id: a.id,
       name: a.name,
       description: a.description,
@@ -29,5 +34,5 @@ export default defineEventHandler(() => {
       inputSchema: a.inputSchema,
       outputKeys: a.outputKeys ?? []
     }))
-  }));
-});
+  }))
+})

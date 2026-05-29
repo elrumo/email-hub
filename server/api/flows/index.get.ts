@@ -1,11 +1,11 @@
-import { desc } from "drizzle-orm";
-import { getDb } from "../../db";
-import { flows } from "../../db/schema";
+import { desc } from 'drizzle-orm'
+import { getDb } from '../../db'
+import { flows } from '../../db/schema'
 
 export default defineEventHandler(async () => {
-  const db = getDb();
-  const rows = await db.select().from(flows).orderBy(desc(flows.updatedAt));
-  return rows.map((f) => ({
+  const db = getDb()
+  const rows = await db.select().from(flows).orderBy(desc(flows.updatedAt))
+  return rows.map(f => ({
     id: f.id,
     name: f.name,
     description: f.description,
@@ -14,5 +14,5 @@ export default defineEventHandler(async () => {
     cron: f.cron,
     lastRunAt: f.lastRunAt,
     updatedAt: f.updatedAt
-  }));
-});
+  }))
+})

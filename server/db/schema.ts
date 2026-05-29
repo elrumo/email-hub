@@ -1,11 +1,11 @@
-import { sql } from "drizzle-orm";
+import { sql } from 'drizzle-orm'
 import {
   index,
   integer,
   sqliteTable,
   text,
   unique
-} from "drizzle-orm/sqlite-core";
+} from 'drizzle-orm/sqlite-core'
 
 /**
  * A saved set of credentials for one integration (e.g. a single Dokploy
@@ -18,48 +18,49 @@ import {
  * ever backed up off-box.
  */
 export const connections = sqliteTable(
-  "connections",
+  'connections',
   {
-    id: text("id").primaryKey(),
-    integrationId: text("integration_id").notNull(),
-    name: text("name").notNull(),
+    id: text('id').primaryKey(),
+    integrationId: text('integration_id').notNull(),
+    name: text('name').notNull(),
     /** JSON blob of the integration's connection fields */
-    config: text("config", { mode: "json" }).notNull().$type<Record<string, unknown>>(),
-    createdAt: integer("created_at").notNull(),
-    updatedAt: integer("updated_at").notNull()
+    config: text('config', { mode: 'json' }).notNull().$type<Record<string, unknown>>(),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
   },
-  (t) => [
-    index("connections_integration_idx").on(t.integrationId),
-    unique("connections_integration_name_uq").on(t.integrationId, t.name)
+  t => [
+    index('connections_integration_idx').on(t.integrationId),
+    unique('connections_integration_name_uq').on(t.integrationId, t.name)
   ]
-);
+)
 
 /**
- * A machine monitored through a Dokploy connection, used by the dashboard.
- * Stores the per-server monitoring metrics endpoint + token (from Dokploy's
- * setupMonitoring / getMetricsToken).
+ * A monitor: one monitorable connection (an integration with a `monitoring`
+ * capability — e.g. Dokploy, Uptime Kuma) plus a per-target config. Shown on
+ * the Monitoring page, which snapshots each monitor on demand by running the
+ * integration's `monitoring.snapshotAction` with `targetConfig` as input.
+ *
+ * `integrationId` is denormalized from the connection so listing doesn't need a
+ * join. `targetConfig` is integration-specific (validated against the
+ * integration's monitoring.targetSchema): for Dokploy it holds the metrics
+ * URL/token + serverId; for Kuma it holds the monitor name.
  */
-export const machines = sqliteTable(
-  "machines",
+export const monitors = sqliteTable(
+  'monitors',
   {
-    id: text("id").primaryKey(),
-    connectionId: text("connection_id")
+    id: text('id').primaryKey(),
+    connectionId: text('connection_id')
       .notNull()
-      .references(() => connections.id, { onDelete: "cascade" }),
-    name: text("name").notNull(),
-    /** Dokploy serverId, if this maps to a remote server (null = the Dokploy host itself) */
-    serverId: text("server_id"),
-    /** monitoring agent base url for server.getServerMetrics `url` param */
-    metricsUrl: text("metrics_url"),
-    /** token for server.getServerMetrics `token` param */
-    metricsToken: text("metrics_token"),
-    /** default dataPoints to request */
-    dataPoints: text("data_points").notNull().default("50"),
-    createdAt: integer("created_at").notNull(),
-    updatedAt: integer("updated_at").notNull()
+      .references(() => connections.id, { onDelete: 'cascade' }),
+    integrationId: text('integration_id').notNull(),
+    name: text('name').notNull(),
+    /** JSON blob of the integration's monitoring target fields */
+    targetConfig: text('target_config', { mode: 'json' }).notNull().$type<Record<string, unknown>>(),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
   },
-  (t) => [index("machines_connection_idx").on(t.connectionId)]
-);
+  t => [index('monitors_connection_idx').on(t.connectionId)]
+)
 
 /**
  * A user-defined automation: one trigger + an ordered list of steps. The
@@ -70,51 +71,51 @@ export const machines = sqliteTable(
  *   { trigger: {...}, steps: [...] }
  */
 export const flows = sqliteTable(
-  "flows",
+  'flows',
   {
-    id: text("id").primaryKey(),
-    name: text("name").notNull(),
-    description: text("description"),
-    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    description: text('description'),
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
     /** JSON FlowDefinition */
-    definition: text("definition", { mode: "json" }).notNull().$type<unknown>(),
+    definition: text('definition', { mode: 'json' }).notNull().$type<unknown>(),
     /** cached cron expression (denormalized from definition.trigger) for the scheduler */
-    cron: text("cron"),
+    cron: text('cron'),
     /** epoch ms of the last time the scheduler ran this flow (cron bookkeeping) */
-    lastRunAt: integer("last_run_at"),
-    createdAt: integer("created_at").notNull(),
-    updatedAt: integer("updated_at").notNull()
+    lastRunAt: integer('last_run_at'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
   },
-  (t) => [index("flows_enabled_idx").on(t.enabled)]
-);
+  t => [index('flows_enabled_idx').on(t.enabled)]
+)
 
 /**
  * One execution of a flow. `steps` captures per-step input/output/error so the
  * UI can show exactly what happened. `trigger` records how the run started.
  */
 export const flowRuns = sqliteTable(
-  "flow_runs",
+  'flow_runs',
   {
-    id: text("id").primaryKey(),
-    flowId: text("flow_id")
+    id: text('id').primaryKey(),
+    flowId: text('flow_id')
       .notNull()
-      .references(() => flows.id, { onDelete: "cascade" }),
+      .references(() => flows.id, { onDelete: 'cascade' }),
     /** "manual" | "cron" | "webhook" */
-    trigger: text("trigger").notNull(),
+    trigger: text('trigger').notNull(),
     /** "running" | "success" | "error" | "skipped" */
-    status: text("status").notNull(),
-    startedAt: integer("started_at").notNull(),
-    finishedAt: integer("finished_at"),
-    error: text("error"),
+    status: text('status').notNull(),
+    startedAt: integer('started_at').notNull(),
+    finishedAt: integer('finished_at'),
+    error: text('error'),
     /** JSON array of per-step records: {stepId, type, input, output, error, skipped} */
-    steps: text("steps", { mode: "json" }).$type<unknown[]>(),
-    createdAt: integer("created_at").notNull()
+    steps: text('steps', { mode: 'json' }).$type<unknown[]>(),
+    createdAt: integer('created_at').notNull()
   },
-  (t) => [
-    index("flow_runs_flow_idx").on(t.flowId),
-    index("flow_runs_started_idx").on(t.startedAt)
+  t => [
+    index('flow_runs_flow_idx').on(t.flowId),
+    index('flow_runs_started_idx').on(t.startedAt)
   ]
-);
+)
 
 /**
  * Per-flow named scratch state: counters, timestamps, strings. Powers the
@@ -124,30 +125,30 @@ export const flowRuns = sqliteTable(
  * embedding the entity in the key.
  */
 export const flowState = sqliteTable(
-  "flow_state",
+  'flow_state',
   {
-    flowId: text("flow_id")
+    flowId: text('flow_id')
       .notNull()
-      .references(() => flows.id, { onDelete: "cascade" }),
-    key: text("key").notNull(),
+      .references(() => flows.id, { onDelete: 'cascade' }),
+    key: text('key').notNull(),
     /** JSON-encoded value (number | string | boolean) */
-    value: text("value", { mode: "json" }).$type<unknown>(),
-    updatedAt: integer("updated_at").notNull()
+    value: text('value', { mode: 'json' }).$type<unknown>(),
+    updatedAt: integer('updated_at').notNull()
   },
-  (t) => [
+  t => [
     // composite primary key via unique index on (flowId, key)
-    unique("flow_state_pk").on(t.flowId, t.key)
+    unique('flow_state_pk').on(t.flowId, t.key)
   ]
-);
+)
 
-export const schemaSql = sql; // re-export marker to keep tree-shaking honest
+export const schemaSql = sql // re-export marker to keep tree-shaking honest
 
-export type ConnectionRow = typeof connections.$inferSelect;
-export type NewConnectionRow = typeof connections.$inferInsert;
-export type MachineRow = typeof machines.$inferSelect;
-export type NewMachineRow = typeof machines.$inferInsert;
-export type FlowRow = typeof flows.$inferSelect;
-export type NewFlowRow = typeof flows.$inferInsert;
-export type FlowRunRow = typeof flowRuns.$inferSelect;
-export type NewFlowRunRow = typeof flowRuns.$inferInsert;
-export type FlowStateRow = typeof flowState.$inferSelect;
+export type ConnectionRow = typeof connections.$inferSelect
+export type NewConnectionRow = typeof connections.$inferInsert
+export type MonitorRow = typeof monitors.$inferSelect
+export type NewMonitorRow = typeof monitors.$inferInsert
+export type FlowRow = typeof flows.$inferSelect
+export type NewFlowRow = typeof flows.$inferInsert
+export type FlowRunRow = typeof flowRuns.$inferSelect
+export type NewFlowRunRow = typeof flowRuns.$inferInsert
+export type FlowStateRow = typeof flowState.$inferSelect

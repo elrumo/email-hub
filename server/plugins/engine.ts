@@ -1,7 +1,8 @@
-import path from "node:path";
-import { initDb } from "../db";
-import { schedulerTick } from "../engine/scheduler";
-import { registerAllIntegrations } from "../integrations";
+import path from 'node:path'
+import { initDb } from '../db'
+import { drainPool } from '../engine/clientPool'
+import { schedulerTick } from '../engine/scheduler'
+import { registerAllIntegrations } from '../integrations'
 
 /**
  * Boots the flow engine: opens the SQLite DB (running migrations), registers
@@ -11,39 +12,45 @@ import { registerAllIntegrations } from "../integrations";
  * The DB file lives on the /data volume (NUXT_DB_FILE). Migrations are bundled
  * by Nitro from server/db/migrations.
  */
-export default async function () {
-  const cfg = useRuntimeConfig();
-  const dbFile = (cfg.dbFile as string) || "/data/app.db";
+export default async function (nitroApp?: { hooks?: { hook: (name: string, fn: () => unknown) => void } }) {
+  const cfg = useRuntimeConfig()
+  const dbFile = (cfg.dbFile as string) || '/data/app.db'
 
-  // Migrations folder: in dev it's the source path; Nitro copies it into the
-  // server bundle for prod. Resolve relative to this module's directory.
-  const migrationsDir = path.resolve(
-    path.dirname(new URL(import.meta.url).pathname),
-    "../db/migrations"
-  );
+  // Migrations folder. Resolved from the server asset dir in prod (Nitro copies
+  // it there via the config below) or the source tree in dev. NUXT_MIGRATIONS_DIR
+  // lets the container override it explicitly.
+  const migrationsDir
+    = (process.env.NUXT_MIGRATIONS_DIR as string)
+      || path.resolve(process.cwd(), 'server/db/migrations')
 
   try {
-    initDb({ dbFile, migrationsDir });
-    registerAllIntegrations();
-    console.log(`[engine] db ready at ${dbFile}; integrations registered`);
+    initDb({ dbFile, migrationsDir })
+    registerAllIntegrations()
+    console.log(`[engine] db ready at ${dbFile}; integrations registered`)
   } catch (e) {
-    console.error("[engine] boot failed:", e instanceof Error ? e.message : e);
-    return;
+    console.error('[engine] boot failed:', e instanceof Error ? e.message : e)
+    return
   }
 
-  const intervalMs = Number(cfg.schedulerIntervalMs || 0) || 30_000;
-  const ac = new AbortController();
-  loop(intervalMs, ac.signal);
-  console.log(`[engine] scheduler started (interval=${intervalMs}ms)`);
+  const intervalMs = Number(cfg.schedulerIntervalMs || 0) || 30_000
+  const ac = new AbortController()
+  loop(intervalMs, ac.signal)
+  console.log(`[engine] scheduler started (interval=${intervalMs}ms)`)
+
+  // tear down pooled clients (Mongo/SQL/etc.) on shutdown
+  nitroApp?.hooks?.hook('close', async () => {
+    ac.abort()
+    await drainPool()
+  })
 }
 
 async function loop(intervalMs: number, signal: AbortSignal): Promise<void> {
   while (!signal.aborted) {
     try {
-      await schedulerTick(Date.now(), signal);
+      await schedulerTick(Date.now(), signal)
     } catch (e) {
-      console.error("[engine] scheduler tick failed:", e instanceof Error ? e.message : e);
+      console.error('[engine] scheduler tick failed:', e instanceof Error ? e.message : e)
     }
-    await new Promise((r) => setTimeout(r, intervalMs));
+    await new Promise(r => setTimeout(r, intervalMs))
   }
 }

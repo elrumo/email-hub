@@ -1,11 +1,14 @@
-import { registerIntegration } from "../engine/registry";
-import { bunnyIntegration } from "./bunny";
-import { dokployIntegration } from "./dokploy";
-import { kumaIntegration } from "./kuma";
-import { notifyIntegration } from "./notify";
-import { probeIntegration } from "./probe";
+import { registerIntegration } from '../engine/registry'
+import { bunnyIntegration } from './bunny'
+import { dokployIntegration } from './dokploy'
+import { kumaIntegration } from './kuma'
+import { mailgunIntegration } from './mailgun'
+import { mongoIntegration } from './mongo'
+import { notifyIntegration } from './notify'
+import { probeIntegration } from './probe'
+import { telegramIntegration } from './telegram'
 
-let registered = false;
+let registered = false
 
 /**
  * Register every integration with the engine registry. Called once at boot.
@@ -13,15 +16,18 @@ let registered = false;
  * engine or UI changes required.
  */
 export function registerAllIntegrations(): void {
-  if (registered) return;
+  if (registered) return
   for (const i of [
     dokployIntegration,
     bunnyIntegration,
     kumaIntegration,
     probeIntegration,
-    notifyIntegration
+    notifyIntegration,
+    telegramIntegration,
+    mailgunIntegration,
+    mongoIntegration
   ]) {
-    registerIntegration(i);
+    registerIntegration(i)
   }
-  registered = true;
+  registered = true
 }

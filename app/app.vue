@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 useHead({
   meta: [
     { name: 'viewport', content: 'width=device-width, initial-scale=1' }
@@ -12,7 +12,17 @@ useHead({
 })
 
 const title = 'dokploy-doctor'
-const description = 'DNS failover monitor — watches Uptime Kuma and steers Bunny DNS records to a healthy origin.'
+const description = 'Automation flows for your infrastructure — connect Dokploy, Bunny, Uptime Kuma and more, then build trigger → action flows that run on a schedule, a webhook, or a button.'
+
+const route = useRoute()
+const nav = [
+  { label: 'Flows', to: '/', icon: 'i-lucide-workflow' },
+  { label: 'Connections', to: '/connections', icon: 'i-lucide-plug' },
+  { label: 'Monitoring', to: '/monitoring', icon: 'i-lucide-activity' }
+]
+function isActive(to: string) {
+  return to === '/' ? route.path === '/' || route.path.startsWith('/flows') : route.path.startsWith(to)
+}
 
 useSeoMeta({
   title,
@@ -27,6 +37,7 @@ useSeoMeta({
 <template>
   <UApp>
     <UHeader
+      :toggle="{ class: 'sm:hidden' }"
       :ui="{ root: 'border-none backdrop-blur', center: 'gap-2' }"
     >
       <template #title>
@@ -41,6 +52,19 @@ useSeoMeta({
         </span>
       </template>
 
+      <nav class="hidden items-center gap-1 sm:flex">
+        <UButton
+          v-for="item in nav"
+          :key="item.to"
+          :to="item.to"
+          :icon="item.icon"
+          :label="item.label"
+          size="sm"
+          :color="isActive(item.to) ? 'primary' : 'neutral'"
+          :variant="isActive(item.to) ? 'soft' : 'ghost'"
+        />
+      </nav>
+
       <template #right>
         <UColorModeButton />
 
@@ -52,6 +76,25 @@ useSeoMeta({
           color="neutral"
           variant="ghost"
         />
+      </template>
+
+      <!-- Mobile menu — rendered in UHeader's built-in slide-over, toggled by
+           the hamburger that appears automatically below the sm breakpoint. -->
+      <template #content>
+        <nav class="flex flex-col gap-1">
+          <UButton
+            v-for="item in nav"
+            :key="item.to"
+            :to="item.to"
+            :icon="item.icon"
+            :label="item.label"
+            size="lg"
+            block
+            :ui="{ base: 'justify-start' }"
+            :color="isActive(item.to) ? 'primary' : 'neutral'"
+            :variant="isActive(item.to) ? 'soft' : 'ghost'"
+          />
+        </nav>
       </template>
     </UHeader>
 
