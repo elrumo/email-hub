@@ -36,7 +36,7 @@ export default defineEventHandler(async (event) => {
     const integration = conn ? getIntegration(conn.integrationId) : undefined
     if (conn && integration?.webAnalytics) {
       try {
-        analyticsTags = integration.webAnalytics.scriptTags(conn.config)
+        analyticsTags = integration.webAnalytics.scriptTags(conn.config, { domain: board.analyticsDomain ?? undefined })
       } catch {
         analyticsTags = []
       }

@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "7cf978f0-b560-4257-b182-9754fd60effd",
-  "prevId": "842b117e-5e58-4228-8cbe-358a907407ec",
+  "id": "a43ff2da-f28f-4245-bd9c-df6ffbfeda5f",
+  "prevId": "7cf978f0-b560-4257-b182-9754fd60effd",
   "tables": {
     "activity_log": {
       "name": "activity_log",
@@ -152,6 +152,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "icon": {
+          "name": "icon",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "is_default": {

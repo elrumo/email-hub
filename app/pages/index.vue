@@ -56,6 +56,14 @@ const analyticsConnItems = computed(() => [
     }))
 ])
 
+// The chosen provider's per-board domain field (e.g. Plausible's site domain),
+// or null when the provider needs none (e.g. Google Analytics) or none picked.
+const analyticsDomainField = computed(() => {
+  const conn = connections.value.find(c => c.id === boardDraft.analyticsConnectionId)
+  if (!conn) return null
+  return catalog.value?.find(i => i.id === conn.integrationId)?.webAnalytics?.domainField ?? null
+})
+
 // only ping shortcuts that actually appear on the grid (and are ping-enabled)
 const gridShortcuts = computed(() => {
   const ids = new Set(widgets.value.filter(w => w.kind === 'shortcut').map(w => w.refId))
@@ -245,7 +253,7 @@ const boardModalOpen = ref(false)
 const boardBusy = ref(false)
 // draft for create/edit; `id` empty means "create new". `icon` is a lucide icon
 // name, an image URL / data: URI (uploaded picture), or '' for the name monogram.
-const boardDraft = reactive({ id: '', name: '', icon: '', isDefault: false, isPublic: false, publicTrigger: false, analyticsConnectionId: '' })
+const boardDraft = reactive({ id: '', name: '', icon: '', isDefault: false, isPublic: false, publicTrigger: false, analyticsConnectionId: '', analyticsDomain: '' })
 
 // a small curated icon set for board avatars; users can also type any lucide name
 const BOARD_ICON_CHOICES = [
@@ -258,7 +266,7 @@ const boardIconInput = ref<HTMLInputElement | null>(null)
 const boardIconUploading = ref(false)
 
 function openNewBoard() {
-  Object.assign(boardDraft, { id: '', name: '', icon: '', isDefault: false, isPublic: false, publicTrigger: false, analyticsConnectionId: '' })
+  Object.assign(boardDraft, { id: '', name: '', icon: '', isDefault: false, isPublic: false, publicTrigger: false, analyticsConnectionId: '', analyticsDomain: '' })
   boardModalOpen.value = true
 }
 function openEditBoard() {
@@ -271,7 +279,8 @@ function openEditBoard() {
     isDefault: b.isDefault,
     isPublic: b.isPublic,
     publicTrigger: b.publicTrigger,
-    analyticsConnectionId: b.analyticsConnectionId ?? ''
+    analyticsConnectionId: b.analyticsConnectionId ?? '',
+    analyticsDomain: b.analyticsDomain ?? ''
   })
   boardModalOpen.value = true
 }
@@ -343,7 +352,8 @@ async function saveBoard() {
           isDefault: boardDraft.isDefault,
           isPublic: boardDraft.isPublic,
           publicTrigger: boardDraft.publicTrigger,
-          analyticsConnectionId: boardDraft.analyticsConnectionId || null
+          analyticsConnectionId: boardDraft.analyticsConnectionId || null,
+          analyticsDomain: boardDraft.analyticsDomain || null
         }
       })
     } else {
@@ -354,7 +364,8 @@ async function saveBoard() {
           icon: boardDraft.icon || null,
           isPublic: boardDraft.isPublic,
           publicTrigger: boardDraft.publicTrigger,
-          analyticsConnectionId: boardDraft.analyticsConnectionId || null
+          analyticsConnectionId: boardDraft.analyticsConnectionId || null,
+          analyticsDomain: boardDraft.analyticsDomain || null
         }
       })
       activeBoardId.value = res.id
@@ -1247,6 +1258,18 @@ function spanFor(w: Widget) {
               :items="analyticsConnItems"
               value-key="value"
               placeholder="None"
+              class="w-full"
+            />
+          </UFormField>
+
+          <UFormField
+            v-if="boardDraft.isPublic && analyticsDomainField"
+            :label="analyticsDomainField.label"
+            :description="analyticsDomainField.help"
+          >
+            <UInput
+              v-model="boardDraft.analyticsDomain"
+              :placeholder="analyticsDomainField.placeholder"
               class="w-full"
             />
           </UFormField>
