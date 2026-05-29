@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm'
 import { getDb } from '../../db'
 import { boards } from '../../db/schema'
 import { logActivity, requireUser } from '../../utils/auth'
-import { clearOtherDefaults, normalizeAnalyticsDomain, resolveAnalyticsConnectionId, uniqueSlug } from './_shared'
+import { clearOtherDefaults, normalizeAnalyticsDomain, normalizeBoardIcon, resolveAnalyticsConnectionId, uniqueSlug } from './_shared'
 
 /** Create a board for the current user. The first board becomes the default. */
 export default defineEventHandler(async (event) => {
@@ -27,6 +27,7 @@ export default defineEventHandler(async (event) => {
     ownerId: user.id,
     name,
     slug,
+    icon: normalizeBoardIcon(body?.icon),
     isDefault,
     isPublic: !!body?.isPublic,
     publicTrigger: !!body?.publicTrigger,

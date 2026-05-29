@@ -71,6 +71,7 @@ export default defineEventHandler(async (event) => {
       id: board.id,
       name: board.name,
       slug: board.slug,
+      icon: board.icon,
       publicTrigger: board.publicTrigger
     },
     // public-safe analytics script tags to inject on the board page (may be [])

@@ -251,11 +251,22 @@ async function removeWidget(w: Widget) {
 // ── board management ──────────────────────────────────────────────────────────
 const boardModalOpen = ref(false)
 const boardBusy = ref(false)
-// draft for create/edit; `id` empty means "create new"
-const boardDraft = reactive({ id: '', name: '', isDefault: false, isPublic: false, publicTrigger: false, analyticsConnectionId: '', analyticsDomain: '' })
+// draft for create/edit; `id` empty means "create new". `icon` is a lucide icon
+// name, an image URL / data: URI (uploaded picture), or '' for the name monogram.
+const boardDraft = reactive({ id: '', name: '', icon: '', isDefault: false, isPublic: false, publicTrigger: false, analyticsConnectionId: '', analyticsDomain: '' })
+
+// a small curated icon set for board avatars; users can also type any lucide name
+const BOARD_ICON_CHOICES = [
+  'i-lucide-house', 'i-lucide-layout-grid', 'i-lucide-folder', 'i-lucide-briefcase',
+  'i-lucide-rocket', 'i-lucide-star', 'i-lucide-heart', 'i-lucide-globe',
+  'i-lucide-server', 'i-lucide-activity', 'i-lucide-gauge', 'i-lucide-bar-chart-3',
+  'i-lucide-shield', 'i-lucide-bell', 'i-lucide-bookmark', 'i-lucide-sparkles'
+]
+const boardIconInput = ref<HTMLInputElement | null>(null)
+const boardIconUploading = ref(false)
 
 function openNewBoard() {
-  Object.assign(boardDraft, { id: '', name: '', isDefault: false, isPublic: false, publicTrigger: false, analyticsConnectionId: '', analyticsDomain: '' })
+  Object.assign(boardDraft, { id: '', name: '', icon: '', isDefault: false, isPublic: false, publicTrigger: false, analyticsConnectionId: '', analyticsDomain: '' })
   boardModalOpen.value = true
 }
 function openEditBoard() {
@@ -264,6 +275,7 @@ function openEditBoard() {
   Object.assign(boardDraft, {
     id: b.id,
     name: b.name,
+    icon: b.icon ?? '',
     isDefault: b.isDefault,
     isPublic: b.isPublic,
     publicTrigger: b.publicTrigger,
@@ -271,6 +283,57 @@ function openEditBoard() {
     analyticsDomain: b.analyticsDomain ?? ''
   })
   boardModalOpen.value = true
+}
+
+/**
+ * Read a chosen image file, downscale it to a small square via a canvas, and
+ * stash the result as a `data:image/…` URI in the draft. Keeping it small means
+ * the avatar can live inline in the board row (no separate file storage needed)
+ * and stays under the server's size cap.
+ */
+async function onBoardIconFile(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = '' // let the same file be re-picked later
+  if (!file) return
+  if (!file.type.startsWith('image/')) {
+    toast.add({ title: 'Choose an image file', color: 'warning' })
+    return
+  }
+  boardIconUploading.value = true
+  try {
+    boardDraft.icon = await fileToSquareDataUrl(file, 256)
+  } catch {
+    toast.add({ title: 'Could not read that image', color: 'error' })
+  } finally {
+    boardIconUploading.value = false
+  }
+}
+
+function fileToSquareDataUrl(file: File, size: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      const canvas = document.createElement('canvas')
+      canvas.width = size
+      canvas.height = size
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return reject(new Error('no canvas context'))
+      // center-crop to a square, then scale into the canvas
+      const side = Math.min(img.width, img.height)
+      const sx = (img.width - side) / 2
+      const sy = (img.height - side) / 2
+      ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size)
+      resolve(canvas.toDataURL('image/webp', 0.85))
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error('decode failed'))
+    }
+    img.src = url
+  })
 }
 
 async function saveBoard() {
@@ -285,6 +348,7 @@ async function saveBoard() {
         method: 'PUT',
         body: {
           name: boardDraft.name,
+          icon: boardDraft.icon || null,
           isDefault: boardDraft.isDefault,
           isPublic: boardDraft.isPublic,
           publicTrigger: boardDraft.publicTrigger,
@@ -297,6 +361,7 @@ async function saveBoard() {
         method: 'POST',
         body: {
           name: boardDraft.name,
+          icon: boardDraft.icon || null,
           isPublic: boardDraft.isPublic,
           publicTrigger: boardDraft.publicTrigger,
           analyticsConnectionId: boardDraft.analyticsConnectionId || null,
@@ -1089,6 +1154,75 @@ function spanFor(w: Widget) {
               placeholder="e.g. Ops, Personal, Status"
               class="w-full"
             />
+          </UFormField>
+
+          <UFormField
+            label="Icon"
+            description="Upload a picture or pick an icon. Leave empty to use the board's initial."
+          >
+            <div class="flex items-center gap-2">
+              <!-- live preview -->
+              <span class="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-elevated text-muted ring-1 ring-default">
+                <img
+                  v-if="isImageIcon(boardDraft.icon)"
+                  :src="boardDraft.icon"
+                  alt=""
+                  class="size-full object-cover"
+                >
+                <UIcon
+                  v-else-if="boardDraft.icon"
+                  :name="boardDraft.icon"
+                  class="size-5"
+                />
+                <span
+                  v-else
+                  class="text-base font-semibold"
+                >{{ (boardDraft.name || '·').trim().charAt(0).toUpperCase() || '·' }}</span>
+              </span>
+
+              <USelectMenu
+                :model-value="isImageIcon(boardDraft.icon) ? undefined : (boardDraft.icon || undefined)"
+                :items="BOARD_ICON_CHOICES"
+                create-item
+                placeholder="Pick an icon"
+                class="w-full"
+                @update:model-value="(v: string) => (boardDraft.icon = v)"
+                @create="(v: string) => (boardDraft.icon = v)"
+              >
+                <template #item-leading="{ item }">
+                  <UIcon
+                    :name="item"
+                    class="size-4"
+                  />
+                </template>
+              </USelectMenu>
+
+              <UButton
+                icon="i-lucide-upload"
+                color="neutral"
+                variant="outline"
+                square
+                :loading="boardIconUploading"
+                aria-label="Upload image"
+                @click="boardIconInput?.click()"
+              />
+              <UButton
+                v-if="boardDraft.icon"
+                icon="i-lucide-x"
+                color="neutral"
+                variant="ghost"
+                square
+                aria-label="Clear icon"
+                @click="boardDraft.icon = ''"
+              />
+            </div>
+            <input
+              ref="boardIconInput"
+              type="file"
+              accept="image/*"
+              class="hidden"
+              @change="onBoardIconFile"
+            >
           </UFormField>
 
           <UFormField

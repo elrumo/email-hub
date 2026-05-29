@@ -370,6 +370,13 @@ export const boards = sqliteTable(
     name: text('name').notNull(),
     /** url-safe unique identifier used for the public `/b/<slug>` view */
     slug: text('slug').notNull(),
+    /**
+     * Optional board avatar. Either a lucide icon name (e.g. "i-lucide-home")
+     * rendered via <UIcon>, or an image URL / `data:image/…` URI (an uploaded
+     * picture) rendered via <img>. When null the board falls back to a monogram
+     * of the first letter of its name.
+     */
+    icon: text('icon'),
     /** the board the home page opens on; exactly one per user is true */
     isDefault: integer('is_default', { mode: 'boolean' }).notNull().default(false),
     /** viewable read-only by unauthenticated visitors at /b/<slug> */
