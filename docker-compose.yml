@@ -1,7 +1,7 @@
 services:
   app:
     build: .
-    image: dokploy-doctor
+    image: flow-hub
     restart: unless-stopped
     ports:
       - "${PORT:-3000}:3000"
@@ -13,7 +13,7 @@ services:
       NUXT_MIGRATIONS_DIR: /app/migrations
     volumes:
       # persists the SQLite database (and WAL files) across deploys
-      - dokploy_doctor_data:/data
+      - flow_hub_data:/data
     healthcheck:
       test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:3000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
