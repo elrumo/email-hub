@@ -17,10 +17,6 @@ const props = defineProps<{
 }>()
 defineEmits<{ edit: [], remove: [], refresh: [] }>()
 
-const STATUS_COLOR = {
-  up: 'success', down: 'error', pending: 'warning', maintenance: 'info', unknown: 'neutral'
-} as const
-
 // the Kuma group this monitor belongs to, persisted in targetConfig at add time
 const group = computed(() => {
   const g = props.monitor.targetConfig?.group

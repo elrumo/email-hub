@@ -22,7 +22,7 @@ import { Chat } from '@ai-sdk/vue'
 import { DefaultChatTransport, isTextUIPart, type UIMessage } from 'ai'
 import { isPartStreaming } from '@nuxt/ui/utils/ai'
 import type { EmailBlock, EmailBlockType, EmailDocument } from '#shared/email/blocks'
-import { addBlock, updateBlock } from '#shared/email/ops'
+import { addBlock, moveBlock, updateBlock } from '#shared/email/ops'
 import { renderEmailHtml } from '#shared/email/render'
 import { isStarterEmailDocument, type EmailTemplateDefinition } from '#shared/email/templates'
 import type { UploadedAsset } from '~/composables/useEmailAssets'
@@ -78,6 +78,30 @@ const previewDeviceItems = computed(() => [
     }
   }))
 ])
+const mobilePanel = ref<'chat' | 'preview' | 'edit'>('preview')
+const mobilePanelItems = [
+  { label: 'Chat', value: 'chat', icon: 'i-lucide-sparkles' },
+  { label: 'Preview', value: 'preview', icon: 'i-lucide-monitor' },
+  { label: 'Edit', value: 'edit', icon: 'i-lucide-sliders-horizontal' }
+]
+const isMobileWorkspace = ref(false)
+
+function updateMobileWorkspace() {
+  if (!import.meta.client) return
+  isMobileWorkspace.value = window.innerWidth < 1024
+  if (isMobileWorkspace.value && previewDeviceId.value === 'desktop') {
+    previewDeviceId.value = 'phone'
+  }
+}
+
+function focusMobilePanel(panel: typeof mobilePanel.value) {
+  if (isMobileWorkspace.value) mobilePanel.value = panel
+}
+
+function selectFromPreview(blockId: string | null) {
+  selectedId.value = blockId
+  if (blockId) focusMobilePanel('edit')
+}
 
 // ---- autosave (document + name) -------------------------------------------
 const saving = ref(false)
@@ -139,9 +163,15 @@ const promptPlaceholder = computed(() => {
 })
 
 onMounted(() => {
+  updateMobileWorkspace()
+  window.addEventListener('resize', updateMobileWorkspace)
+
   if (!chat.messages.length && isStarterEmailDocument(document.value)) {
     templateOpen.value = true
   }
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', updateMobileWorkspace)
 })
 
 // ---- manual block insertion ----------------------------------------------
@@ -165,6 +195,7 @@ function insert(type: EmailBlockType) {
   const res = addBlock(document.value, type)
   document.value = res.doc
   selectedId.value = res.id
+  focusMobilePanel('edit')
 }
 
 function applyTemplate(payload: { template: EmailTemplateDefinition, document: EmailDocument }) {
@@ -197,6 +228,7 @@ function onUploaded(asset: UploadedAsset) {
     })
     document.value = res.doc
     selectedId.value = res.id
+    focusMobilePanel('edit')
   } else {
     // non-image file → a text block with a download link
     const res = addBlock(document.value, 'text', { align: 'center' })
@@ -205,6 +237,7 @@ function onUploaded(asset: UploadedAsset) {
     })
     document.value = withLink.doc
     selectedId.value = res.id
+    focusMobilePanel('edit')
   }
 }
 
@@ -225,80 +258,193 @@ function blockLabel(b: EmailBlock): string {
   return b.type
 }
 
+// ---- block outline drag/drop ----------------------------------------------
+const draggingBlockId = ref<string | null>(null)
+const dropIndex = ref<number | null>(null)
+
+const orderedBlocks = computed(() => {
+  const id = draggingBlockId.value
+  const insertionIndex = dropIndex.value
+  if (!id || insertionIndex == null) return document.value.blocks
+
+  const from = document.value.blocks.findIndex(b => b.id === id)
+  if (from === -1) return document.value.blocks
+
+  const next = [...document.value.blocks]
+  const [dragged] = next.splice(from, 1)
+  if (!dragged) return document.value.blocks
+
+  const to = Math.max(0, Math.min(from < insertionIndex ? insertionIndex - 1 : insertionIndex, next.length))
+  next.splice(to, 0, dragged)
+  return next
+})
+
+function resetBlockDrag() {
+  draggingBlockId.value = null
+  dropIndex.value = null
+}
+
+function setBlockDropIndex(index: number) {
+  if (!draggingBlockId.value) return
+  dropIndex.value = Math.max(0, Math.min(index, document.value.blocks.length))
+}
+
+function blockDropIndex(e: DragEvent, b: EmailBlock): number {
+  const index = document.value.blocks.findIndex(block => block.id === b.id)
+  if (index === -1) return document.value.blocks.length
+
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  return e.clientY > rect.top + rect.height / 2 ? index + 1 : index
+}
+
+function onBlockDragStart(e: DragEvent, b: EmailBlock) {
+  draggingBlockId.value = b.id
+  dropIndex.value = document.value.blocks.findIndex(block => block.id === b.id)
+  selectedId.value = b.id
+
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', b.id)
+  }
+}
+
+function onBlockDragOver(e: DragEvent, b: EmailBlock) {
+  if (!draggingBlockId.value || b.id === draggingBlockId.value) return
+  e.preventDefault()
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+  setBlockDropIndex(blockDropIndex(e, b))
+}
+
+function onBlockListDragOver(e: DragEvent) {
+  if (!draggingBlockId.value) return
+  e.preventDefault()
+  if ((e.target as HTMLElement | null)?.closest('[data-email-block-id]')) return
+  setBlockDropIndex(document.value.blocks.length)
+}
+
+function onBlockDrop(e: DragEvent) {
+  e.preventDefault()
+  const id = draggingBlockId.value ?? e.dataTransfer?.getData('text/plain')
+  if (!id) {
+    resetBlockDrag()
+    return
+  }
+
+  const from = document.value.blocks.findIndex(b => b.id === id)
+  const insertionIndex = dropIndex.value ?? from
+  const to = from < insertionIndex ? insertionIndex - 1 : insertionIndex
+
+  if (from !== -1 && to !== from) {
+    const res = moveBlock(document.value, id, to)
+    if (res.ok) document.value = res.doc
+  }
+
+  selectedId.value = id
+  resetBlockDrag()
+}
+
+function onPreviewMove({ id, to }: { id: string, to: number }) {
+  const res = moveBlock(document.value, id, to)
+  if (res.ok) document.value = res.doc
+  selectedId.value = id
+}
+
 useHead({ title: () => `${name.value} · Email designer` })
 </script>
 
 <template>
-  <div class="flex h-[calc(100vh-64px)] flex-col bg-default">
+  <div class="flex h-[calc(100dvh-64px)] overflow-hidden flex-col bg-default">
     <!-- top bar -->
-    <header class="flex items-center gap-3 border-b border-default px-4 py-2.5">
-      <UButton
-        icon="i-lucide-arrow-left"
-        color="neutral"
-        variant="ghost"
-        size="sm"
-        to="/emails"
-        aria-label="Back to projects"
-      />
-      <UInput
-        v-model="name"
-        variant="none"
-        class="min-w-0 flex-1 font-semibold"
-        :ui="{ base: 'text-highlighted text-base px-0' }"
-        placeholder="Untitled email"
-      />
-      <span class="flex items-center gap-1.5 text-xs text-dimmed">
-        <UIcon
-          :name="saving ? 'i-lucide-loader-circle' : 'i-lucide-check'"
-          :class="saving ? 'animate-spin' : 'text-success'"
-          class="size-3.5"
-        />
-        {{ saving ? 'Saving…' : 'Saved' }}
-      </span>
-
-      <UDropdownMenu :items="previewDeviceItems">
+    <header class="flex shrink-0 flex-wrap items-center gap-2 border-b border-default px-3 py-2.5 sm:gap-3 sm:px-4">
+      <div class="flex min-w-0 flex-1 items-center gap-2">
         <UButton
-          :icon="previewDevice.icon"
-          :label="previewDevice.label"
+          icon="i-lucide-arrow-left"
+          color="neutral"
+          variant="ghost"
+          size="sm"
+          to="/emails"
+          aria-label="Back to projects"
+        />
+        <UInput
+          v-model="name"
+          variant="none"
+          class="min-w-0 flex-1 font-semibold"
+          :ui="{ base: 'text-highlighted text-base px-0' }"
+          placeholder="Untitled email"
+        />
+        <span
+          class="flex shrink-0 items-center gap-1.5 text-xs text-dimmed"
+          :aria-label="saving ? 'Saving' : 'Saved'"
+        >
+          <UIcon
+            :name="saving ? 'i-lucide-loader-circle' : 'i-lucide-check'"
+            :class="saving ? 'animate-spin' : 'text-success'"
+            class="size-3.5"
+          />
+          <span class="hidden sm:inline">{{ saving ? 'Saving…' : 'Saved' }}</span>
+        </span>
+      </div>
+
+      <div class="flex w-full min-w-0 items-center gap-2 overflow-x-auto sm:w-auto sm:overflow-visible">
+        <UDropdownMenu :items="previewDeviceItems">
+          <UButton
+            :icon="previewDevice.icon"
+            :label="previewDevice.label"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            trailing-icon="i-lucide-chevron-down"
+            :aria-label="`Preview device: ${previewDevice.label}`"
+            :ui="{ label: 'hidden sm:inline', trailingIcon: 'hidden sm:block' }"
+          />
+        </UDropdownMenu>
+
+        <UDropdownMenu :items="addItems">
+          <UButton
+            icon="i-lucide-plus"
+            label="Add block"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            :ui="{ label: 'hidden sm:inline' }"
+          />
+        </UDropdownMenu>
+
+        <UButton
+          icon="i-lucide-layout-template"
+          label="Templates"
           color="neutral"
           variant="outline"
           size="sm"
-          trailing-icon="i-lucide-chevron-down"
-          :aria-label="`Preview device: ${previewDevice.label}`"
+          :ui="{ label: 'hidden sm:inline' }"
+          @click="templateOpen = true"
         />
-      </UDropdownMenu>
 
-      <UDropdownMenu :items="addItems">
         <UButton
-          icon="i-lucide-plus"
-          label="Add block"
-          color="neutral"
-          variant="outline"
+          icon="i-lucide-code-xml"
+          label="Copy HTML"
           size="sm"
+          :ui="{ label: 'hidden sm:inline' }"
+          @click="copyHtml"
         />
-      </UDropdownMenu>
-
-      <UButton
-        icon="i-lucide-layout-template"
-        label="Templates"
-        color="neutral"
-        variant="outline"
-        size="sm"
-        @click="templateOpen = true"
-      />
-
-      <UButton
-        icon="i-lucide-code-xml"
-        label="Copy HTML"
-        size="sm"
-        @click="copyHtml"
-      />
+      </div>
     </header>
 
+    <UTabs
+      v-model="mobilePanel"
+      :items="mobilePanelItems"
+      :content="false"
+      color="primary"
+      class="shrink-0 border-b border-default px-3 py-2 lg:hidden"
+    />
+
     <!-- 3-pane body -->
-    <div class="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[340px_1fr_300px]">
+    <div class="min-h-0 flex-1 lg:grid lg:grid-cols-[340px_1fr_300px]">
       <!-- chat -->
-      <aside class="flex min-h-0 flex-col border-r border-default">
+      <aside
+        class="h-full min-h-0 flex-col lg:flex lg:border-r lg:border-default"
+        :class="mobilePanel === 'chat' ? 'flex' : 'hidden'"
+      >
         <div class="flex items-center gap-2 border-b border-default px-4 py-3">
           <UIcon
             name="i-lucide-sparkles"
@@ -387,17 +533,24 @@ useHead({ title: () => `${name.value} · Email designer` })
       </aside>
 
       <!-- preview -->
-      <main class="min-h-0">
+      <main
+        class="h-full min-h-0 lg:block"
+        :class="mobilePanel === 'preview' ? 'block' : 'hidden'"
+      >
         <EmailPreview
           :document="document"
           :selected-id="selectedId"
           :device="previewDevice"
-          @select="selectedId = $event"
+          @select="selectFromPreview"
+          @move="onPreviewMove"
         />
       </main>
 
       <!-- inspector -->
-      <aside class="hidden min-h-0 flex-col border-l border-default lg:flex">
+      <aside
+        class="h-full min-h-0 flex-col lg:flex lg:border-l lg:border-default"
+        :class="mobilePanel === 'edit' ? 'flex' : 'hidden'"
+      >
         <EmailInspector
           :document="document"
           :selected-id="selectedId"
@@ -410,24 +563,38 @@ useHead({ title: () => `${name.value} · Email designer` })
           <div class="px-4 py-2 text-xs font-medium uppercase tracking-wide text-dimmed">
             Blocks
           </div>
-          <ul class="max-h-48 overflow-y-auto pb-2">
+          <TransitionGroup
+            tag="ul"
+            name="email-block-list"
+            class="max-h-48 overflow-y-auto pb-2"
+            @dragover="onBlockListDragOver"
+            @drop="onBlockDrop"
+          >
             <li
-              v-for="b in document.blocks"
+              v-for="b in orderedBlocks"
               :key="b.id"
+              :data-email-block-id="b.id"
+              draggable="true"
+              class="email-block-list-item"
+              :class="draggingBlockId === b.id ? 'opacity-55' : ''"
+              @dragstart="onBlockDragStart($event, b)"
+              @dragover="onBlockDragOver($event, b)"
+              @drop="onBlockDrop"
+              @dragend="resetBlockDrag"
             >
               <button
-                class="flex w-full items-center gap-2 px-4 py-1.5 text-left text-sm transition hover:bg-elevated/60"
-                :class="selectedId === b.id ? 'bg-primary/10 text-primary' : 'text-muted'"
+                class="flex w-full cursor-grab items-center gap-2 px-4 py-1.5 text-left text-sm transition active:cursor-grabbing"
+                :class="selectedId === b.id ? 'bg-primary/10 text-primary' : 'text-muted hover:bg-elevated/60'"
                 @click="selectedId = b.id"
               >
                 <UIcon
                   name="i-lucide-grip-vertical"
-                  class="size-3.5 text-dimmed"
+                  class="size-3.5 shrink-0 text-dimmed"
                 />
                 <span class="truncate">{{ blockLabel(b) }}</span>
               </button>
             </li>
-          </ul>
+          </TransitionGroup>
         </div>
       </aside>
     </div>
@@ -448,3 +615,24 @@ useHead({ title: () => `${name.value} · Email designer` })
     />
   </div>
 </template>
+
+<style scoped>
+.email-block-list-item {
+  transition:
+    opacity 140ms ease,
+    transform 180ms ease,
+    background-color 140ms ease;
+}
+
+.email-block-list-move,
+.email-block-list-enter-active,
+.email-block-list-leave-active {
+  transition: transform 180ms ease, opacity 140ms ease;
+}
+
+.email-block-list-enter-from,
+.email-block-list-leave-to {
+  opacity: 0;
+  transform: translateY(6px);
+}
+</style>

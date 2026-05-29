@@ -8,6 +8,11 @@ const { data: flows, refresh } = await useFetch<Flow[]>('/api/flows', {
 })
 const toast = useToast()
 const running = ref<string | null>(null)
+const router = useRouter()
+
+function startExample(id: string) {
+  router.push({ path: '/flows/new', query: { example: id } })
+}
 
 function triggerSummary(f: Flow): string {
   const t = f.definition?.trigger
@@ -71,26 +76,36 @@ async function confirmDelete() {
 
     <div
       v-if="flows.length === 0"
-      class="flex flex-col items-center gap-5 rounded-2xl border border-dashed border-default py-20 text-center"
+      class="space-y-6 rounded-2xl border border-dashed border-default p-6 sm:p-8"
     >
-      <span class="flex size-12 items-center justify-center rounded-2xl bg-elevated text-dimmed">
-        <UIcon
-          name="i-lucide-workflow"
-          class="size-6"
-        />
-      </span>
-      <div class="space-y-1">
-        <p class="font-medium text-highlighted">
-          No flows yet
-        </p>
-        <p class="text-sm text-muted">
-          Build one from scratch, or start from a template like DNS failover.
-        </p>
+      <div class="flex flex-col gap-5 text-center sm:text-left">
+        <div class="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
+          <span class="flex size-12 items-center justify-center rounded-2xl bg-elevated text-dimmed">
+            <UIcon
+              name="i-lucide-workflow"
+              class="size-6"
+            />
+          </span>
+          <div class="space-y-1">
+            <p class="font-medium text-highlighted">
+              No flows yet
+            </p>
+            <p class="text-sm text-muted">
+              Start from scratch, or pick one of these examples and make it yours.
+            </p>
+          </div>
+        </div>
+        <div class="flex justify-center sm:justify-start">
+          <UButton
+            icon="i-lucide-plus"
+            label="New blank flow"
+            to="/flows/new"
+          />
+        </div>
       </div>
-      <UButton
-        icon="i-lucide-plus"
-        label="New flow"
-        to="/flows/new"
+
+      <FlowExampleGallery
+        @select="startExample"
       />
     </div>
 

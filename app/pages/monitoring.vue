@@ -34,7 +34,8 @@ const editing = ref<Monitor | null>(null)
 const form = reactive({
   connectionId: '',
   name: '',
-  targetConfig: {} as Record<string, unknown>
+  targetConfig: {} as Record<string, unknown>,
+  publicVisible: false
 })
 const saving = ref(false)
 const testing = ref(false)
@@ -202,6 +203,7 @@ function resetForm(connectionId: string) {
   form.connectionId = connectionId
   form.name = ''
   form.targetConfig = {}
+  form.publicVisible = false
   serverId.value = ''
   dokployInfo.value = null
   autoFilled.value = false
@@ -229,6 +231,7 @@ function openEdit(m: Monitor) {
   form.connectionId = m.connectionId
   form.name = m.name
   form.targetConfig = { ...m.targetConfig }
+  form.publicVisible = m.publicVisible
   serverId.value = String(m.targetConfig.serverId ?? '')
   dokployInfo.value = null
   autoFilled.value = false
@@ -280,7 +283,12 @@ async function saveKuma() {
       await $fetch('/api/monitors', {
         method: 'POST',
         // persist the group alongside the name so the card can show/group it
-        body: { connectionId: form.connectionId, name: m.name, targetConfig: { monitor: m.name, group: m.group ?? null } }
+        body: {
+          connectionId: form.connectionId,
+          name: m.name,
+          targetConfig: { monitor: m.name, group: m.group ?? null },
+          publicVisible: form.publicVisible
+        }
       })
     }
     open.value = false
@@ -302,9 +310,20 @@ async function save() {
   saving.value = true
   try {
     if (editing.value) {
-      await $fetch(`/api/monitors/${editing.value.id}`, { method: 'PUT', body: { name: form.name, targetConfig: form.targetConfig } })
+      await $fetch(`/api/monitors/${editing.value.id}`, {
+        method: 'PUT',
+        body: { name: form.name, targetConfig: form.targetConfig, publicVisible: form.publicVisible }
+      })
     } else {
-      await $fetch('/api/monitors', { method: 'POST', body: { connectionId: form.connectionId, name: form.name, targetConfig: form.targetConfig } })
+      await $fetch('/api/monitors', {
+        method: 'POST',
+        body: {
+          connectionId: form.connectionId,
+          name: form.name,
+          targetConfig: form.targetConfig,
+          publicVisible: form.publicVisible
+        }
+      })
     }
     open.value = false
     await refresh()
@@ -454,6 +473,13 @@ const connItems = computed(() => monitorableConns.value.map(c => ({
               placeholder="my-server"
               class="w-full"
             />
+          </UFormField>
+
+          <UFormField
+            label="Public on shared boards"
+            description="Allow this monitor's live snapshot to appear on public boards that include it. Turn it off to keep the public placeholder instead."
+          >
+            <USwitch v-model="form.publicVisible" />
           </UFormField>
 
           <!-- Dokploy: server picker + auto-discovery -->

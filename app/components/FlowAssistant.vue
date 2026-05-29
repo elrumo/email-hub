@@ -106,6 +106,15 @@ async function saveSetup() {
 // presentational components render correctly without the AI SDK; we read the
 // text back out of parts[0] when posting to the server.
 interface UiMessage { id: string, role: 'user' | 'assistant', parts: Array<{ type: 'text', text: string }> }
+interface AssistQuestionOption { label: string, value: string | number }
+interface AssistQuestion {
+  id: string
+  label: string
+  kind: 'select'
+  options: AssistQuestionOption[]
+  required?: boolean
+  help?: string
+}
 const messages = ref<UiMessage[]>([])
 const input = ref('')
 const sending = ref(false)
@@ -118,10 +127,16 @@ const status = computed(() => (sending.value ? 'submitted' : 'ready') as 'submit
 
 // the latest proposed flow awaiting the user's approval
 const proposal = ref<{ name: string, description: string, summary: string, trigger: FlowTrigger, steps: FlowStep[] } | null>(null)
+const pendingQuestions = ref<AssistQuestion[]>([])
+const questionAnswers = ref<Record<string, string | number | undefined>>({})
 
 async function send() {
   const text = input.value.trim()
   if (!text || sending.value) return
+  await submitTurn(text)
+}
+
+async function submitTurn(text: string) {
   if (!selectedConn.value) {
     toast.add({ title: 'Pick an AI connection first', color: 'warning' })
     return
@@ -129,10 +144,12 @@ async function send() {
   pushMsg('user', text)
   input.value = ''
   proposal.value = null
+  pendingQuestions.value = []
+  questionAnswers.value = {}
   sending.value = true
   try {
     const res = await $fetch<
-      | { kind: 'questions', reply: string, questions: string[] }
+      | { kind: 'questions', reply: string, questions: Array<string | AssistQuestion> }
       | { kind: 'flow', reply: string, summary: string, flow: { name: string, description: string, trigger: FlowTrigger, steps: FlowStep[] } }
       | { kind: 'error', reply: string }
     >('/api/flows/assist', {
@@ -145,7 +162,14 @@ async function send() {
     })
 
     if (res.kind === 'questions') {
-      pushMsg('assistant', [res.reply, ...res.questions.map(q => `• ${q}`)].filter(Boolean).join('\n'))
+      const textQuestions = res.questions.filter((q): q is string => typeof q === 'string')
+      const choiceQuestions = res.questions.filter((q): q is AssistQuestion => typeof q !== 'string')
+      pushMsg('assistant', [
+        res.reply,
+        ...textQuestions.map(q => `• ${q}`),
+        ...choiceQuestions.map(q => `• ${q.label}`)
+      ].filter(Boolean).join('\n'))
+      setPendingQuestions(choiceQuestions)
     } else if (res.kind === 'flow') {
       proposal.value = { ...res.flow, summary: res.summary }
       pushMsg('assistant', [res.reply, res.summary].filter(Boolean).join('\n\n') || 'Here’s a flow you can review.')
@@ -158,6 +182,46 @@ async function send() {
   } finally {
     sending.value = false
   }
+}
+
+function setPendingQuestions(questions: AssistQuestion[]) {
+  pendingQuestions.value = questions.map((q, index) => ({
+    ...q,
+    id: `${q.id || 'choice'}-${index}`
+  }))
+  const next: Record<string, string | number | undefined> = {}
+  for (const q of pendingQuestions.value) {
+    if (q.options.length === 1) next[q.id] = q.options[0]!.value
+  }
+  questionAnswers.value = next
+}
+
+function optionLabel(question: AssistQuestion, value: unknown): string {
+  const found = question.options.find(o => o.value === value)
+  return found ? found.label : String(value ?? '')
+}
+
+function questionItems(question: AssistQuestion) {
+  return question.options.map(o => ({ label: o.label, value: o.value }))
+}
+
+async function submitQuestionAnswers() {
+  const missing = pendingQuestions.value.find(q => q.required !== false && questionAnswers.value[q.id] == null)
+  if (missing) {
+    toast.add({ title: `Choose ${missing.label}`, color: 'warning' })
+    return
+  }
+
+  const lines = pendingQuestions.value
+    .map((q) => {
+      const value = questionAnswers.value[q.id]
+      if (value == null) return ''
+      return `- ${q.label}: ${optionLabel(q, value)} (${value})`
+    })
+    .filter(Boolean)
+  if (!lines.length) return
+
+  await submitTurn(`Answers:\n${lines.join('\n')}`)
 }
 
 // the chat components type parts as the AI-SDK union; we only ever emit text
@@ -326,6 +390,52 @@ function stepSummary(s: FlowStep): string {
           <p class="text-xs text-dimmed">
             You’ll be able to review and tweak every step before saving.
           </p>
+        </div>
+      </UCard>
+
+      <UCard
+        v-if="pendingQuestions.length"
+        :ui="{ root: 'ring-info/30' }"
+      >
+        <div class="space-y-4">
+          <div class="flex items-start gap-2">
+            <UIcon
+              name="i-lucide-list-checks"
+              class="mt-0.5 size-4 text-info"
+            />
+            <div>
+              <p class="text-sm font-medium text-highlighted">
+                Pick from what I found
+              </p>
+              <p class="text-xs text-muted">
+                These options are discovered from your saved connections, so you do not have to hunt for IDs.
+              </p>
+            </div>
+          </div>
+
+          <UFormField
+            v-for="q in pendingQuestions"
+            :key="q.id"
+            :label="q.label"
+            :required="q.required !== false"
+            :description="q.help"
+          >
+            <USelect
+              v-model="questionAnswers[q.id]"
+              :items="questionItems(q)"
+              placeholder="Choose an option"
+              class="w-full"
+            />
+          </UFormField>
+
+          <div class="flex justify-end">
+            <UButton
+              label="Continue"
+              icon="i-lucide-arrow-right"
+              :loading="sending"
+              @click="submitQuestionAnswers"
+            />
+          </div>
         </div>
       </UCard>
 

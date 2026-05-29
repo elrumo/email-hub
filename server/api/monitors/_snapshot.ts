@@ -36,7 +36,7 @@ export async function snapshotMonitor(
     // thread the monitor id in for integrations (e.g. ping) whose snapshot
     // reads their own retained samples; others ignore the extra key.
     const input = { ...monitor.targetConfig, _monitorId: monitor.id }
-    const snapshot = await action.run({ connection, input, log: () => {}, signal, client })
+    const snapshot = await action.run({ connection, input, log: () => {}, signal, client }) as unknown as MonitorSnapshot
     return { ok: true, ...snapshot }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) }

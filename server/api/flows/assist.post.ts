@@ -1,10 +1,14 @@
-import { and, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { getDb } from '../../db'
 import { connections } from '../../db/schema'
+import { bunnyZoneDiscovery, kumaDiscovery, normalizeAssistQuestions, type AssistConnectionContext, type AssistContext, type AssistDiscoveryContext } from '../../engine/assistContext'
 import { buildAssistSystemPrompt } from '../../engine/assistPrompt'
+import { getIntegration } from '../../engine/registry'
 import { validateFlowDefinition } from '../../engine/validateFlow'
 import { chat } from '../../integrations/ai'
+import { discoverBunnyZones } from '../../integrations/bunny'
 import { registerAllIntegrations } from '../../integrations'
+import { discoverKumaMonitors } from '../../integrations/kuma'
 import { requireUser } from '../../utils/auth'
 
 /**
@@ -43,10 +47,11 @@ export default defineEventHandler(async (event) => {
 
   // resolve the AI connection: explicit id → owner's default-marked ai conn → first ai conn
   const db = getDb()
-  const aiConns = await db
+  const allConns = await db
     .select()
     .from(connections)
-    .where(and(eq(connections.ownerId, user.id), eq(connections.integrationId, 'ai')))
+    .where(eq(connections.ownerId, user.id))
+  const aiConns = allConns.filter(c => c.integrationId === 'ai')
 
   let conn = body?.connectionId
     ? aiConns.find(c => c.id === String(body.connectionId))
@@ -58,7 +63,43 @@ export default defineEventHandler(async (event) => {
   const model = String(body?.model ?? '') || String(config.defaultModel ?? '')
   if (!model) throw createError({ statusCode: 400, statusMessage: 'no model set — choose one on the AI connection or in the picker' })
 
-  const system = buildAssistSystemPrompt()
+  const ac = new AbortController()
+  const timer = setTimeout(() => ac.abort(), 60_000)
+
+  const connectionContext: AssistConnectionContext[] = allConns
+    .filter(c => c.integrationId !== 'ai')
+    .map(c => ({
+      id: c.id,
+      name: c.name,
+      integrationId: c.integrationId,
+      integrationName: getIntegration(c.integrationId)?.name ?? c.integrationId
+    }))
+  const connectionContextById = new Map(connectionContext.map(c => [c.id, c]))
+  const discoveries: AssistDiscoveryContext[] = []
+
+  await Promise.allSettled(allConns.map(async (saved) => {
+    const safeConn = connectionContextById.get(saved.id)
+    if (!safeConn) return
+
+    if (saved.integrationId === 'kuma') {
+      const baseUrl = String(saved.config.baseUrl ?? '')
+      const apiKey = String(saved.config.apiKey ?? '')
+      if (!baseUrl || !apiKey) return
+      const monitors = await discoverKumaMonitors(baseUrl, apiKey, ac.signal)
+      if (monitors.length) discoveries.push(kumaDiscovery(safeConn, monitors))
+    }
+
+    if (saved.integrationId === 'bunny') {
+      const zones = await discoverBunnyZones(saved.config, ac.signal)
+      if (zones.length) discoveries.push(bunnyZoneDiscovery(safeConn, zones))
+    }
+  }))
+
+  const assistContext: AssistContext = {
+    connections: connectionContext,
+    discoveries
+  }
+  const system = buildAssistSystemPrompt(assistContext)
 
   // The transcript is flattened into one user turn — the AI integration's chat()
   // sends a single user message; the running conversation is rendered inline so
@@ -67,8 +108,6 @@ export default defineEventHandler(async (event) => {
     .map(m => `${m.role === 'user' ? 'USER' : 'ASSISTANT'}: ${m.content}`)
     .join('\n\n')
 
-  const ac = new AbortController()
-  const timer = setTimeout(() => ac.abort(), 60_000)
   try {
     let userTurn = `Conversation so far:\n\n${transcript}\n\nRespond now with a single JSON object as instructed.`
 
@@ -86,7 +125,7 @@ export default defineEventHandler(async (event) => {
 
       // shape A: clarifying questions
       if (Array.isArray(parsed.questions) && !parsed.flow) {
-        const questions = parsed.questions.filter((q: unknown) => typeof q === 'string')
+        const questions = normalizeAssistQuestions(parsed.questions)
         return { kind: 'questions', reply: reply || 'A couple of questions:', questions }
       }
 

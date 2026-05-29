@@ -71,6 +71,8 @@ export interface Monitor {
   name: string
   /** integration-specific target config (secrets redacted), matches the integration's monitoring.targetSchema */
   targetConfig: Record<string, unknown>
+  /** allow the live snapshot to appear on public boards */
+  publicVisible: boolean
   createdAt: number
 }
 
@@ -162,7 +164,7 @@ export interface PublicBoard {
   widgets: Array<Pick<Widget, 'id' | 'kind' | 'refId' | 'content' | 'w' | 'h' | 'sortOrder'>>
   shortcuts: Array<{ id: string, name: string, url: string, icon?: string | null }>
   flows: Array<{ id: string, name: string, description?: string | null, enabled: boolean, canTrigger: boolean }>
-  monitors: Array<{ id: string, name: string, integrationId: string }>
+  monitors: Array<{ id: string, name: string, integrationId: string, publicVisible: boolean }>
 }
 
 export type Operator
@@ -241,6 +243,15 @@ export interface FlowDefinition {
   trigger: FlowTrigger
   steps: FlowStep[]
   notifyOnRun?: NotifyOnRun
+}
+
+export interface FlowDraft {
+  name: string
+  description?: string | null
+  enabled?: boolean
+  /** allow unauthenticated visitors of a public board to run this flow */
+  publicTrigger?: boolean
+  definition: FlowDefinition
 }
 
 export interface Flow {

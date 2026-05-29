@@ -22,11 +22,38 @@ interface BunnyZone {
   Domain: string
   Records: BunnyRecord[]
 }
+interface BunnyZoneListResponse {
+  Items?: Array<Pick<BunnyZone, 'Id' | 'Domain'>>
+}
 
 function key(ctx: ActionContext): string {
   const k = String(ctx.connection?.config.apiKey ?? '')
   if (!k) throw new Error('Bunny connection has no API key')
   return k
+}
+
+function apiBaseFromConfig(config: Record<string, unknown>): string {
+  return String(config.apiBase ?? '') || process.env.NUXT_BUNNY_API_BASE || 'https://api.bunny.net'
+}
+
+export async function discoverBunnyZones(
+  config: Record<string, unknown>,
+  signal: AbortSignal
+): Promise<Array<{ id: number, domain: string }>> {
+  const apiKey = String(config.apiKey ?? '')
+  if (!apiKey) return []
+
+  const res = await fetch(`${apiBaseFromConfig(config)}/dnszone?page=1&perPage=100`, {
+    headers: { AccessKey: apiKey, Accept: 'application/json' },
+    signal
+  })
+  if (!res.ok) throw new Error(`Bunny zones ${res.status}`)
+
+  const json = await res.json() as BunnyZoneListResponse | Array<Pick<BunnyZone, 'Id' | 'Domain'>>
+  const zones = Array.isArray(json) ? json : (json.Items ?? [])
+  return zones
+    .filter(z => typeof z.Id === 'number' && typeof z.Domain === 'string')
+    .map(z => ({ id: z.Id, domain: z.Domain }))
 }
 
 async function fetchZone(base: string, apiKey: string, zoneId: number, signal: AbortSignal): Promise<BunnyZone> {

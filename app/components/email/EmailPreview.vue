@@ -29,6 +29,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'select', id: string | null): void
+  (e: 'move', payload: { id: string, to: number }): void
 }>()
 
 const frame = ref<HTMLIFrameElement | null>(null)
@@ -60,7 +61,7 @@ function updateScale() {
   const availableWidth = Math.max(280, el.clientWidth - 32)
   const availableHeight = Math.max(360, el.clientHeight - 32)
   const nextScale = Math.min(1, availableWidth / frameWidth.value, availableHeight / frameHeight.value)
-  scale.value = Math.max(0.45, Number(nextScale.toFixed(3)))
+  scale.value = Math.max(0.3, Number(nextScale.toFixed(3)))
 }
 
 /**
@@ -68,7 +69,7 @@ function updateScale() {
  *  - tags each top-level block cell with its data-block-id (the renderer emits
  *    blocks as <tr><td>… so we walk the content table rows in order),
  *  - draws a hover/selected outline,
- *  - relays clicks to the parent.
+ *  - adds editor-only drag handles and relays clicks/reorders to the parent.
  * Because the renderer order matches document.blocks order, we map row index →
  * block id here rather than threading ids through the email HTML (which must
  * stay clean for export).
@@ -80,6 +81,11 @@ function buildSrcDoc(): string {
 <script>
   (function () {
     var IDS = ${JSON.stringify(ids)};
+    var selectedId = null;
+    var draggedId = null;
+    var dropCommitted = false;
+    var currentIds = IDS.slice();
+
     function contentRows() {
       // the inner content table is the first table with a fixed pixel width
       var tables = document.querySelectorAll('table');
@@ -93,20 +99,147 @@ function buildSrcDoc(): string {
       }
       return [];
     }
+
+    function rowById(id) {
+      return document.querySelector('[data-block-id="' + id + '"]');
+    }
+
+    function snapshotRows() {
+      var map = {};
+      contentRows().forEach(function (row) {
+        map[row.getAttribute('data-block-id')] = row.getBoundingClientRect();
+      });
+      return map;
+    }
+
+    function animateFrom(before) {
+      contentRows().forEach(function (row) {
+        var id = row.getAttribute('data-block-id');
+        var prev = before[id];
+        if (!prev) return;
+        var next = row.getBoundingClientRect();
+        var dy = prev.top - next.top;
+        if (!dy) return;
+        row.style.transition = 'transform 0s';
+        row.style.transform = 'translateY(' + dy + 'px)';
+        requestAnimationFrame(function () {
+          row.style.transition = 'transform 180ms ease';
+          row.style.transform = '';
+        });
+      });
+    }
+
+    function injectStyles() {
+      var style = document.createElement('style');
+      style.textContent = [
+        '[data-block-id] { transition: opacity 140ms ease, box-shadow 140ms ease; }',
+        '[data-block-id] > td { position: relative; }',
+        '.email-drag-handle { align-content: center; background: #ffffff; border: 1px solid rgba(24, 24, 27, .16); border-radius: 7px; box-shadow: 0 8px 22px rgba(24, 24, 27, .16); box-sizing: border-box; cursor: grab; display: flex; flex-wrap: wrap; gap: 2px; height: 26px; justify-content: center; left: 8px; opacity: 0; padding: 6px; position: absolute; top: 50%; transform: translateY(-50%); transition: opacity 140ms ease, transform 140ms ease; width: 26px; z-index: 20; }',
+        '.email-drag-handle:active { cursor: grabbing; }',
+        '.email-drag-handle span { background: #71717a; border-radius: 999px; height: 3px; width: 3px; }',
+        '[data-block-id]:hover .email-drag-handle, [data-block-id][data-selected="true"] .email-drag-handle, body.email-preview-dragging .email-drag-handle { opacity: 1; }',
+        '[data-block-id][data-preview-dragging="true"] { opacity: .52; }'
+      ].join('\\n');
+      document.head.appendChild(style);
+    }
+
+    function createHandle(row) {
+      var cell = row.children && row.children[0];
+      if (!cell || cell.querySelector('.email-drag-handle')) return;
+
+      var handle = document.createElement('button');
+      handle.type = 'button';
+      handle.className = 'email-drag-handle';
+      handle.draggable = true;
+      handle.setAttribute('aria-label', 'Drag block');
+      for (var i = 0; i < 6; i++) handle.appendChild(document.createElement('span'));
+
+      handle.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        parent.postMessage({ __email: true, type: 'select', id: row.getAttribute('data-block-id') }, '*');
+      });
+      handle.addEventListener('dragstart', function (e) {
+        draggedId = row.getAttribute('data-block-id');
+        dropCommitted = false;
+        document.body.classList.add('email-preview-dragging');
+        row.setAttribute('data-preview-dragging', 'true');
+        if (e.dataTransfer) {
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', draggedId || '');
+        }
+      });
+      handle.addEventListener('dragend', function () {
+        document.body.classList.remove('email-preview-dragging');
+        contentRows().forEach(function (r) { r.removeAttribute('data-preview-dragging'); });
+        if (!dropCommitted) restoreOriginalOrder();
+        draggedId = null;
+      });
+
+      cell.insertBefore(handle, cell.firstChild);
+    }
+
     function tag() {
       var rows = contentRows();
       rows.forEach(function (row, idx) {
-        if (idx < IDS.length) row.setAttribute('data-block-id', IDS[idx]);
+        if (idx < IDS.length) {
+          row.setAttribute('data-block-id', IDS[idx]);
+          createHandle(row);
+        }
       });
     }
     function apply(selected) {
+      selectedId = selected;
       var rows = document.querySelectorAll('[data-block-id]');
       rows.forEach(function (row) {
         var on = row.getAttribute('data-block-id') === selected;
+        row.toggleAttribute('data-selected', on);
         row.style.outline = on ? '2px solid #2563eb' : '';
         row.style.outlineOffset = on ? '-2px' : '';
         row.style.cursor = 'pointer';
       });
+    }
+
+    function movePreview(id, insertionIndex) {
+      var from = currentIds.indexOf(id);
+      if (from === -1) return;
+
+      var nextIds = currentIds.slice();
+      nextIds.splice(from, 1);
+      var to = Math.max(0, Math.min(from < insertionIndex ? insertionIndex - 1 : insertionIndex, nextIds.length));
+      if (to === from) return;
+
+      nextIds.splice(to, 0, id);
+
+      var before = snapshotRows();
+      var row = rowById(id);
+      var nextRow = nextIds[to + 1] ? rowById(nextIds[to + 1]) : null;
+      if (row && row.parentNode) row.parentNode.insertBefore(row, nextRow);
+      currentIds = nextIds;
+      animateFrom(before);
+      apply(selectedId);
+    }
+
+    function restoreOriginalOrder() {
+      var rows = contentRows();
+      if (!rows.length) return;
+      var before = snapshotRows();
+      var parentNode = rows[0].parentNode;
+      IDS.forEach(function (id) {
+        var row = rowById(id);
+        if (row) parentNode.appendChild(row);
+      });
+      currentIds = IDS.slice();
+      animateFrom(before);
+      apply(selectedId);
+    }
+
+    function insertionIndexFor(e, row) {
+      var id = row.getAttribute('data-block-id');
+      var index = currentIds.indexOf(id);
+      if (index === -1) return currentIds.length;
+      var rect = row.getBoundingClientRect();
+      return e.clientY > rect.top + rect.height / 2 ? index + 1 : index;
     }
     document.addEventListener('mouseover', function (e) {
       var row = e.target.closest('[data-block-id]');
@@ -115,6 +248,24 @@ function buildSrcDoc(): string {
     document.addEventListener('mouseout', function (e) {
       var row = e.target.closest('[data-block-id]');
       if (row) row.style.boxShadow = '';
+    });
+    document.addEventListener('dragover', function (e) {
+      if (!draggedId) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+
+      var row = e.target.closest('[data-block-id]');
+      if (row) {
+        movePreview(draggedId, insertionIndexFor(e, row));
+      } else {
+        movePreview(draggedId, currentIds.length);
+      }
+    });
+    document.addEventListener('drop', function (e) {
+      if (!draggedId) return;
+      e.preventDefault();
+      dropCommitted = true;
+      parent.postMessage({ __email: true, type: 'move', id: draggedId, to: currentIds.indexOf(draggedId) }, '*');
     });
     document.addEventListener('click', function (e) {
       var row = e.target.closest('[data-block-id]');
@@ -125,6 +276,7 @@ function buildSrcDoc(): string {
     window.addEventListener('message', function (e) {
       if (e.data && e.data.__email && e.data.type === 'selected') apply(e.data.id);
     });
+    injectStyles();
     tag();
     parent.postMessage({ __email: true, type: 'ready' }, '*');
   })();
@@ -140,6 +292,9 @@ function onMessage(e: MessageEvent) {
   const d = e.data
   if (!d || !d.__email) return
   if (d.type === 'select') emit('select', d.id ?? null)
+  if (d.type === 'move' && typeof d.id === 'string' && typeof d.to === 'number') {
+    emit('move', { id: d.id, to: d.to })
+  }
   if (d.type === 'ready') postSelected()
 }
 

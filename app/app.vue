@@ -171,7 +171,7 @@ useSeoMeta({
         <NuxtPage />
       </UMain>
 
-      <UFooter :ui="{ root: 'border-none' }">
+      <!-- <UFooter :ui="{ root: 'border-none' }">
         <template #left>
           <p class="text-sm text-muted">
             Dokploy Doctor · © {{ new Date().getFullYear() }}
@@ -188,7 +188,7 @@ useSeoMeta({
             variant="ghost"
           />
         </template>
-      </UFooter>
+      </UFooter> -->
     </template>
   </UApp>
 </template>

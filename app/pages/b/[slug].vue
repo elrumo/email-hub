@@ -165,23 +165,12 @@ function hostOf(url: string) {
               </UBadge>
             </UCard>
 
-            <!-- monitor: live data is private, show a labelled placeholder -->
-            <UCard
+            <!-- monitor -->
+            <PublicMonitorTile
               v-else-if="w.kind === 'monitor' && monitorOf(w.refId)"
-              class="h-full"
-              :ui="{ body: 'flex h-full flex-col justify-center gap-1.5' }"
-            >
-              <div class="flex items-center gap-2 font-medium text-highlighted">
-                <UIcon
-                  name="i-lucide-activity"
-                  class="size-4 shrink-0 text-dimmed"
-                />
-                <span class="truncate">{{ monitorOf(w.refId)!.name }}</span>
-              </div>
-              <p class="text-xs text-dimmed">
-                Live metrics are private.
-              </p>
-            </UCard>
+              :board-slug="board.slug"
+              :monitor="monitorOf(w.refId)!"
+            />
 
             <!-- note -->
             <UCard

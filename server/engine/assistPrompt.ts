@@ -10,6 +10,7 @@
  * the prompt small while still covering real use and degrading gracefully.
  */
 import { listIntegrations } from './registry'
+import { formatAssistContext, type AssistContext } from './assistContext'
 import type { ActionDef, Integration } from './types'
 
 /** integrations whose actions are generated from the Dokploy OpenAPI spec */
@@ -45,9 +46,10 @@ function integrationBlock(i: Integration): string {
   return [head, ...i.actions.map(actionLine)].join('\n')
 }
 
-export function buildAssistSystemPrompt(): string {
+export function buildAssistSystemPrompt(context: AssistContext = { connections: [], discoveries: [] }): string {
   const integrations = listIntegrations()
   const catalog = integrations.map(integrationBlock).join('\n')
+  const userContext = formatAssistContext(context)
 
   return `You are FlowHub's flow-building assistant. FlowHub is a self-hosted, IFTTT/n8n-style
 automation platform. You help the user turn a plain-English description into a runnable flow.
@@ -82,11 +84,26 @@ Reference earlier output with {{ steps.<stepId>.<field> }} — the <field> must 
 # Available integrations and their actions
 ${catalog}
 
+# User's saved context and selectable values
+These are safe, user-owned options discovered by FlowHub. Use them proactively:
+- If exactly one matching saved connection exists, set connectionId to its id in triggers/actions that need it.
+- If the user clearly names one of these options, fill the matching value instead of asking.
+- If there are multiple plausible choices, ask a structured select question using these options instead of asking the user to type an id/name.
+- If a discovered field has exactly one option, prefer filling it.
+
+${userContext}
+
 # How to respond
 Reply with a SINGLE JSON object, no prose outside it, no code fences. Two shapes:
 
-A) You need more information (ask BEFORE building — keep it to 1–3 crisp questions):
-   { "reply": "<short friendly message>", "questions": ["...", "..."] }
+A) You need more information (ask BEFORE building — keep it to 1–3 crisp questions).
+   Use a string only for genuinely open-ended questions. Use an object for dropdown choices:
+   { "reply": "<short friendly message>",
+     "questions": [
+       "What schedule should this run on?",
+       { "id": "kumaMonitor", "label": "Which Uptime Kuma monitor?", "kind": "select", "required": true,
+         "options": [ { "label": "API / Website", "value": "Website" } ] }
+     ] }
 
 B) You have enough to propose a flow:
    { "reply": "<short message>",
@@ -94,8 +111,9 @@ B) You have enough to propose a flow:
      "flow": { "name": "<short name>", "description": "<one line>", "trigger": {...}, "steps": [ ... ] } }
 
 Rules:
-- Prefer asking a question over guessing a connection, an action id you're unsure of, or a schedule.
+- Prefer discovered/saved options over asking the user to type identifiers like monitor names, zone IDs, record IDs, entity IDs, or connection IDs.
+- Prefer asking a question over guessing an action id you're unsure of, a schedule, or a choice not present in the discovered context.
 - Use only integrationIds and actionIds that appear above (for summarised integrations, confirm the id first).
 - Every step needs a unique "id". Keep flows as simple as the request allows.
-- Never invent credentials or secrets. connectionId is always null in your output.`
+- Never invent credentials or secrets. connectionId may only be null or one of the ids listed in the saved context above.`
 }

@@ -107,7 +107,7 @@ function chooseBlank() {
               :style="{ backgroundColor: template.document.settings.backgroundColor }"
             >
               <div
-                class="mx-auto h-full max-w-[180px] rounded-md p-3 shadow-sm ring-1 ring-black/5"
+                class="mx-auto h-full max-w-[180px] rounded-md p-3 shadow-sm ring-1 ring-black/5 overflow-hidden"
                 :style="{ backgroundColor: template.document.settings.contentBackground }"
               >
                 <div

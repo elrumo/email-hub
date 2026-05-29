@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Connection, Flow, FlowDefinition, FlowStep, FlowTrigger, IntegrationMeta, NotifyOnRun, TriggerMeta } from '~/types'
+import type { Connection, Flow, FlowDefinition, FlowDraft, FlowStep, FlowTrigger, IntegrationMeta, NotifyOnRun, TriggerMeta } from '~/types'
 import { blankStep, STEP_TYPE_OPTIONS } from '~/composables/builder'
 
 const props = defineProps<{
@@ -7,22 +7,26 @@ const props = defineProps<{
   connections: Connection[]
   /** existing flow, or null for a new one */
   flow: Flow | null
+  /** prefilled values for a new flow */
+  draft?: FlowDraft | null
 }>()
 const emit = defineEmits<{ saved: [id: string] }>()
 
 const toast = useToast()
 const router = useRouter()
 
-const name = ref(props.flow?.name ?? '')
-const description = ref(props.flow?.description ?? '')
-const enabled = ref(props.flow?.enabled ?? true)
+const initialFlow = props.flow ?? props.draft ?? null
+
+const name = ref(initialFlow?.name ?? '')
+const description = ref(initialFlow?.description ?? '')
+const enabled = ref(initialFlow?.enabled ?? true)
 // allow unauthenticated visitors of a public board to run this flow
-const publicTrigger = ref(props.flow?.publicTrigger ?? false)
+const publicTrigger = ref(initialFlow?.publicTrigger ?? false)
 
 // trigger: kind selector. We model 3 built-in kinds + integration poll triggers.
 type TriggerKind = 'manual' | 'cron' | 'webhook' | 'poll'
 const trigger = ref<FlowTrigger>(
-  props.flow?.definition?.trigger ?? { integrationId: 'core', triggerId: 'manual', config: {} }
+  initialFlow?.definition?.trigger ?? { integrationId: 'core', triggerId: 'manual', config: {} }
 )
 const triggerKind = ref<TriggerKind>(
   trigger.value.integrationId === 'core' && trigger.value.triggerId === 'cron'
@@ -34,7 +38,7 @@ const triggerKind = ref<TriggerKind>(
         : 'poll'
 )
 
-const steps = ref<FlowStep[]>(props.flow?.definition?.steps ?? [])
+const steps = ref<FlowStep[]>(initialFlow?.definition?.steps ?? [])
 
 // build mode: hand-build the steps, or let the AI assistant draft them. The
 // assistant fills the very same name/trigger/steps refs, then drops the user
@@ -72,7 +76,7 @@ async function onConnectionCreated() {
 // browser-notification-on-run setting
 const { supported: pushSupported, enabled: pushEnabled, refresh: refreshPush } = usePush()
 onMounted(refreshPush)
-const notifyOnRun = ref<NotifyOnRun>(props.flow?.definition?.notifyOnRun ?? 'never')
+const notifyOnRun = ref<NotifyOnRun>(initialFlow?.definition?.notifyOnRun ?? 'never')
 const notifyItems = [
   { label: 'Don’t notify', value: 'never', icon: 'i-lucide-bell-off' },
   { label: 'On every run', value: 'always', icon: 'i-lucide-bell-ring' },
