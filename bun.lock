@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "dokploy-doctor",
+      "name": "flow-hub",
       "dependencies": {
         "@iconify-json/lucide": "^1.2.108",
         "@iconify-json/simple-icons": "^1.2.83",

@@ -20,7 +20,7 @@ function probe(
         port: 443,
         path: pathPart || '/',
         method: 'GET',
-        headers: { 'Host': fqdn, 'User-Agent': 'dokploy-doctor/flow' },
+        headers: { 'Host': fqdn, 'User-Agent': 'flow-hub/2.0' },
         servername: fqdn,
         rejectUnauthorized: false,
         timeout: timeoutMs

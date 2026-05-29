@@ -1,4 +1,4 @@
-# dokploy-doctor
+# flow-hub
 
 A self-hosted **DNS failover daemon** with a web dashboard. It watches host
 health in [Uptime Kuma](https://uptime.kuma.pet/) and, when a host goes down,
@@ -19,10 +19,10 @@ points at the "active" one. If that server dies, you normally have to notice the
 outage and manually edit DNS to point at the surviving server — and wait for the
 change to take effect.
 
-dokploy-doctor automates that loop:
+flow-hub automates that loop:
 
 1. Uptime Kuma already monitors your hosts and exposes their up/down status.
-2. dokploy-doctor polls Kuma, detects sustained downtime, **independently
+2. flow-hub polls Kuma, detects sustained downtime, **independently
    verifies** the failure, then swaps the Bunny.net DNS record to a backup IP
    that it has confirmed is actually responding.
 3. It notifies you (Discord) and shows the whole state on a dashboard.

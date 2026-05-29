@@ -12,53 +12,6 @@ export default defineNuxtConfig({
 
   css: ['~/assets/css/main.css'],
 
-  // Installable PWA. iOS needs the apple-touch-icon + apple meta tags (added in
-  // app.vue) on top of the manifest; the manifest alone is ignored by Safari.
-  pwa: {
-    registerType: 'autoUpdate',
-    manifest: {
-      name: 'Dokploy Doctor',
-      short_name: 'Doctor',
-      description: 'Automation flows for your infrastructure.',
-      theme_color: '#2563eb',
-      background_color: '#0a0a0a',
-      display: 'standalone',
-      orientation: 'portrait',
-      start_url: '/',
-      scope: '/',
-      icons: [
-        { src: '/icons/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
-        { src: '/icons/pwa-512x512.png', sizes: '512x512', type: 'image/png' },
-        { src: '/icons/maskable-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
-      ]
-    },
-    workbox: {
-      // Pre-cache the built app shell; API calls stay network-first so flow
-      // data is never served stale.
-      globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
-      navigateFallback: '/',
-      runtimeCaching: [
-        {
-          urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
-          handler: 'NetworkFirst',
-          options: {
-            cacheName: 'api-cache',
-            networkTimeoutSeconds: 10,
-            expiration: { maxEntries: 64, maxAgeSeconds: 60 * 5 }
-          }
-        }
-      ]
-    },
-    client: {
-      installPrompt: true
-    },
-    devOptions: {
-      // Let the service worker run in `nuxt dev` so installability can be tested.
-      enabled: true,
-      type: 'module'
-    }
-  },
-
   runtimeConfig: {
     dbFile: process.env.NUXT_DB_FILE || '/data/app.db',
     schedulerIntervalMs: process.env.NUXT_SCHEDULER_INTERVAL_MS || '',
@@ -112,6 +65,56 @@ export default defineNuxtConfig({
         commaDangle: 'never',
         braceStyle: '1tbs'
       }
+    }
+  },
+
+  // Installable PWA. iOS needs the apple-touch-icon + apple meta tags (added in
+  // app.vue) on top of the manifest; the manifest alone is ignored by Safari.
+  pwa: {
+    registerType: 'autoUpdate',
+    // The app sits behind HTTP Basic auth — request the manifest with
+    // credentials so the browser sends the auth header and avoids a 401.
+    useCredentials: true,
+    manifest: {
+      name: 'Flow Hub',
+      short_name: 'Flow Hub',
+      description: 'Automation flows for your infrastructure.',
+      theme_color: '#2563eb',
+      background_color: '#0a0a0a',
+      display: 'standalone',
+      orientation: 'portrait',
+      start_url: '/',
+      scope: '/',
+      icons: [
+        { src: '/icons/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+        { src: '/icons/pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+        { src: '/icons/maskable-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+      ]
+    },
+    workbox: {
+      // Pre-cache the built app shell; API calls stay network-first so flow
+      // data is never served stale.
+      globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
+      navigateFallback: '/',
+      runtimeCaching: [
+        {
+          urlPattern: ({ url }: { url: URL }) => url.pathname.startsWith('/api/'),
+          handler: 'NetworkFirst',
+          options: {
+            cacheName: 'api-cache',
+            networkTimeoutSeconds: 10,
+            expiration: { maxEntries: 64, maxAgeSeconds: 60 * 5 }
+          }
+        }
+      ]
+    },
+    client: {
+      installPrompt: true
+    },
+    devOptions: {
+      // Let the service worker run in `nuxt dev` so installability can be tested.
+      enabled: true,
+      type: 'module'
     }
   }
 })

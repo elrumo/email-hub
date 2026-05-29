@@ -1,17 +1,29 @@
 <script setup lang="ts">
 useHead({
   meta: [
-    { name: 'viewport', content: 'width=device-width, initial-scale=1' }
+    // `viewport-fit=cover` lets the standalone app draw under the iOS notch /
+    // home indicator so it feels native once installed.
+    { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' },
+    { name: 'theme-color', content: '#2563eb' },
+    // iOS PWA: Safari ignores the web manifest, so these drive standalone mode,
+    // the status-bar style and the home-screen title.
+    { name: 'apple-mobile-web-app-capable', content: 'yes' },
+    { name: 'mobile-web-app-capable', content: 'yes' },
+    { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' },
+    { name: 'apple-mobile-web-app-title', content: 'Flow Hub' }
   ],
   link: [
-    { rel: 'icon', href: '/favicon.ico' }
+    { rel: 'icon', href: '/favicon.ico', sizes: '32x32' },
+    { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
+    // iOS home-screen icon — must be a real PNG; Safari won't use the manifest's.
+    { rel: 'apple-touch-icon', href: '/icons/apple-touch-icon.png', sizes: '180x180' }
   ],
   htmlAttrs: {
     lang: 'en'
   }
 })
 
-const title = 'dokploy-doctor'
+const title = 'Flow Hub'
 const description = 'Automation flows for your infrastructure — connect Dokploy, Bunny, Uptime Kuma and more, then build trigger → action flows that run on a schedule, a webhook, or a button.'
 
 const route = useRoute()
@@ -69,7 +81,7 @@ useSeoMeta({
         <UColorModeButton />
 
         <UButton
-          to="https://github.com/macosicons/dokploy-doctor"
+          to="https://github.com/elrumo/flow-hub"
           target="_blank"
           icon="i-simple-icons-github"
           aria-label="GitHub"
@@ -111,7 +123,7 @@ useSeoMeta({
 
       <template #right>
         <UButton
-          to="https://github.com/macosicons/dokploy-doctor"
+          to="https://github.com/elrumo/flow-hub"
           target="_blank"
           icon="i-simple-icons-github"
           aria-label="GitHub"
