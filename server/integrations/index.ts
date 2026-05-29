@@ -3,12 +3,14 @@ import { aiIntegration } from './ai'
 import { browserIntegration } from './browser'
 import { bunnyIntegration } from './bunny'
 import { dokployIntegration } from './dokploy'
+import { googleAnalyticsIntegration } from './google-analytics'
 import { homeAssistantIntegration } from './homeassistant'
 import { kumaIntegration } from './kuma'
 import { mailgunIntegration } from './mailgun'
 import { mongoIntegration } from './mongo'
 import { notifyIntegration } from './notify'
 import { pingIntegration } from './ping'
+import { plausibleIntegration } from './plausible'
 import { probeIntegration } from './probe'
 import { s3Integration } from './s3'
 import { telegramIntegration } from './telegram'
@@ -35,7 +37,9 @@ export function registerAllIntegrations(): void {
     mongoIntegration,
     s3Integration,
     aiIntegration,
-    homeAssistantIntegration
+    homeAssistantIntegration,
+    plausibleIntegration,
+    googleAnalyticsIntegration
   ]) {
     registerIntegration(i)
   }

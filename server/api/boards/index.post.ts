@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm'
 import { getDb } from '../../db'
 import { boards } from '../../db/schema'
 import { logActivity, requireUser } from '../../utils/auth'
-import { clearOtherDefaults, uniqueSlug } from './_shared'
+import { clearOtherDefaults, resolveAnalyticsConnectionId, uniqueSlug } from './_shared'
 
 /** Create a board for the current user. The first board becomes the default. */
 export default defineEventHandler(async (event) => {
@@ -19,6 +19,7 @@ export default defineEventHandler(async (event) => {
   const now = Date.now()
   const id = randomUUID()
   const slug = await uniqueSlug(db, body?.slug ? String(body.slug) : name)
+  const analyticsConnectionId = await resolveAnalyticsConnectionId(db, user.id, body?.analyticsConnectionId)
   await db.insert(boards).values({
     id,
     ownerId: user.id,
@@ -27,6 +28,7 @@ export default defineEventHandler(async (event) => {
     isDefault,
     isPublic: !!body?.isPublic,
     publicTrigger: !!body?.publicTrigger,
+    analyticsConnectionId,
     sortOrder: existing.length,
     createdAt: now,
     updatedAt: now

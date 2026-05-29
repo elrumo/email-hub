@@ -1,6 +1,9 @@
 import { and, asc, eq, inArray } from 'drizzle-orm'
 import { getDb } from '../../../db'
-import { boards, flows, monitors, shortcuts, widgets } from '../../../db/schema'
+import { boards, connections, flows, monitors, shortcuts, widgets } from '../../../db/schema'
+import { getIntegration } from '../../../engine/registry'
+import type { AnalyticsScriptTag } from '../../../engine/types'
+import { registerAllIntegrations } from '../../../integrations'
 
 /**
  * Public, unauthenticated read of a board by slug. Returns the board plus its
@@ -12,12 +15,32 @@ import { boards, flows, monitors, shortcuts, widgets } from '../../../db/schema'
  * 404 unless the board exists and `isPublic` is true.
  */
 export default defineEventHandler(async (event) => {
+  registerAllIntegrations()
   const slug = getRouterParam(event, 'slug')!
   const db = getDb()
 
   const board = (await db.select().from(boards).where(eq(boards.slug, slug)))[0]
   if (!board || !board.isPublic) {
     throw createError({ statusCode: 404, statusMessage: 'board not found' })
+  }
+
+  // Resolve the board's analytics provider (if any) into public-safe script
+  // tags. Only the integration's webAnalytics output leaves the server — never
+  // the connection config (which may hold an API key / service account).
+  let analyticsTags: AnalyticsScriptTag[] = []
+  if (board.analyticsConnectionId && board.ownerId) {
+    const conn = (await db
+      .select()
+      .from(connections)
+      .where(and(eq(connections.id, board.analyticsConnectionId), eq(connections.ownerId, board.ownerId))))[0]
+    const integration = conn ? getIntegration(conn.integrationId) : undefined
+    if (conn && integration?.webAnalytics) {
+      try {
+        analyticsTags = integration.webAnalytics.scriptTags(conn.config)
+      } catch {
+        analyticsTags = []
+      }
+    }
   }
 
   const tiles = await db
@@ -50,6 +73,8 @@ export default defineEventHandler(async (event) => {
       slug: board.slug,
       publicTrigger: board.publicTrigger
     },
+    // public-safe analytics script tags to inject on the board page (may be [])
+    analytics: { tags: analyticsTags },
     widgets: tiles.map(t => ({
       id: t.id,
       kind: t.kind,

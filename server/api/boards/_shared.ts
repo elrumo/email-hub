@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import { and, eq, ne } from 'drizzle-orm'
 import type { DB } from '../../db'
-import { boards } from '../../db/schema'
+import { boards, connections } from '../../db/schema'
+import { getIntegration } from '../../engine/registry'
+import { registerAllIntegrations } from '../../integrations'
 
 /** Turn a board name into a url-safe slug stub (no uniqueness applied yet). */
 export function slugify(input: string): string {
@@ -40,4 +42,32 @@ export async function clearOtherDefaults(db: DB, ownerId: string, boardId: strin
     .update(boards)
     .set({ isDefault: false, updatedAt: Date.now() })
     .where(and(eq(boards.ownerId, ownerId), ne(boards.id, boardId)))
+}
+
+/**
+ * Validate a board's chosen analytics connection. Returns the connection id when
+ * it belongs to `ownerId` and its integration declares a `webAnalytics`
+ * capability; returns `null` for an empty/cleared selection. Throws a 400 when
+ * the connection is unknown or can't track. Accepts the raw request value
+ * (string | null | undefined).
+ */
+export async function resolveAnalyticsConnectionId(
+  db: DB,
+  ownerId: string,
+  raw: unknown
+): Promise<string | null> {
+  if (raw == null || raw === '') return null
+  const connectionId = String(raw)
+  registerAllIntegrations()
+  const row = (await db
+    .select({ id: connections.id, integrationId: connections.integrationId })
+    .from(connections)
+    .where(and(eq(connections.id, connectionId), eq(connections.ownerId, ownerId))))[0]
+  if (!row) {
+    throw createError({ statusCode: 400, statusMessage: 'analytics connection not found' })
+  }
+  if (!getIntegration(row.integrationId)?.webAnalytics) {
+    throw createError({ statusCode: 400, statusMessage: 'that connection can\'t track boards' })
+  }
+  return connectionId
 }

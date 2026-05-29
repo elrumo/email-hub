@@ -50,7 +50,9 @@ export default defineEventHandler(async (event) => {
     if (snapshot.kind === 'status') {
       return { ok: true, message: `Reachable — status: ${snapshot.label}.` }
     }
-    const hasData = snapshot.gauges.some(g => g.value != null)
+    const hasData = snapshot.kind === 'stats'
+      ? snapshot.stats.some(s => s.value != null)
+      : snapshot.gauges.some(g => g.value != null)
     return {
       ok: true,
       message: hasData ? 'Reachable — metrics returned.' : 'Reachable, but no metric data was returned yet.'

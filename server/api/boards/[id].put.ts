@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm'
 import { getDb } from '../../db'
 import { boards } from '../../db/schema'
 import { logActivity, requireUser } from '../../utils/auth'
-import { clearOtherDefaults, uniqueSlug } from './_shared'
+import { clearOtherDefaults, resolveAnalyticsConnectionId, uniqueSlug } from './_shared'
 
 /** Update a board (rename, slug, default/public/publicTrigger flags). */
 export default defineEventHandler(async (event) => {
@@ -27,6 +27,9 @@ export default defineEventHandler(async (event) => {
   }
   if (body?.isPublic !== undefined) update.isPublic = !!body.isPublic
   if (body?.publicTrigger !== undefined) update.publicTrigger = !!body.publicTrigger
+  if (body?.analyticsConnectionId !== undefined) {
+    update.analyticsConnectionId = await resolveAnalyticsConnectionId(db, user.id, body.analyticsConnectionId)
+  }
 
   // A user always has exactly one default; you can promote a board but not
   // un-default it directly (promote another instead).

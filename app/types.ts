@@ -37,9 +37,18 @@ export interface TriggerMeta {
 }
 
 export interface MonitoringCapability {
-  kind: 'gauges' | 'status'
+  kind: 'gauges' | 'status' | 'stats'
   snapshotAction: string
   targetSchema: FieldSchema[]
+}
+
+/** A public-safe analytics `<script>` tag injected on a tracked public board. */
+export interface AnalyticsScriptTag {
+  src?: string
+  async?: boolean
+  defer?: boolean
+  innerHTML?: string
+  attrs?: Record<string, string>
 }
 
 export interface IntegrationMeta {
@@ -49,6 +58,8 @@ export interface IntegrationMeta {
   img?: string
   canTest?: boolean
   monitoring?: MonitoringCapability
+  /** true when the integration can track public boards (Plausible / GA) */
+  webAnalytics?: boolean
   connectionSchema: FieldSchema[]
   triggers: TriggerMeta[]
   actions: ActionMeta[]
@@ -88,6 +99,12 @@ export type MonitorSnapshot
     kind: 'status'
     state: 'up' | 'down' | 'pending' | 'maintenance' | 'unknown'
     label: string
+    detail?: string
+    raw?: unknown
+  }
+  | {
+    kind: 'stats'
+    stats: Array<{ key: string, label: string, icon?: string, value: number | string | null, unit?: string, hint?: string }>
     detail?: string
     raw?: unknown
   }
@@ -158,6 +175,8 @@ export interface Board {
   isPublic: boolean
   /** allow public visitors to run every flow on this board (overrides per-flow flag) */
   publicTrigger: boolean
+  /** connection used to track visits to this board (Plausible / Google Analytics), or null */
+  analyticsConnectionId?: string | null
   sortOrder: number
   createdAt: number
   updatedAt: number
@@ -166,6 +185,8 @@ export interface Board {
 /** Shape returned by the public board endpoint (display-only, no secrets). */
 export interface PublicBoard {
   board: { id: string, name: string, slug: string, publicTrigger: boolean }
+  /** public-safe analytics script tags to inject on the board page (may be empty) */
+  analytics?: { tags: AnalyticsScriptTag[] }
   widgets: Array<Pick<Widget, 'id' | 'kind' | 'refId' | 'content' | 'cardStyle' | 'w' | 'h' | 'sortOrder'>>
   shortcuts: Array<{ id: string, name: string, url: string, icon?: string | null }>
   flows: Array<{ id: string, name: string, description?: string | null, enabled: boolean, canTrigger: boolean }>

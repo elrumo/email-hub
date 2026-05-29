@@ -66,6 +66,12 @@ const num = (v: string | number | undefined | null): number | null => {
 
 const isGauges = computed(() => snapshot.value?.ok && snapshot.value.kind === 'gauges')
 const isStatus = computed(() => snapshot.value?.ok && snapshot.value.kind === 'status')
+const isStats = computed(() => snapshot.value?.ok && snapshot.value.kind === 'stats')
+
+function fmtStat(value: number | string | null): string {
+  if (value == null) return '—'
+  return typeof value === 'number' ? value.toLocaleString() : value
+}
 
 /** One recorded ping (present in a constant-ping monitor's status snapshot raw). */
 interface PingSample { ts: number, latencyMs: number | null, ok: boolean, status: number }
@@ -287,6 +293,38 @@ const updatedAgo = computed(() => {
           <span>{{ pingSuccessRate != null ? `${pingSuccessRate}% up` : '' }} · {{ pingSamples.length }} pings</span>
         </div>
       </div>
+    </template>
+
+    <!-- stats snapshot (web analytics) → grid of figures -->
+    <template v-else-if="isStats && snapshot?.ok && snapshot.kind === 'stats'">
+      <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div
+          v-for="s in snapshot.stats"
+          :key="s.key"
+          class="rounded-md border border-default bg-elevated/10 p-3"
+        >
+          <span class="flex items-center gap-1.5 text-xs text-muted">
+            <UIcon
+              v-if="s.icon"
+              :name="s.icon"
+              class="size-3.5"
+            />
+            {{ s.label }}
+          </span>
+          <span class="mt-1 block text-2xl font-semibold text-highlighted tabular-nums">
+            {{ fmtStat(s.value) }}<span
+              v-if="s.unit && s.value != null"
+              class="text-sm text-dimmed"
+            > {{ s.unit }}</span>
+          </span>
+        </div>
+      </div>
+      <p
+        v-if="snapshot.detail"
+        class="text-xs text-dimmed"
+      >
+        {{ snapshot.detail }}
+      </p>
     </template>
 
     <!-- gauges snapshot without a rich Dokploy series → simple bars -->
