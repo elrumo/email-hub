@@ -35,8 +35,11 @@ const sizeH = computed(() => props.span?.h ?? props.widget.h)
 const isTall = computed(() => sizeH.value >= 2)
 const isLarge = computed(() => sizeW.value * sizeH.value >= 4)
 
-// Per-tile card chrome, shared with the public board view.
-const cardClass = computed(() => bentoCardClass(props.widget.cardStyle))
+// Per-tile card chrome + background fill, shared with the public board view.
+const cardClass = computed(() => bentoCardClass(props.widget.cardStyle, props.widget.bg))
+// CSS vars feeding the solid fill; set on the wrapper so the (possibly nested)
+// .bento-card inherits them. Empty unless this tile has a solid background.
+const cardVars = computed(() => bentoCardVars(props.widget))
 const noteIsHtml = computed(() => isRichTextHtml(props.widget.content))
 
 const emit = defineEmits<{ remove: [], edit: [] }>()
@@ -75,7 +78,10 @@ const host = computed(() => {
 </script>
 
 <template>
-  <div class="group relative h-full">
+  <div
+    class="group relative h-full"
+    :style="cardVars"
+  >
     <!-- edit-mode controls: drag handle + edit + remove. The tile itself has
          pointer-events disabled while editing (so it drags as one piece);
          these controls opt back in. -->

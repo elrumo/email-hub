@@ -144,6 +144,9 @@ export type WidgetKind = 'shortcut' | 'flow' | 'monitor' | 'note' | 'section' | 
 /** Per-tile card chrome on the bento grid. */
 export type CardStyle = 'shadow' | 'outline' | 'none'
 
+/** Per-tile background fill: the default surface, or a custom solid colour. */
+export type CardBg = 'none' | 'solid'
+
 /** A tile on the home bento grid. See server/db/schema.ts `widgets`. */
 export interface Widget {
   id: string
@@ -154,6 +157,12 @@ export interface Widget {
   content?: string | null
   /** card chrome — soft shadow, outline ring, or none */
   cardStyle?: CardStyle
+  /** background fill — 'none' keeps the default surface, 'solid' uses the colours below */
+  bg?: CardBg
+  /** solid background colour (hex) used in light theme when bg === 'solid' */
+  bgLight?: string | null
+  /** solid background colour (hex) used in dark theme when bg === 'solid' */
+  bgDark?: string | null
   /** column span (1–4) */
   w: number
   /** row span (1–4) */
@@ -187,7 +196,7 @@ export interface PublicBoard {
   board: { id: string, name: string, slug: string, publicTrigger: boolean }
   /** public-safe analytics script tags to inject on the board page (may be empty) */
   analytics?: { tags: AnalyticsScriptTag[] }
-  widgets: Array<Pick<Widget, 'id' | 'kind' | 'refId' | 'content' | 'cardStyle' | 'w' | 'h' | 'sortOrder'>>
+  widgets: Array<Pick<Widget, 'id' | 'kind' | 'refId' | 'content' | 'cardStyle' | 'bg' | 'bgLight' | 'bgDark' | 'w' | 'h' | 'sortOrder'>>
   shortcuts: Array<{ id: string, name: string, url: string, icon?: string | null }>
   flows: Array<{ id: string, name: string, description?: string | null, enabled: boolean, canTrigger: boolean }>
   monitors: Array<{ id: string, name: string, integrationId: string, publicVisible: boolean }>

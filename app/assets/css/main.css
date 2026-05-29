@@ -104,6 +104,18 @@
   }
 }
 
+/* Per-tile solid background fill (cardBg === 'solid'). The colours are set
+   inline as CSS variables (see bentoCardVars) so a tile can carry a different
+   colour per theme; we fall back to the default surface when none was picked.
+   The two-class selector outweighs Nuxt UI's `bg-default` utility on the card
+   root, so the custom fill wins. */
+.bento-card.bento-bg-solid {
+  background-color: var(--bento-bg-light, var(--ui-bg));
+}
+html.dark .bento-card.bento-bg-solid {
+  background-color: var(--bento-bg-dark, var(--bento-bg-light, var(--ui-bg)));
+}
+
 /*
  * Rich-text tiles render formatted HTML authored with the Nuxt UI editor
  * (UEditor). Tailwind's reset strips heading/list styling, so restore a

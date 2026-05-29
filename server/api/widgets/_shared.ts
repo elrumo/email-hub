@@ -14,6 +14,22 @@ export const URL_KINDS = ['image', 'iframe'] as const
 export const CARD_STYLES = ['shadow', 'outline', 'none'] as const
 export type CardStyle = (typeof CARD_STYLES)[number]
 
+/** Allowed per-tile background fill. */
+export const CARD_BGS = ['none', 'solid'] as const
+export type CardBg = (typeof CARD_BGS)[number]
+
+/**
+ * Coerce a colour value to a safe hex string (`#rgb`, `#rrggbb`, `#rrggbbaa`)
+ * or null. Rejects anything else so a custom background can't smuggle arbitrary
+ * CSS into the inline `style` it drives on public boards.
+ */
+function normalizeHexColor(value: unknown): string | null {
+  if (value === null || value === undefined) return null
+  const s = String(value).trim()
+  if (!s) return null
+  return /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(s) ? s.toLowerCase() : null
+}
+
 /**
  * Resolve a board id that belongs to `ownerId`. When `boardId` is given it must
  * be one of the user's boards; otherwise the user's default board is used (the
@@ -42,7 +58,7 @@ export async function resolveOwnedBoard(
 }
 export type WidgetKind = (typeof WIDGET_KINDS)[number]
 
-type WidgetFields = Pick<NewWidgetRow, 'kind' | 'refId' | 'content' | 'cardStyle' | 'w' | 'h' | 'sortOrder'>
+type WidgetFields = Pick<NewWidgetRow, 'kind' | 'refId' | 'content' | 'cardStyle' | 'bg' | 'bgLight' | 'bgDark' | 'w' | 'h' | 'sortOrder'>
 
 function clampSpan(value: unknown, fallback: number): number {
   const n = Number(value)
@@ -118,11 +134,27 @@ export function normalizeWidgetBody(
     throw createError({ statusCode: 400, statusMessage: `cardStyle must be one of: ${CARD_STYLES.join(', ')}` })
   }
 
+  const bg = (b.bg !== undefined ? String(b.bg) : existing.bg ?? 'none') as CardBg
+  if (!CARD_BGS.includes(bg)) {
+    throw createError({ statusCode: 400, statusMessage: `bg must be one of: ${CARD_BGS.join(', ')}` })
+  }
+  // Colours are only meaningful for a solid fill; clear them otherwise so a tile
+  // reset back to "none" doesn't keep stale swatches around.
+  const bgLight = bg === 'solid'
+    ? (b.bgLight !== undefined ? normalizeHexColor(b.bgLight) : existing.bgLight ?? null)
+    : null
+  const bgDark = bg === 'solid'
+    ? (b.bgDark !== undefined ? normalizeHexColor(b.bgDark) : existing.bgDark ?? null)
+    : null
+
   return {
     kind,
     refId: isSelfContained(kind) ? null : refId,
     content: isSelfContained(kind) ? content : null,
     cardStyle,
+    bg,
+    bgLight,
+    bgDark,
     w: clampSpan(b.w, existing.w ?? 1),
     h: clampSpan(b.h, existing.h ?? 1),
     sortOrder: b.sortOrder !== undefined ? (Number(b.sortOrder) || 0) : existing.sortOrder ?? 0
