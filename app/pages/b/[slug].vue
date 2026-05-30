@@ -69,6 +69,41 @@ function hostOf(url: string) {
     return url
   }
 }
+
+// ── square bento cells (mirrors the home grid) ───────────────────────────────
+// Spans are stored in grid cells. Older boards used a coarse 1–4 span; the owner
+// upgrades those ×CELL_SCALE on their home grid, but this read-only public view
+// can't write, so it scales legacy-looking spans at read time. A board "looks
+// legacy" when every non-section tile fits the old 1–CELL_SCALE range; otherwise
+// the spans are already in cells and used verbatim. Rows are sized to the live
+// column width so every cell is a true square.
+const CELL_SCALE = 4
+const looksLegacy = computed(() => {
+  const tiles = widgets.value.filter(w => w.kind !== 'section')
+  return tiles.length > 0 && tiles.every(w => w.w <= CELL_SCALE && w.h <= CELL_SCALE)
+})
+// a tile's span in cells, scaling legacy coarse spans up to match the grid
+function cellSpan(w: { w: number, h: number }) {
+  const f = looksLegacy.value ? CELL_SCALE : 1
+  return { w: w.w * f, h: w.h * f }
+}
+const gridEl = ref<HTMLElement | null>(null)
+const cellSize = ref(40)
+function measureCells() {
+  if (!gridEl.value) return
+  const styles = getComputedStyle(gridEl.value)
+  const n = styles.gridTemplateColumns.split(' ').filter(Boolean).length
+  if (!n) return
+  const gap = Number.parseFloat(styles.columnGap) || 0
+  const width = gridEl.value.getBoundingClientRect().width
+  cellSize.value = (width - gap * (n - 1)) / n
+}
+onMounted(() => {
+  measureCells()
+  window.addEventListener('resize', measureCells)
+})
+onBeforeUnmount(() => window.removeEventListener('resize', measureCells))
+watch(() => widgets.value.length, () => nextTick(measureCells))
 </script>
 
 <template>
@@ -157,14 +192,16 @@ function hostOf(url: string) {
 
             <div
               v-else
-              class="grid auto-rows-[8.5rem] grid-cols-2 gap-4 sm:grid-cols-3"
+              ref="gridEl"
+              class="grid grid-cols-8 gap-3 sm:grid-cols-12"
+              :style="{ gridAutoRows: `${cellSize}px` }"
             >
               <div
                 v-for="w in widgets"
                 :key="w.id"
                 :style="{
-                  gridColumn: w.kind === 'section' ? '1 / -1' : `span ${w.w}`,
-                  gridRow: w.kind === 'section' ? 'span 1' : `span ${w.h}`,
+                  gridColumn: w.kind === 'section' ? '1 / -1' : `span ${cellSpan(w).w}`,
+                  gridRow: w.kind === 'section' ? 'span 1' : `span ${cellSpan(w).h}`,
                   ...bentoCardVars(w)
                 }"
               >

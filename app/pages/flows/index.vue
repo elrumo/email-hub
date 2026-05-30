@@ -159,36 +159,27 @@ async function confirmDelete() {
 
     <div
       v-if="flows.length === 0"
-      class="space-y-6 rounded-2xl border border-dashed border-default p-6 sm:p-8"
+      class="flex flex-col gap-5 rounded-2xl border border-dashed border-default p-6 text-center sm:flex-row sm:items-start sm:text-left sm:p-8"
     >
-      <div class="flex flex-col gap-5 text-center sm:text-left">
-        <div class="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
-          <span class="flex size-12 items-center justify-center rounded-2xl bg-elevated text-dimmed">
-            <UIcon
-              name="i-lucide-workflow"
-              class="size-6"
-            />
-          </span>
-          <div class="space-y-1">
-            <p class="font-medium text-highlighted">
-              No flows yet
-            </p>
-            <p class="text-sm text-muted">
-              Start from scratch, describe one to the assistant above, or pick an example and make it yours.
-            </p>
-          </div>
-        </div>
-        <div class="flex justify-center sm:justify-start">
-          <UButton
-            icon="i-lucide-plus"
-            label="New blank flow"
-            to="/flows/new"
-          />
-        </div>
+      <span class="flex size-12 shrink-0 items-center justify-center self-center rounded-2xl bg-elevated text-dimmed sm:self-start">
+        <UIcon
+          name="i-lucide-workflow"
+          class="size-6"
+        />
+      </span>
+      <div class="space-y-1">
+        <p class="font-medium text-highlighted">
+          No flows yet
+        </p>
+        <p class="text-sm text-muted">
+          Start from scratch, describe one to the assistant above, or grab a template below and make it yours.
+        </p>
       </div>
-
-      <FlowExampleGallery
-        @select="startExample"
+      <UButton
+        icon="i-lucide-plus"
+        label="New blank flow"
+        to="/flows/new"
+        class="self-center sm:ml-auto sm:self-start"
       />
     </div>
 
@@ -261,6 +252,38 @@ async function confirmDelete() {
         </div>
       </UCard>
     </div>
+
+    <!-- ── Discover: community flows, then templates ──────────────────────────
+         The community-flows feature is being built separately; it mounts into
+         the #community-flows anchor below. Templates sit *behind* it as the
+         always-available fallback so there's never an empty discover area. -->
+    <section class="mt-12 space-y-8">
+      <!-- community flows mount point (filled by the community feature) -->
+      <div id="community-flows" />
+
+      <div>
+        <div class="mb-4 flex items-start gap-2.5">
+          <span class="flex size-7 shrink-0 items-center justify-center rounded-full bg-elevated text-muted">
+            <UIcon
+              name="i-lucide-layout-template"
+              class="size-4"
+            />
+          </span>
+          <div>
+            <h2 class="text-sm font-semibold text-highlighted">
+              Templates
+            </h2>
+            <p class="text-sm text-muted">
+              Proven starting points. Open one in the builder, swap in your connections, and save — everything stays editable.
+            </p>
+          </div>
+        </div>
+
+        <FlowExampleGallery
+          @select="startExample"
+        />
+      </div>
+    </section>
 
     <!-- floating AI chat, opened by the launcher above -->
     <FlowChatDock

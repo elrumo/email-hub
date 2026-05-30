@@ -13,7 +13,7 @@
 :root {
   /* Generous, rounded geometry — the single most "Apple" lever. */
   --ui-radius: 0.625rem;
-  --ui-container: 66rem;
+  --ui-container: 76rem;
 }
 
 /*

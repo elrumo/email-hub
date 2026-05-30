@@ -1,104 +1,3 @@
-<script setup lang="ts">
-/**
- * Public marketing landing page — the app's index (`/`).
- *
- * Renders standalone (no app chrome; see app.vue `isStandalonePage`). The global
- * route guard (app/middleware/auth.global.ts) sends authenticated visitors on to
- * the app home (/home), so this page is only ever shown to logged-out visitors.
- */
-
-const title = 'Flow Hub — Automate your infrastructure, visually'
-const description
-  = 'Flow Hub connects your servers, DNS, monitors and notifications into trigger → action flows that run on a schedule, a webhook, or the tap of a button. Self-hosted and yours.'
-
-useSeoMeta({
-  title,
-  description,
-  ogTitle: title,
-  ogDescription: description,
-  twitterCard: 'summary_large_image'
-})
-
-// Integration logos shown in the "works with" strip. A mix of brand marks
-// (simple-icons) and generic glyphs (lucide) for the in-house pieces.
-const integrations = [
-  { name: 'Dokploy', icon: 'i-lucide-container' },
-  { name: 'Bunny.net', icon: 'i-lucide-rabbit' },
-  { name: 'Uptime Kuma', icon: 'i-lucide-activity' },
-  { name: 'Telegram', icon: 'i-simple-icons-telegram' },
-  { name: 'Mailgun', icon: 'i-lucide-mail' },
-  { name: 'MongoDB', icon: 'i-simple-icons-mongodb' },
-  { name: 'Amazon S3', icon: 'i-simple-icons-amazons3' },
-  { name: 'Home Assistant', icon: 'i-simple-icons-homeassistant' },
-  { name: 'Plausible', icon: 'i-simple-icons-plausibleanalytics' },
-  { name: 'Google Analytics', icon: 'i-simple-icons-googleanalytics' },
-  { name: 'OpenAI', icon: 'i-simple-icons-openai' },
-  { name: 'Anthropic', icon: 'i-simple-icons-anthropic' }
-]
-
-// Feature bento. The first card spans two columns for a stronger lead.
-const features = [
-  {
-    icon: 'i-lucide-workflow',
-    title: 'Visual flow builder',
-    body: 'Chain a trigger to a sequence of actions on a drag-and-drop canvas. Pass data between steps, branch on conditions, and preview every run.',
-    span: true
-  },
-  {
-    icon: 'i-lucide-zap',
-    title: 'Triggers that fit',
-    body: 'Run flows on a cron schedule, an inbound webhook, a health-check ping, or a button you tap.'
-  },
-  {
-    icon: 'i-lucide-plug',
-    title: '15+ integrations',
-    body: 'Dokploy, Bunny DNS, Uptime Kuma, Telegram, Mailgun, MongoDB, S3, Home Assistant and more — or import any OpenAPI spec.'
-  },
-  {
-    icon: 'i-lucide-activity',
-    title: 'Live monitoring',
-    body: 'Uptime, machine and analytics monitors with sparklines, history and push alerts the moment something drifts.'
-  },
-  {
-    icon: 'i-lucide-layout-grid',
-    title: 'Bento home boards',
-    body: 'Pin the shortcuts, flows and monitors you care about into a tidy grid. Make a board public to share it read-only.',
-    span: true
-  },
-  {
-    icon: 'i-lucide-sparkles',
-    title: 'AI flow assistant',
-    body: 'Describe what you want in plain language and let the assistant scaffold the flow for you.'
-  },
-  {
-    icon: 'i-lucide-server',
-    title: 'Self-hosted & installable',
-    body: 'One container, your data. Installs as a PWA on desktop and mobile, with web push baked in.'
-  }
-]
-
-// "How it works" — three plain steps.
-const steps = [
-  {
-    icon: 'i-lucide-plug-zap',
-    title: 'Connect',
-    body: 'Add a connection for each service you use — paste an API key, or import an OpenAPI spec.'
-  },
-  {
-    icon: 'i-lucide-workflow',
-    title: 'Build',
-    body: 'Pick a trigger, drop in actions, and wire the outputs of one step into the next.'
-  },
-  {
-    icon: 'i-lucide-rocket',
-    title: 'Run',
-    body: 'Enable the flow and let it fire on schedule, on a webhook, or on demand — and watch it on your board.'
-  }
-]
-
-const year = new Date().getFullYear()
-</script>
-
 <template>
   <div class="landing min-h-svh overflow-x-hidden bg-default text-default">
     <!-- ── header ─────────────────────────────────────────────────────────── -->
@@ -111,7 +10,9 @@ const year = new Date().getFullYear()
               class="size-4.5"
             />
           </span>
-          <span class="text-base font-semibold tracking-tight text-highlighted">Flow Hub</span>
+          <span class="text-base font-semibold tracking-tight text-highlighted">
+            Flow Hub
+          </span>
         </span>
 
         <nav class="hidden items-center gap-1 md:flex">
@@ -426,6 +327,107 @@ const year = new Date().getFullYear()
     </footer>
   </div>
 </template>
+
+<script setup lang="ts">
+/**
+ * Public marketing landing page — the app's index (`/`).
+ *
+ * Renders standalone (no app chrome; see app.vue `isStandalonePage`). The global
+ * route guard (app/middleware/auth.global.ts) sends authenticated visitors on to
+ * the app home (/home), so this page is only ever shown to logged-out visitors.
+ */
+
+const title = 'Flow Hub — Automate your infrastructure, visually'
+const description
+  = 'Flow Hub connects your servers, DNS, monitors and notifications into trigger → action flows that run on a schedule, a webhook, or the tap of a button. Self-hosted and yours.'
+
+useSeoMeta({
+  title,
+  description,
+  ogTitle: title,
+  ogDescription: description,
+  twitterCard: 'summary_large_image'
+})
+
+// Integration logos shown in the "works with" strip. A mix of brand marks
+// (simple-icons) and generic glyphs (lucide) for the in-house pieces.
+const integrations = [
+  { name: 'Dokploy', icon: 'i-lucide-container' },
+  { name: 'Bunny.net', icon: 'i-lucide-rabbit' },
+  { name: 'Uptime Kuma', icon: 'i-lucide-activity' },
+  { name: 'Telegram', icon: 'i-simple-icons-telegram' },
+  { name: 'Mailgun', icon: 'i-lucide-mail' },
+  { name: 'MongoDB', icon: 'i-simple-icons-mongodb' },
+  { name: 'Amazon S3', icon: 'i-simple-icons-amazons3' },
+  { name: 'Home Assistant', icon: 'i-simple-icons-homeassistant' },
+  { name: 'Plausible', icon: 'i-simple-icons-plausibleanalytics' },
+  { name: 'Google Analytics', icon: 'i-simple-icons-googleanalytics' },
+  { name: 'OpenAI', icon: 'i-simple-icons-openai' },
+  { name: 'Anthropic', icon: 'i-simple-icons-anthropic' }
+]
+
+// Feature bento. The first card spans two columns for a stronger lead.
+const features = [
+  {
+    icon: 'i-lucide-workflow',
+    title: 'Visual flow builder',
+    body: 'Chain a trigger to a sequence of actions on a drag-and-drop canvas. Pass data between steps, branch on conditions, and preview every run.',
+    span: true
+  },
+  {
+    icon: 'i-lucide-zap',
+    title: 'Triggers that fit',
+    body: 'Run flows on a cron schedule, an inbound webhook, a health-check ping, or a button you tap.'
+  },
+  {
+    icon: 'i-lucide-plug',
+    title: '15+ integrations',
+    body: 'Dokploy, Bunny DNS, Uptime Kuma, Telegram, Mailgun, MongoDB, S3, Home Assistant and more — or import any OpenAPI spec.'
+  },
+  {
+    icon: 'i-lucide-activity',
+    title: 'Live monitoring',
+    body: 'Uptime, machine and analytics monitors with sparklines, history and push alerts the moment something drifts.'
+  },
+  {
+    icon: 'i-lucide-layout-grid',
+    title: 'Bento home boards',
+    body: 'Pin the shortcuts, flows and monitors you care about into a tidy grid. Make a board public to share it read-only.',
+    span: true
+  },
+  {
+    icon: 'i-lucide-sparkles',
+    title: 'AI flow assistant',
+    body: 'Describe what you want in plain language and let the assistant scaffold the flow for you.'
+  },
+  {
+    icon: 'i-lucide-server',
+    title: 'Self-hosted & installable',
+    body: 'One container, your data. Installs as a PWA on desktop and mobile, with web push baked in.'
+  }
+]
+
+// "How it works" — three plain steps.
+const steps = [
+  {
+    icon: 'i-lucide-plug-zap',
+    title: 'Connect',
+    body: 'Add a connection for each service you use — paste an API key, or import an OpenAPI spec.'
+  },
+  {
+    icon: 'i-lucide-workflow',
+    title: 'Build',
+    body: 'Pick a trigger, drop in actions, and wire the outputs of one step into the next.'
+  },
+  {
+    icon: 'i-lucide-rocket',
+    title: 'Run',
+    body: 'Enable the flow and let it fire on schedule, on a webhook, or on demand — and watch it on your board.'
+  }
+]
+
+const year = new Date().getFullYear()
+</script>
 
 <style scoped>
 /* ── soft animated aurora blobs behind the hero / CTA ──────────────────────── */

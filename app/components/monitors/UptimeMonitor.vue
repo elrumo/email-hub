@@ -14,6 +14,9 @@ const props = defineProps<{
   snapshot: Extract<MonitorSnapshot, { kind: 'status' }> | null
   error?: string
   loading?: boolean
+  isBoard?: boolean
+  /** grid span (col/row count) so the body can adapt to its size & proportions */
+  span?: { w: number, h: number }
 }>()
 defineEmits<{ edit: [], remove: [], refresh: [] }>()
 
@@ -83,6 +86,7 @@ const group = computed(() => {
             @click="$emit('refresh')"
           />
           <UButton
+            v-if="!isBoard"
             icon="i-lucide-pencil"
             color="neutral"
             variant="ghost"
@@ -91,6 +95,7 @@ const group = computed(() => {
             @click="$emit('edit')"
           />
           <UButton
+            v-if="!isBoard"
             icon="i-lucide-trash-2"
             color="error"
             variant="ghost"

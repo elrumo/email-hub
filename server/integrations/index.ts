@@ -1,10 +1,13 @@
 import { registerIntegration } from '../engine/registry'
 import { aiIntegration } from './ai'
+import { bookloreIntegration } from './booklore'
 import { browserIntegration } from './browser'
 import { bunnyIntegration } from './bunny'
 import { dokployIntegration } from './dokploy'
 import { googleAnalyticsIntegration } from './google-analytics'
 import { homeAssistantIntegration } from './homeassistant'
+import { jellyfinIntegration } from './jellyfin'
+import { komgaIntegration } from './komga'
 import { kumaIntegration } from './kuma'
 import { mailgunIntegration } from './mailgun'
 import { mongoIntegration } from './mongo'
@@ -12,7 +15,10 @@ import { notifyIntegration } from './notify'
 import { pingIntegration } from './ping'
 import { plausibleIntegration } from './plausible'
 import { probeIntegration } from './probe'
+import { qbittorrentIntegration } from './qbittorrent'
 import { s3Integration } from './s3'
+import { seerrIntegration } from './seerr'
+import { servarrIntegration } from './servarr'
 import { telegramIntegration } from './telegram'
 
 let registered = false
@@ -39,7 +45,13 @@ export function registerAllIntegrations(): void {
     aiIntegration,
     homeAssistantIntegration,
     plausibleIntegration,
-    googleAnalyticsIntegration
+    googleAnalyticsIntegration,
+    servarrIntegration,
+    qbittorrentIntegration,
+    jellyfinIntegration,
+    seerrIntegration,
+    komgaIntegration,
+    bookloreIntegration
   ]) {
     registerIntegration(i)
   }

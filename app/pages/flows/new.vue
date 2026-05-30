@@ -24,22 +24,43 @@ if (aiDraft) pendingDraft.value = null
 
 const draft = computed(() => aiDraft ?? buildFlowExampleDraft(selectedExampleId.value))
 
-function chooseExample(id: string) {
-  router.replace({ query: { ...route.query, example: id } })
-}
-
 function clearExample() {
   const query = { ...route.query }
   delete query.example
   router.replace({ query })
 }
+
+// A friendly one-line summary of where this flow is starting from — blank, a
+// template, or an AI draft. Keeps the top of the builder reassuring rather than
+// a wall of empty fields (Siri Shortcuts "start" feel).
+const startFrom = computed(() => {
+  if (aiDraft) {
+    return {
+      icon: 'i-lucide-sparkles',
+      title: 'Drafted by the assistant',
+      body: 'Prefilled from your chat. Review and tweak every step, then save.'
+    }
+  }
+  if (selectedExample.value) {
+    return {
+      icon: selectedExample.value.icon,
+      title: `Starting from “${selectedExample.value.name}”`,
+      body: 'Prefilled from a template. Swap in your connections and adjust anything before you save.'
+    }
+  }
+  return {
+    icon: 'i-lucide-wand-2',
+    title: 'A blank flow',
+    body: 'Pick when it runs, then add what it should do. You can also browse templates on the Flows page.'
+  }
+})
 </script>
 
 <template>
-  <UContainer class="max-w-6xl py-10 sm:py-14">
-    <div class="mb-8">
+  <UContainer class="max-w-3xl py-10 sm:py-14">
+    <div class="mb-6">
       <UButton
-        to="/home"
+        to="/flows"
         icon="i-lucide-arrow-left"
         label="Flows"
         color="neutral"
@@ -51,49 +72,35 @@ function clearExample() {
         New flow
       </h1>
       <p class="mt-1 text-sm text-muted">
-        Start blank, or pick an example and turn it into your own automation.
+        A flow is just a trigger — <span class="text-highlighted">when</span> it runs — and a short list of actions — <span class="text-highlighted">what</span> it does.
       </p>
     </div>
 
-    <div class="mb-8 space-y-4">
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 class="text-sm font-semibold text-highlighted">
-            Example flows
-          </h2>
-          <p class="text-sm text-muted">
-            These load into the builder as editable drafts, so you can swap connections, tweak steps, and save.
-          </p>
-        </div>
-        <UButton
-          v-if="selectedExample"
-          label="Start blank"
-          color="neutral"
-          variant="outline"
-          @click="clearExample"
+    <!-- where this flow is starting from -->
+    <div class="mb-8 flex items-start gap-3 rounded-2xl border border-default bg-elevated/40 p-4">
+      <span class="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/15">
+        <UIcon
+          :name="startFrom.icon"
+          class="size-5"
         />
+      </span>
+      <div class="min-w-0 flex-1">
+        <p class="text-sm font-medium text-highlighted">
+          {{ startFrom.title }}
+        </p>
+        <p class="text-sm text-muted">
+          {{ startFrom.body }}
+        </p>
       </div>
-
-      <UAlert
-        v-if="aiDraft"
-        color="primary"
-        variant="soft"
-        icon="i-lucide-sparkles"
-        title="Drafted by the assistant"
-        description="The builder below is prefilled from your chat. Review and tweak every step, then save."
-      />
-      <UAlert
-        v-else-if="selectedExample"
-        color="primary"
-        variant="soft"
-        icon="i-lucide-sparkles"
-        :title="`Loaded: ${selectedExample.name}`"
-        description="The builder below is prefilled with this example. Everything stays editable before you save."
-      />
-
-      <FlowExampleGallery
-        :selected-id="selectedExampleId"
-        @select="chooseExample"
+      <UButton
+        v-if="selectedExample"
+        label="Start blank"
+        icon="i-lucide-eraser"
+        color="neutral"
+        variant="ghost"
+        size="sm"
+        class="shrink-0"
+        @click="clearExample"
       />
     </div>
 

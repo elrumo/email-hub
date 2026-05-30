@@ -56,7 +56,12 @@ export function useAuth() {
 
   async function logout(): Promise<void> {
     await $fetch('/api/auth/logout', { method: 'POST' })
+    // Clear all cached session state. `loaded` must be reset too, otherwise the
+    // route middleware's `ensureLoaded()` short-circuits and never re-checks the
+    // (now destroyed) session on subsequent navigations.
     user.value = null
+    needsSetup.value = false
+    loaded.value = false
   }
 
   const isAdmin = computed(() => user.value?.role === 'admin')

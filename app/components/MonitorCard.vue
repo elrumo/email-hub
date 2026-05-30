@@ -18,6 +18,9 @@ const props = defineProps<{
   /** iconify icon / image for the integration, shown in the card header */
   icon?: string
   img?: string
+  isBoard?: boolean
+  /** grid span (col/row count) so the body can adapt to its size & proportions */
+  span?: { w: number, h: number }
 }>()
 defineEmits<{ edit: [], remove: [], open: [] }>()
 
@@ -52,6 +55,8 @@ const error = computed(() => (response.value && !response.value.ok ? response.va
     :snapshot="snapshot?.kind === 'gauges' ? snapshot : null"
     :error="error"
     :loading="loading"
+    :isBoard="isBoard"
+    :span="span"
     @refresh="load"
     @edit="$emit('edit')"
     @remove="$emit('remove')"
@@ -65,6 +70,8 @@ const error = computed(() => (response.value && !response.value.ok ? response.va
     :snapshot="snapshot?.kind === 'status' ? snapshot : null"
     :error="error"
     :loading="loading"
+    :isBoard="isBoard"
+    :span="span"
     @refresh="load"
     @edit="$emit('edit')"
     @remove="$emit('remove')"
@@ -77,6 +84,8 @@ const error = computed(() => (response.value && !response.value.ok ? response.va
     :snapshot="snapshot?.kind === 'stats' ? snapshot : null"
     :error="error"
     :loading="loading"
+    :isBoard="isBoard"
+    :span="span"
     @refresh="load"
     @edit="$emit('edit')"
     @remove="$emit('remove')"

@@ -1,82 +1,3 @@
-<script setup lang="ts">
-import type { PingState } from '~/composables/usePing'
-import type { Flow, IntegrationMeta, Monitor, Shortcut, Widget } from '~/types'
-import { relTime } from '~/composables/format'
-
-/**
- * One tile on the home bento grid. Resolves its referenced entity from the
- * lists the page already fetched and renders the right body per kind. A tile
- * whose reference has been deleted renders a "missing" state so it can be
- * cleaned up (the home page also skips dangling widgets server-side on delete).
- *
- * Card chrome (shadow / outline / none) is per-tile via `widget.cardStyle`;
- * "section" tiles render as a chrome-less heading band, "note" tiles render
- * rich text authored with the Nuxt UI editor.
- */
-const props = defineProps<{
-  widget: Widget
-  shortcuts: Shortcut[]
-  flows: Flow[]
-  monitors: Monitor[]
-  catalog: IntegrationMeta[]
-  /** live ping state for a shortcut widget */
-  ping?: PingState
-  /** drag-reorder affordance is shown only in edit mode */
-  editMode?: boolean
-  /** effective grid span (col/row count) so the body can adapt to its size */
-  span?: { w: number, h: number }
-}>()
-
-// Size buckets derived from the tile's grid span. Bodies use these to decide
-// how much detail to show — e.g. a 1×1 tile stays compact, a wide/tall tile
-// can breathe. `area` is a coarse small/medium/large signal.
-const sizeW = computed(() => props.span?.w ?? props.widget.w)
-const sizeH = computed(() => props.span?.h ?? props.widget.h)
-const isTall = computed(() => sizeH.value >= 2)
-const isLarge = computed(() => sizeW.value * sizeH.value >= 4)
-
-// Per-tile card chrome + background fill, shared with the public board view.
-const cardClass = computed(() => bentoCardClass(props.widget.cardStyle, props.widget.bg))
-// CSS vars feeding the solid fill; set on the wrapper so the (possibly nested)
-// .bento-card inherits them. Empty unless this tile has a solid background.
-const cardVars = computed(() => bentoCardVars(props.widget))
-const noteIsHtml = computed(() => isRichTextHtml(props.widget.content))
-
-const emit = defineEmits<{ remove: [], edit: [] }>()
-
-const shortcut = computed(() => props.shortcuts.find(s => s.id === props.widget.refId))
-const flow = computed(() => props.flows.find(f => f.id === props.widget.refId))
-const monitor = computed(() => props.monitors.find(m => m.id === props.widget.refId))
-const metaFor = (id?: string) => props.catalog.find(i => i.id === id)
-
-const missing = computed(() => {
-  if (props.widget.kind === 'shortcut') return !shortcut.value
-  if (props.widget.kind === 'flow') return !flow.value
-  if (props.widget.kind === 'monitor') return !monitor.value
-  return false
-})
-
-const running = ref(false)
-async function runFlow() {
-  if (!flow.value) return
-  running.value = true
-  try {
-    await $fetch(`/api/flows/${flow.value.id}/run`, { method: 'POST', body: {} })
-  } finally {
-    running.value = false
-  }
-}
-
-const host = computed(() => {
-  if (!shortcut.value) return ''
-  try {
-    return new URL(shortcut.value.url).host
-  } catch {
-    return shortcut.value.url
-  }
-})
-</script>
-
 <template>
   <div
     class="group relative h-full"
@@ -253,8 +174,10 @@ const host = computed(() => {
       v-else-if="widget.kind === 'monitor' && monitor"
       :class="`${cardClass} h-full`"
       :monitor="monitor"
+      :isBoard="true"
       :icon="metaFor(monitor.integrationId)?.icon"
       :img="metaFor(monitor.integrationId)?.img"
+      :span="{ w: sizeW, h: sizeH }"
     />
 
     <!-- note (rich text) -->
@@ -330,3 +253,84 @@ const host = computed(() => {
     </div>
   </div>
 </template>
+
+<script setup lang="ts">
+import type { PingState } from '~/composables/usePing'
+import type { Flow, IntegrationMeta, Monitor, Shortcut, Widget } from '~/types'
+import { relTime } from '~/composables/format'
+
+/**
+ * One tile on the home bento grid. Resolves its referenced entity from the
+ * lists the page already fetched and renders the right body per kind. A tile
+ * whose reference has been deleted renders a "missing" state so it can be
+ * cleaned up (the home page also skips dangling widgets server-side on delete).
+ *
+ * Card chrome (shadow / outline / none) is per-tile via `widget.cardStyle`;
+ * "section" tiles render as a chrome-less heading band, "note" tiles render
+ * rich text authored with the Nuxt UI editor.
+ */
+const props = defineProps<{
+  widget: Widget
+  shortcuts: Shortcut[]
+  flows: Flow[]
+  monitors: Monitor[]
+  catalog: IntegrationMeta[]
+  /** live ping state for a shortcut widget */
+  ping?: PingState
+  /** drag-reorder affordance is shown only in edit mode */
+  editMode?: boolean
+  /** effective grid span (col/row count) so the body can adapt to its size */
+  span?: { w: number, h: number }
+}>()
+
+// Size buckets derived from the tile's grid span (in cells). Bodies use these to
+// decide how much detail to show — a small tile stays compact, a wide/tall tile
+// can breathe. Thresholds are in cells: ~4 cells = one "tile unit", so a tile is
+// tall/wide once it spans two units (8 cells) and large once its area matches a
+// 2×2-unit tile (64 cells²).
+const sizeW = computed(() => props.span?.w ?? props.widget.w)
+const sizeH = computed(() => props.span?.h ?? props.widget.h)
+const isTall = computed(() => sizeH.value >= 8)
+const isLarge = computed(() => sizeW.value * sizeH.value >= 64)
+
+// Per-tile card chrome + background fill, shared with the public board view.
+const cardClass = computed(() => bentoCardClass(props.widget.cardStyle, props.widget.bg))
+// CSS vars feeding the solid fill; set on the wrapper so the (possibly nested)
+// .bento-card inherits them. Empty unless this tile has a solid background.
+const cardVars = computed(() => bentoCardVars(props.widget))
+const noteIsHtml = computed(() => isRichTextHtml(props.widget.content))
+
+const emit = defineEmits<{ remove: [], edit: [] }>()
+
+const shortcut = computed(() => props.shortcuts.find(s => s.id === props.widget.refId))
+const flow = computed(() => props.flows.find(f => f.id === props.widget.refId))
+const monitor = computed(() => props.monitors.find(m => m.id === props.widget.refId))
+const metaFor = (id?: string) => props.catalog.find(i => i.id === id)
+
+const missing = computed(() => {
+  if (props.widget.kind === 'shortcut') return !shortcut.value
+  if (props.widget.kind === 'flow') return !flow.value
+  if (props.widget.kind === 'monitor') return !monitor.value
+  return false
+})
+
+const running = ref(false)
+async function runFlow() {
+  if (!flow.value) return
+  running.value = true
+  try {
+    await $fetch(`/api/flows/${flow.value.id}/run`, { method: 'POST', body: {} })
+  } finally {
+    running.value = false
+  }
+}
+
+const host = computed(() => {
+  if (!shortcut.value) return ''
+  try {
+    return new URL(shortcut.value.url).host
+  } catch {
+    return shortcut.value.url
+  }
+})
+</script>

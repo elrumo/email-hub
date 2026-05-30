@@ -27,7 +27,6 @@ const title = 'Flow Hub'
 const description = 'Automation flows for your infrastructure — connect Dokploy, Bunny, Uptime Kuma and more, then build trigger → action flows that run on a schedule, a webhook, or a button.'
 
 const route = useRoute()
-const router = useRouter()
 const auth = useAuth()
 
 // Apply the persisted accent palette app-wide. Called here (not only inside
@@ -44,7 +43,8 @@ const isStandalonePage = computed(() =>
 
 async function onLogout() {
   await auth.logout()
-  await router.replace('/login')
+  // Full reload to the landing page so all SSR/useState session data is cleared.
+  await navigateTo('/', { replace: true, external: true })
 }
 
 const userMenu = computed(() => [

@@ -15,6 +15,9 @@ defineProps<{
   snapshot: Extract<MonitorSnapshot, { kind: 'stats' }> | null
   error?: string
   loading?: boolean
+  isBoard?: boolean
+  /** grid span (col/row count) so the body can adapt to its size & proportions */
+  span?: { w: number, h: number }
 }>()
 defineEmits<{ edit: [], remove: [], open: [], refresh: [] }>()
 
@@ -35,7 +38,7 @@ function fmt(value: number | string | null): string {
     @click="snapshot && $emit('open')"
     @keydown.enter="snapshot && $emit('open')"
   >
-    <div class="flex flex-col gap-4 group">
+    <div class="flex flex-col gap-2 group">
       <div class="relative flex items-start justify-between gap-3">
         <!-- Header -->
         <div class="flex items-start gap-3">

@@ -7,14 +7,24 @@ import type { Monitor, MonitorSnapshot } from '../../types'
  * The parent MonitorCard owns the fetch and passes the resolved snapshot down;
  * this card is clickable to open the live detail slideover.
  */
-defineProps<{
+const props = defineProps<{
   monitor: Monitor
   icon?: string
   img?: string
   snapshot: Extract<MonitorSnapshot, { kind: 'gauges' }> | null
   error?: string
   loading?: boolean
+  isBoard?: boolean
+  /** grid span (col/row count) so the body can adapt to its size & proportions */
+  span?: { w: number, h: number }
 }>()
+
+// Size buckets derived from the tile span (in cells); ~4 cells = one tile unit,
+// so a tile reads wide/tall once it spans two units (8 cells).
+const sizeW = computed(() => props.span?.w ?? 4)
+const sizeH = computed(() => props.span?.h ?? 4)
+const isWide = computed(() => sizeW.value >= 8)
+const isTall = computed(() => sizeH.value >= 8)
 defineEmits<{ edit: [], remove: [], open: [], refresh: [] }>()
 
 function gaugeColor(p: number | null | undefined): 'success' | 'warning' | 'error' | 'neutral' {
@@ -33,7 +43,7 @@ function gaugeColor(p: number | null | undefined): 'success' | 'warning' | 'erro
     @click="snapshot && $emit('open')"
     @keydown.enter="snapshot && $emit('open')"
   >
-    <div class="flex flex-col gap-4 group">
+    <div class="flex flex-col gap-2 group">
       <div class="relative flex items-start justify-between gap-3">
         <!-- Header -->
         <div class="flex items-start gap-3">
@@ -75,6 +85,7 @@ function gaugeColor(p: number | null | undefined): 'success' | 'warning' | 'erro
             @click="$emit('refresh')"
           />
           <UButton
+            v-if="!isBoard"
             icon="i-lucide-pencil"
             color="neutral"
             variant="ghost"
@@ -83,6 +94,7 @@ function gaugeColor(p: number | null | undefined): 'success' | 'warning' | 'erro
             @click="$emit('edit')"
           />
           <UButton
+            v-if="!isBoard"
             icon="i-lucide-trash-2"
             color="error"
             variant="ghost"
@@ -105,7 +117,7 @@ function gaugeColor(p: number | null | undefined): 'success' | 'warning' | 'erro
         <!-- gauges -->
         <div
           v-else-if="snapshot"
-          class="space-y-3"
+          :class="isTall ? 'space-y-3' : 'space-y-1.5'"
         >
           <div
             v-for="g in snapshot.gauges"
@@ -132,10 +144,10 @@ function gaugeColor(p: number | null | undefined): 'success' | 'warning' | 'erro
             />
           </div>
           <p
-            v-if="snapshot.detail"
+            v-if="snapshot.detail && isTall"
             class="text-xs text-dimmed pt-0.5"
           >
-            {{ snapshot.detail }} · click for live detail
+            {{ snapshot.detail }}<span v-if="isWide"> · click for live detail</span>
           </p>
         </div>
 

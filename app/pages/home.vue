@@ -155,12 +155,13 @@ const refEmptyHint = computed(() => {
   return null
 })
 
-// sensible default span per kind when the type changes (add mode only)
+// sensible default span per kind when the type changes (add mode only).
+// Spans are in grid cells (1–16); sections ignore width (always full-width).
 function defaultSpan(kind: WidgetKind): { w: number, h: number } {
-  if (kind === 'section') return { w: 4, h: 1 }
-  if (kind === 'note' || kind === 'image' || kind === 'iframe') return { w: 2, h: 2 }
-  if (kind === 'monitor') return { w: 1, h: 2 }
-  return { w: 1, h: 1 }
+  if (kind === 'section') return { w: 16, h: 1 }
+  if (kind === 'note' || kind === 'image' || kind === 'iframe') return { w: 8, h: 8 }
+  if (kind === 'monitor') return { w: 4, h: 8 }
+  return { w: 4, h: 4 }
 }
 
 watch(() => draft.kind, (kind) => {
@@ -523,7 +524,74 @@ async function onDragEnd() {
 }
 
 // ── resize (pointer-drag a corner handle, snaps to grid cells) ───────────────
-const MAX_SPAN = 4
+// Spans are stored and manipulated in grid cells (1–MAX_SPAN). The grid is fine-
+// grained so tiles can be sized freely down to a single cell. Legacy boards used
+// a coarse 1–4 span; those are upgraded ×CELL_SCALE once on load (see the lazy
+// backfill below) so a former 1×1 tile keeps its 4×4-cell footprint.
+const CELL_SCALE = 4
+// max width/height a tile may span, in grid cells
+const MAX_SPAN = 16
+
+// ── lazy span upgrade (coarse 1–4 → cells) ───────────────────────────────────
+// Older boards stored spans in coarse 1–4 units; the grid now works in cells, so
+// those need ×CELL_SCALE to keep their footprint. We can't tell a legacy span
+// apart from an already-upgraded one purely by value, so we upgrade each board
+// once and remember it in localStorage. A board "looks legacy" when every non-
+// section tile fits in the old 1–CELL_SCALE range; once upgraded we mark it and
+// never touch it again on this device.
+const UPGRADE_KEY = 'bento:span-upgraded:v4'
+function upgradedBoards(): Set<string> {
+  if (!import.meta.client) return new Set()
+  try {
+    return new Set(JSON.parse(localStorage.getItem(UPGRADE_KEY) || '[]'))
+  } catch {
+    return new Set()
+  }
+}
+function markUpgraded(boardId: string) {
+  if (!import.meta.client) return
+  const set = upgradedBoards()
+  set.add(boardId)
+  try {
+    localStorage.setItem(UPGRADE_KEY, JSON.stringify([...set]))
+  } catch { /* storage full / disabled — worst case we re-scan, which no-ops */ }
+}
+
+// boards currently mid-upgrade this session, so the widgets-watch can't kick off
+// a second pass during the async PUTs (before localStorage is marked)
+const upgrading = new Set<string>()
+async function maybeUpgradeSpans() {
+  if (!import.meta.client) return
+  const boardId = activeBoardId.value
+  if (!boardId || upgrading.has(boardId) || upgradedBoards().has(boardId)) return
+  upgrading.add(boardId)
+  const tiles = widgets.value.filter(w => w.kind !== 'section')
+  // a legacy board: every tile still fits the old coarse range
+  const looksLegacy = tiles.length > 0
+    && tiles.every(w => w.w <= CELL_SCALE && w.h <= CELL_SCALE)
+  if (looksLegacy) {
+    // scale up + persist each tile (optimistic local update first)
+    const updates = tiles.map((w) => {
+      const nw = w.w * CELL_SCALE
+      const nh = w.h * CELL_SCALE
+      w.w = nw
+      w.h = nh
+      return $fetch(`/api/widgets/${w.id}`, { method: 'PUT', body: { w: nw, h: nh } })
+    })
+    try {
+      await Promise.all(updates)
+    } catch {
+      await refresh()
+    }
+  }
+  markUpgraded(boardId)
+  upgrading.delete(boardId)
+}
+// run once whenever a board's widgets settle (board switch or initial load)
+watch([activeBoardId, widgets], () => {
+  void maybeUpgradeSpans()
+}, { immediate: true })
+
 // TransitionGroup ref resolves to a component proxy; unwrap to its root <div>.
 const gridRef = ref<{ $el?: HTMLElement } | HTMLElement | null>(null)
 const gridEl = computed<HTMLElement | null>(() => {
@@ -531,13 +599,23 @@ const gridEl = computed<HTMLElement | null>(() => {
   if (!r) return null
   return (r as { $el?: HTMLElement }).$el ?? (r as HTMLElement)
 })
-// number of columns currently rendered (responsive: 2 / 3 / 4)
-const cols = ref(4)
+// number of columns currently rendered (responsive: 8 / 12 / 16 rendered cells)
+const cols = ref(16)
+// the live width of a single grid cell, in px. Rows are sized to match it so a
+// cell is a true square (and an N×M tile keeps that square aspect per cell).
+const cellSize = ref(40)
 function measureCols() {
   if (!gridEl.value) return
   const styles = getComputedStyle(gridEl.value)
-  const n = styles.gridTemplateColumns.split(' ').filter(Boolean).length
-  if (n) cols.value = n
+  const tracks = styles.gridTemplateColumns.split(' ').filter(Boolean)
+  const n = tracks.length
+  if (n) {
+    cols.value = n
+    // derive the column width from the measured grid box (robust to gaps)
+    const gap = Number.parseFloat(styles.columnGap) || 0
+    const width = gridEl.value.getBoundingClientRect().width
+    cellSize.value = (width - gap * (n - 1)) / n
+  }
 }
 onMounted(() => {
   measureCols()
@@ -548,7 +626,8 @@ onBeforeUnmount(() => window.removeEventListener('resize', measureCols))
 watch(() => widgets.value.length, () => nextTick(measureCols))
 
 const resizing = ref(false)
-// the widget being resized + its live (un-persisted) preview span
+// the widget being resized + its live (un-persisted) preview span, in grid cells
+// (what the badge shows and what gets persisted verbatim).
 const resizeId = ref<string | null>(null)
 const previewSpan = reactive({ w: 1, h: 1 })
 
@@ -571,15 +650,16 @@ function onResizeStart(e: PointerEvent, w: Widget) {
   const rect = gridEl.value.getBoundingClientRect()
   const styles = getComputedStyle(gridEl.value)
   const gap = Number.parseFloat(styles.columnGap) || 0
-  const rowH = Number.parseFloat(styles.gridAutoRows) || 128
   const n = styles.gridTemplateColumns.split(' ').filter(Boolean).length || cols.value
+  // cells are square: column width and row height are the same track size, and
+  // resizing snaps in single rendered cells.
   const cellW = (rect.width - gap * (n - 1)) / n
   ctx = {
     widget: w,
     startX: e.clientX,
     startY: e.clientY,
     cellW,
-    cellH: rowH,
+    cellH: cellW,
     gap,
     startW: w.w,
     startH: w.h
@@ -600,6 +680,7 @@ function resizingEl(): HTMLElement | null {
 
 function onResizeMove(e: PointerEvent) {
   if (!ctx) return
+  // cols.value and the span are both in rendered cells
   const maxW = Math.min(MAX_SPAN, cols.value)
   const dx = e.clientX - ctx.startX
   const dy = e.clientY - ctx.startY
@@ -647,9 +728,10 @@ async function onResizeEnd() {
   const id = resizeId.value
   resizeId.value = null
   if (!c || !id) return
+  if (previewSpan.w === c.startW && previewSpan.h === c.startH) return
+  // spans are stored in grid cells; persist the preview verbatim
   const w = previewSpan.w
   const h = previewSpan.h
-  if (w === c.startW && h === c.startH) return
   // optimistic update, then persist via the existing PUT endpoint
   const target = widgets.value.find(x => x.id === id)
   if (target) {
@@ -663,7 +745,9 @@ async function onResizeEnd() {
   }
 }
 
-// effective span for a tile: live preview while resizing, persisted span otherwise
+// effective span for a tile in grid cells: the live preview while resizing, the
+// persisted (cell) span otherwise. Used for CSS grid placement, the size badge,
+// and the tile bodies' size buckets.
 function spanFor(w: Widget) {
   if (resizeId.value === w.id) return { w: previewSpan.w, h: previewSpan.h }
   return { w: w.w, h: w.h }
@@ -671,82 +755,113 @@ function spanFor(w: Widget) {
 </script>
 
 <template>
-  <UContainer class="py-10 sm:py-14">
-    <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-      <div class="min-w-0">
-        <h1 class="text-xl font-semibold tracking-tight text-highlighted">
-          Home
-        </h1>
-        <p class="mt-1 text-sm text-muted">
-          Your dashboard. Pin the shortcuts, flows and monitors you care about into a grid.
-        </p>
+  <UContainer class="md:pt-5 md:pb-8 pt-8">
+
+    <div class="w-full flex justify-between items-center">
+      <div class="mb-8 flex flex-col md:flex-row items-start gap-4">
+        <!-- board name + selector -->
+        <UPopover>
+          <div class="flex items-center gap-1.5 cursor-pointer">
+            <UIcon
+              v-if="activeBoard?.icon"
+              :name="activeBoard.icon"
+              class="size-3.5 opacity-70"
+            />
+            <h1 class="text-xl font-semibold tracking-tight text-highlighted">
+              {{ activeBoard?.name || 'Home' }}
+            </h1>
+            <UIcon
+              name="i-lucide-chevron-down"
+              class="size-5"
+            />
+          </div>
+          
+          <template #content>
+            <!-- board switcher -->
+            <div class="flex flex-col justify-start items-start gap-2 p-3">
+              <UButton
+                v-for="b in boards"
+                :key="b.id"
+                :color="b.id === activeBoardId ? 'primary' : 'neutral'"
+                :variant="b.id === activeBoardId ? 'solid' : 'ghost'"
+                size="sm"
+                class="w-full rounded-sm!"
+                @click="activeBoardId = b.id"
+              >
+                <div class="flex flex-row items-center justify-between w-full">
+                  <div class="flex items-center gap-1.5">
+                    <UIcon
+                      v-if="b.icon"
+                      :name="b.icon"
+                      class="size-3.5"
+                    />
+                    {{ b.name }}
+                  </div>
+                  <UIcon
+                    v-if="b.isPublic"
+                    name="i-lucide-share-2"
+                    class="size-3.5 opacity-70 ml-1"
+                  />
+                </div>
+              </UButton>
+
+              <UButton
+                icon="i-lucide-plus"
+                label="New board"
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                class="w-full rounded-sm!"
+                @click="openNewBoard"
+              />
+            </div>
+          </template>
+        </UPopover>
+        
+        <!-- board actions -->
+        <div
+          v-if="activeBoard"
+          class="flex items-center gap-2"
+        >  
+          <UTooltip :delay-duration="0" text="Board settings">
+            <UButton
+              icon="i-lucide-settings-2"
+              color="neutral"
+              variant="soft"
+              size="sm"
+              @click="openEditBoard"
+            />
+          </UTooltip>
+
+          <UTooltip :delay-duration="0" text="Copy public link">
+            <UButton
+              v-if="activeBoard.isPublic"
+              icon="i-lucide-link"
+              color="neutral"
+              variant="soft"
+              size="sm"
+              @click="copyPublicUrl"
+            />
+          </UTooltip>
+        </div>
       </div>
+
+      <!-- grid actions -->
       <div class="flex items-center gap-2 self-start">
         <UButton
-          :icon="editMode ? 'i-lucide-check' : 'i-lucide-layout-grid'"
-          :label="editMode ? 'Done' : 'Arrange'"
+          :icon="editMode ? 'i-lucide-check' : 'i-lucide-pencil'"
+          :label="editMode ? 'Done' : 'Edit'"
           color="neutral"
-          variant="soft"
+          variant="ghost"
+          size="sm"
           @click="editMode = !editMode"
         />
         <UButton
           icon="i-lucide-plus"
+          size="sm"
+          variant="soft"
           label="Add tile"
           @click="openAdd"
-        />
-      </div>
-    </div>
-
-    <!-- board switcher -->
-    <div class="mb-6 flex flex-wrap items-center gap-2">
-      <UButton
-        v-for="b in boards"
-        :key="b.id"
-        :color="b.id === activeBoardId ? 'primary' : 'neutral'"
-        :variant="b.id === activeBoardId ? 'solid' : 'soft'"
-        size="sm"
-        @click="activeBoardId = b.id"
-      >
-        <UIcon
-          v-if="b.isDefault"
-          name="i-lucide-star"
-          class="size-3.5"
-        />
-        {{ b.name }}
-        <UIcon
-          v-if="b.isPublic"
-          name="i-lucide-globe"
-          class="size-3.5 opacity-70"
-        />
-      </UButton>
-      <UButton
-        icon="i-lucide-plus"
-        label="New board"
-        color="neutral"
-        variant="ghost"
-        size="sm"
-        @click="openNewBoard"
-      />
-      <div
-        v-if="activeBoard"
-        class="ml-auto flex items-center gap-2"
-      >
-        <UButton
-          v-if="activeBoard.isPublic"
-          icon="i-lucide-link"
-          label="Copy public link"
-          color="neutral"
-          variant="ghost"
-          size="sm"
-          @click="copyPublicUrl"
-        />
-        <UButton
-          icon="i-lucide-settings-2"
-          label="Board settings"
-          color="neutral"
-          variant="ghost"
-          size="sm"
-          @click="openEditBoard"
         />
       </div>
     </div>
@@ -781,8 +896,9 @@ function spanFor(w: Widget) {
       ref="gridRef"
       tag="div"
       name="tile"
-      class="grid auto-rows-[8.5rem] grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4"
+      class="grid grid-cols-8 gap-3 sm:grid-cols-12 lg:grid-cols-16"
       :class="{ 'is-editing': editMode }"
+      :style="{ gridAutoRows: `${cellSize}px` }"
     >
       <div
         v-for="w in widgets"
@@ -884,6 +1000,7 @@ function spanFor(w: Widget) {
                 class="w-full"
               />
             </UFormField>
+            
             <UAlert
               v-else-if="refEmptyHint"
               color="neutral"
@@ -1097,29 +1214,30 @@ function spanFor(w: Widget) {
           >
             <UFormField
               label="Width"
-              description="Columns (1–4)"
+              description="Cells (1–16)"
             >
               <UInputNumber
                 v-model="draft.w"
                 :min="1"
-                :max="4"
+                :max="16"
                 class="w-full"
               />
             </UFormField>
             <UFormField
               label="Height"
-              description="Rows (1–4)"
+              description="Cells (1–16)"
             >
               <UInputNumber
                 v-model="draft.h"
                 :min="1"
-                :max="4"
+                :max="16"
                 class="w-full"
               />
             </UFormField>
           </div>
         </div>
       </template>
+      
       <template #footer="{ close }">
         <div class="flex w-full justify-end gap-2">
           <UButton
@@ -1228,22 +1346,45 @@ function spanFor(w: Widget) {
           <UFormField
             v-if="boardDraft.id"
             label="Default board"
-            description="The board the home page opens on."
+            orientation="horizontal"
           >
+            <p class="text-xs text-muted">
+              The board the home page opens on.
+            </p>
             <USwitch v-model="boardDraft.isDefault" />
           </UFormField>
 
-          <UFormField
-            label="Public"
-            description="Anyone with the link can view this board (read-only), no sign-in needed."
-          >
-            <USwitch v-model="boardDraft.isPublic" />
-          </UFormField>
+          <div class="space-y-2">
+            <UFormField
+              label="Public"
+              orientation="horizontal"
+            >
+              <USwitch v-model="boardDraft.isPublic" />
+            </UFormField>
+
+            <div
+              v-if="boardDraft.id && boardDraft.isPublic && publicUrl"
+              class="flex items-center gap-2 rounded-sm border border-default bg-elevated/50 px-2.5 py-1"
+            >
+              <code class="min-w-0 flex-1 truncate text-xs text-muted">{{ publicUrl }}</code>
+              <UButton
+                icon="i-lucide-copy"
+                color="neutral"
+                variant="soft"
+                size="xs"
+                @click="copyPublicUrl"
+              />
+            </div>
+            <p class="text-xs text-muted">
+              Anyone with the link can view this board (read-only), no sign-in needed.
+            </p>
+          </div>
 
           <UFormField
             v-if="boardDraft.isPublic"
             label="Allow public triggering"
             description="Public visitors can run every flow on this board. Overrides each flow's own setting."
+            orientation="horizontal"
           >
             <USwitch v-model="boardDraft.publicTrigger" />
           </UFormField>
@@ -1273,22 +1414,9 @@ function spanFor(w: Widget) {
               class="w-full"
             />
           </UFormField>
-
-          <div
-            v-if="boardDraft.id && boardDraft.isPublic && publicUrl"
-            class="flex items-center gap-2 rounded-lg border border-default bg-elevated/50 p-2"
-          >
-            <code class="min-w-0 flex-1 truncate text-xs text-muted">{{ publicUrl }}</code>
-            <UButton
-              icon="i-lucide-copy"
-              color="neutral"
-              variant="soft"
-              size="xs"
-              @click="copyPublicUrl"
-            />
-          </div>
         </div>
       </template>
+
       <template #footer="{ close }">
         <div class="flex w-full items-center justify-between gap-2">
           <UButton
