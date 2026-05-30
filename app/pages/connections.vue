@@ -7,13 +7,15 @@ const { data: connections, refresh } = await useFetch<Connection[]>('/api/connec
   default: () => []
 })
 
-// Installed user connectors (custom integrations imported from an OpenAPI spec).
-// Listed + managed in their own section further down the page.
+// Installed user connectors (custom integrations imported from an OpenAPI spec
+// or installed from the marketplace). `source` distinguishes provenance:
+// "marketplace:<slug>" for marketplace installs, a URL/file for manual imports.
 interface ConnectorRow {
   id: string
   connectorId: string
   name: string
   enabled: boolean
+  source?: string | null
   version?: string
   actionCount: number
 }
@@ -23,6 +25,101 @@ const { data: userConnectors, refresh: refreshConnectors } = await useFetch<Conn
 })
 
 const toast = useToast()
+
+// ── tabs: this page merges Connections + the community Marketplace ────────────
+const tab = ref<'connections' | 'browse' | 'add'>('connections')
+const tabs = [
+  { label: 'Connections', value: 'connections', icon: 'i-lucide-plug' },
+  { label: 'Browse', value: 'browse', icon: 'i-lucide-store' },
+  { label: 'Add your own', value: 'add', icon: 'i-lucide-upload' }
+]
+
+// ── marketplace gallery feed ─────────────────────────────────────────────────
+interface MarketConnector {
+  kind: 'connector'
+  slug: string
+  title: string
+  summary: string
+  author?: string
+  tags: string[]
+  icon?: string
+  img?: string
+  actionCount: number
+  installed: boolean
+}
+interface MarketFlow {
+  kind: 'flow'
+  slug: string
+  title: string
+  summary: string
+  author?: string
+  tags: string[]
+  icon?: string
+  requires: string[]
+}
+const { data: market, refresh: refreshMarket } = await useFetch<{ connectors: MarketConnector[], flows: MarketFlow[] }>(
+  '/api/marketplace',
+  { key: 'marketplace', default: () => ({ connectors: [], flows: [] }) }
+)
+
+// Which installed connectors came from the marketplace (source "marketplace:…").
+// A connection is "from the marketplace" when its integration is one of these.
+const marketplaceIntegrationIds = computed(() => {
+  const ids = new Set<string>()
+  for (const c of userConnectors.value) {
+    if (typeof c.source === 'string' && c.source.startsWith('marketplace:')) {
+      ids.add(`x-${c.connectorId}`)
+    }
+  }
+  return ids
+})
+function isMarketplaceConnection(c: Connection): boolean {
+  return marketplaceIntegrationIds.value.has(c.integrationId)
+}
+
+// ── browse: install a marketplace connector ──────────────────────────────────
+const installingSlug = ref<string | null>(null)
+async function installFromMarketplace(slug: string) {
+  installingSlug.value = slug
+  try {
+    const res = await $fetch<{ name: string }>('/api/marketplace/install', { method: 'POST', body: { slug } })
+    toast.add({ title: `Installed “${res.name}”`, color: 'success' })
+    await Promise.all([refreshMarket(), refreshConnectors(), refreshNuxtData('integrations')])
+  } catch (e) {
+    toast.add({ title: errMsg(e, 'Install failed'), color: 'error' })
+  } finally {
+    installingSlug.value = null
+  }
+}
+
+// ── add your own: paste JSON / install from URL ──────────────────────────────
+const addMode = ref<'json' | 'url'>('json')
+const defText = ref('')
+const defUrl = ref('')
+const addingConnector = ref(false)
+async function addConnector() {
+  addingConnector.value = true
+  try {
+    const body = addMode.value === 'url'
+      ? { url: defUrl.value.trim() }
+      : { def: JSON.parse(defText.value) }
+    const res = await $fetch<{ name: string }>('/api/connectors', { method: 'POST', body })
+    toast.add({ title: `Installed “${res.name}”`, color: 'success' })
+    defText.value = ''
+    defUrl.value = ''
+    await Promise.all([refreshConnectors(), refreshMarket(), refreshNuxtData('integrations')])
+    tab.value = 'connections'
+  } catch (e) {
+    const msg = e instanceof SyntaxError ? 'That is not valid JSON' : errMsg(e, 'Install failed')
+    toast.add({ title: msg, color: 'error' })
+  } finally {
+    addingConnector.value = false
+  }
+}
+
+function errMsg(e: unknown, fallback: string): string {
+  return (e as { data?: { statusMessage?: string } })?.data?.statusMessage || fallback
+}
 
 // Sentinel value for the "Import from OpenAPI…" entry appended to the Service
 // dropdown. Selecting it opens the import modal instead of choosing a service.
@@ -212,7 +309,7 @@ watch(selectedIntegrationId, (id, old) => {
 // import was launched from the Service dropdown (the add-connection modal is
 // open), select the new integration so the user continues seamlessly.
 async function onConnectorInstalled(integrationId: string) {
-  await Promise.all([refreshNuxtData('integrations'), refreshConnectors()])
+  await Promise.all([refreshNuxtData('integrations'), refreshConnectors(), refreshMarket()])
   if (open.value) {
     selectedIntegrationId.value = integrationId
     config.value = {}
@@ -309,23 +406,33 @@ async function confirmConnectorDelete() {
   if (!connectorDeleteTarget.value) return
   await $fetch(`/api/connectors/${connectorDeleteTarget.value.id}`, { method: 'DELETE' })
   connectorDeleteTarget.value = null
-  await Promise.all([refreshConnectors(), refreshNuxtData('integrations')])
+  await Promise.all([refreshConnectors(), refreshMarket(), refreshNuxtData('integrations')])
   toast.add({ title: 'Connector removed', color: 'success' })
+}
+
+async function toggleConnector(c: ConnectorRow) {
+  try {
+    await $fetch(`/api/connectors/${c.id}`, { method: 'PUT', body: { enabled: !c.enabled } })
+    await Promise.all([refreshConnectors(), refreshMarket(), refreshNuxtData('integrations')])
+  } catch (e) {
+    toast.add({ title: errMsg(e, 'Update failed'), color: 'error' })
+  }
 }
 </script>
 
 <template>
   <UContainer class="py-10 sm:py-14">
-    <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div>
         <h1 class="text-xl font-semibold tracking-tight text-highlighted">
           Connections
         </h1>
         <p class="mt-1 text-sm text-muted">
-          Your saved credentials for each service. Flows use these to talk to Dokploy, Bunny, Uptime Kuma and more.
+          Your saved credentials for each service, plus the community marketplace for new connectors and flows.
         </p>
       </div>
       <UButton
+        v-if="tab === 'connections'"
         icon="i-lucide-plus"
         label="Add connection"
         class="self-start"
@@ -333,122 +440,46 @@ async function confirmConnectorDelete() {
       />
     </div>
 
-    <div
-      v-if="connections.length === 0"
-      class="flex flex-col items-center gap-5 rounded-2xl border border-dashed border-default py-20 text-center"
-    >
-      <span class="flex size-12 items-center justify-center rounded-2xl bg-elevated text-dimmed">
-        <UIcon
-          name="i-lucide-plug"
-          class="size-6"
-        />
-      </span>
-      <div class="space-y-1">
-        <p class="font-medium text-highlighted">
-          No connections yet
-        </p>
-        <p class="text-sm text-muted">
-          Add your first one to start building flows.
-        </p>
-      </div>
-      <UButton
-        icon="i-lucide-plus"
-        label="Add connection"
-        @click="openAdd"
-      />
-    </div>
+    <UTabs
+      v-model="tab"
+      :items="tabs"
+      :content="false"
+      class="mb-6"
+    />
 
-    <div
-      v-else
-      class="grid gap-3 sm:grid-cols-2"
-    >
-      <UCard
-        v-for="c in connections"
-        :key="c.id"
-        variant="sm"
-        :ui="{ body: 'flex items-center gap-3' }"
+    <!-- ── Connections tab: native saved credentials ──────────────────────── -->
+    <div v-if="tab === 'connections'">
+      <div
+        v-if="connections.length === 0"
+        class="flex flex-col items-center gap-5 rounded-2xl border border-dashed border-default py-20 text-center"
       >
-        <div class="flex items-center gap-2 group w-full">
-          <span class="flex size-10 shrink-0 items-center justify-center rounded-md bg-elevated">
-            <UIcon
-              v-if="metaFor(c.integrationId)?.icon"
-              :name="metaFor(c.integrationId)?.icon || 'i-lucide-plug'"
-              class="size-5 text-muted"
-            />
-            <img
-              v-else-if="metaFor(c.integrationId)?.img"
-              :src="metaFor(c.integrationId)?.img"
-              alt="Service icon"
-              class="size-5"
-            >
-          </span>
-
-          <div class="min-w-0 flex-1">
-            <p class="truncate font-medium text-highlighted">
-              {{ c.name }}
-            </p>
-            <p class="text-sm text-muted">
-              {{ metaFor(c.integrationId)?.name || c.integrationId }}
-            </p>
-          </div>
-
-          <UTooltip
-            v-if="c.integrationId === 'ai'"
-            text="Use for AI assist by default"
-          >
-            <USwitch
-              :model-value="c.config?.defaultForAssist === true"
-              size="sm"
-              :loading="settingDefault === c.id"
-              :disabled="settingDefault !== null"
-              aria-label="Use for AI assist by default"
-              @update:model-value="setAssistDefault(c)"
-            />
-          </UTooltip>
-
-          <div class="reveal-on-hover flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <UButton
-              icon="i-lucide-pencil"
-              color="neutral"
-              variant="ghost"
-              size="sm"
-              aria-label="Edit"
-              @click="openEdit(c)"
-            />
-            <UButton
-              icon="i-lucide-trash-2"
-              color="error"
-              variant="ghost"
-              size="sm"
-              aria-label="Delete"
-              @click="deleteTarget = c"
-            />
-          </div>
-        </div>
-      </UCard>
-    </div>
-
-    <!-- custom connectors: service types imported from an OpenAPI spec. Distinct
-         from connections above (those are saved credentials); a connector adds a
-         new service you can then create connections for. -->
-    <div
-      v-if="userConnectors.length"
-      class="mt-12"
-    >
-      <div class="mb-4 flex items-center justify-between gap-4">
-        <div>
-          <h2 class="text-base font-semibold tracking-tight text-highlighted">
-            Custom connectors
-          </h2>
-          <p class="mt-0.5 text-sm text-muted">
-            Services you imported from an OpenAPI / Swagger spec. They appear in the “Add connection” list above. Add more via “Import from OpenAPI…” there.
+        <span class="flex size-12 items-center justify-center rounded-2xl bg-elevated text-dimmed">
+          <UIcon
+            name="i-lucide-plug"
+            class="size-6"
+          />
+        </span>
+        <div class="space-y-1">
+          <p class="font-medium text-highlighted">
+            No connections yet
+          </p>
+          <p class="text-sm text-muted">
+            Add your first one to start building flows.
           </p>
         </div>
+        <UButton
+          icon="i-lucide-plus"
+          label="Add connection"
+          @click="openAdd"
+        />
       </div>
 
-      <div class="grid gap-3 sm:grid-cols-2">
+      <div
+        v-else
+        class="grid gap-3 sm:grid-cols-2"
+      >
         <UCard
-          v-for="c in userConnectors"
+          v-for="c in connections"
           :key="c.id"
           variant="sm"
           :ui="{ body: 'flex items-center gap-3' }"
@@ -456,30 +487,311 @@ async function confirmConnectorDelete() {
           <div class="flex items-center gap-2 group w-full">
             <span class="flex size-10 shrink-0 items-center justify-center rounded-md bg-elevated">
               <UIcon
-                name="i-lucide-blocks"
+                v-if="metaFor(c.integrationId)?.icon"
+                :name="metaFor(c.integrationId)?.icon || 'i-lucide-plug'"
                 class="size-5 text-muted"
               />
+              <img
+                v-else-if="metaFor(c.integrationId)?.img"
+                :src="metaFor(c.integrationId)?.img"
+                alt="Service icon"
+                class="size-5"
+              >
             </span>
+
             <div class="min-w-0 flex-1">
-              <p class="truncate font-medium text-highlighted">
-                {{ c.name }}
-              </p>
+              <div class="flex items-center gap-1.5">
+                <p class="truncate font-medium text-highlighted">
+                  {{ c.name }}
+                </p>
+                <UBadge
+                  v-if="isMarketplaceConnection(c)"
+                  label="marketplace"
+                  color="primary"
+                  variant="subtle"
+                  size="sm"
+                />
+              </div>
               <p class="text-sm text-muted">
-                {{ c.actionCount }} action{{ c.actionCount === 1 ? '' : 's' }}<span v-if="c.version"> · v{{ c.version }}</span>
+                {{ metaFor(c.integrationId)?.name || c.integrationId }}
               </p>
             </div>
+
+            <UTooltip
+              v-if="c.integrationId === 'ai'"
+              text="Use for AI assist by default"
+            >
+              <USwitch
+                :model-value="c.config?.defaultForAssist === true"
+                size="sm"
+                :loading="settingDefault === c.id"
+                :disabled="settingDefault !== null"
+                aria-label="Use for AI assist by default"
+                @update:model-value="setAssistDefault(c)"
+              />
+            </UTooltip>
+
             <div class="reveal-on-hover flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <UButton
+                icon="i-lucide-pencil"
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                aria-label="Edit"
+                @click="openEdit(c)"
+              />
               <UButton
                 icon="i-lucide-trash-2"
                 color="error"
                 variant="ghost"
                 size="sm"
-                aria-label="Delete connector"
-                @click="connectorDeleteTarget = c"
+                aria-label="Delete"
+                @click="deleteTarget = c"
               />
             </div>
           </div>
         </UCard>
+      </div>
+
+      <!-- custom connectors: service types imported from an OpenAPI spec. Distinct
+         from connections above (those are saved credentials); a connector adds a
+         new service you can then create connections for. -->
+      <div
+        v-if="userConnectors.length"
+        class="mt-12"
+      >
+        <div class="mb-4 flex items-center justify-between gap-4">
+          <div>
+            <h2 class="text-base font-semibold tracking-tight text-highlighted">
+              Installed connectors
+            </h2>
+            <p class="mt-0.5 text-sm text-muted">
+              Extra services added from the marketplace or imported from an OpenAPI / Swagger spec. They appear in the “Add connection” list above. Browse more under the Browse tab, or add your own under “Add your own”.
+            </p>
+          </div>
+        </div>
+
+        <div class="grid gap-3 sm:grid-cols-2">
+          <UCard
+            v-for="c in userConnectors"
+            :key="c.id"
+            variant="sm"
+            :ui="{ body: 'flex items-center gap-3' }"
+          >
+            <div class="flex items-center gap-2 group w-full">
+              <span class="flex size-10 shrink-0 items-center justify-center rounded-md bg-elevated">
+                <UIcon
+                  name="i-lucide-blocks"
+                  class="size-5 text-muted"
+                />
+              </span>
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-1.5">
+                  <p class="truncate font-medium text-highlighted">
+                    {{ c.name }}
+                  </p>
+                  <UBadge
+                    v-if="typeof c.source === 'string' && c.source.startsWith('marketplace:')"
+                    label="marketplace"
+                    color="primary"
+                    variant="subtle"
+                    size="sm"
+                  />
+                </div>
+                <p class="text-sm text-muted">
+                  {{ c.actionCount }} action{{ c.actionCount === 1 ? '' : 's' }}<span v-if="c.version"> · v{{ c.version }}</span>
+                </p>
+              </div>
+              <div class="reveal-on-hover flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <USwitch
+                  :model-value="c.enabled"
+                  size="sm"
+                  aria-label="Enable connector"
+                  @update:model-value="toggleConnector(c)"
+                />
+                <UButton
+                  icon="i-lucide-trash-2"
+                  color="error"
+                  variant="ghost"
+                  size="sm"
+                  aria-label="Delete connector"
+                  @click="connectorDeleteTarget = c"
+                />
+              </div>
+            </div>
+          </UCard>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Browse tab: community marketplace ──────────────────────────────── -->
+    <div v-else-if="tab === 'browse'">
+      <h2 class="mb-3 text-sm font-medium text-highlighted">
+        Connectors
+      </h2>
+      <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div
+          v-for="c in market.connectors"
+          :key="c.slug"
+          class="flex flex-col gap-3 rounded-lg border border-default p-4"
+        >
+          <div class="flex items-start gap-3">
+            <img
+              v-if="c.img"
+              :src="c.img"
+              :alt="c.title"
+              class="size-8 rounded"
+            >
+            <UIcon
+              v-else
+              :name="c.icon || 'i-lucide-plug'"
+              class="size-8 text-dimmed"
+            />
+            <div class="min-w-0 flex-1">
+              <p class="truncate font-medium text-highlighted">
+                {{ c.title }}
+              </p>
+              <p class="truncate text-xs text-muted">
+                {{ c.author ? `by ${c.author} · ` : '' }}{{ c.actionCount }} action{{ c.actionCount === 1 ? '' : 's' }}
+              </p>
+            </div>
+          </div>
+          <p class="line-clamp-2 text-sm text-muted">
+            {{ c.summary }}
+          </p>
+          <UButton
+            v-if="c.installed"
+            label="Installed"
+            icon="i-lucide-check"
+            color="neutral"
+            variant="soft"
+            size="sm"
+            disabled
+            block
+          />
+          <UButton
+            v-else
+            label="Install"
+            icon="i-lucide-download"
+            size="sm"
+            block
+            :loading="installingSlug === c.slug"
+            @click="installFromMarketplace(c.slug)"
+          />
+        </div>
+      </div>
+
+      <h2 class="mb-3 mt-8 text-sm font-medium text-highlighted">
+        Flows
+      </h2>
+      <div
+        v-if="market.flows.length === 0"
+        class="rounded-lg border border-dashed border-default p-6 text-center text-sm text-muted"
+      >
+        No community flows yet. Export one of your flows from the Flows page to share it.
+      </div>
+      <div
+        v-else
+        class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+      >
+        <div
+          v-for="f in market.flows"
+          :key="f.slug"
+          class="flex flex-col gap-3 rounded-lg border border-default p-4"
+        >
+          <div class="flex items-start gap-3">
+            <UIcon
+              :name="f.icon || 'i-lucide-workflow'"
+              class="size-8 text-dimmed"
+            />
+            <div class="min-w-0 flex-1">
+              <p class="truncate font-medium text-highlighted">
+                {{ f.title }}
+              </p>
+              <p class="truncate text-xs text-muted">
+                needs: {{ f.requires.filter(r => r !== 'core').join(', ') || 'no connectors' }}
+              </p>
+            </div>
+          </div>
+          <p class="line-clamp-2 text-sm text-muted">
+            {{ f.summary }}
+          </p>
+          <UButton
+            label="Import on Flows page"
+            icon="i-lucide-arrow-up-right"
+            size="sm"
+            variant="soft"
+            block
+            to="/flows"
+          />
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Add your own tab ───────────────────────────────────────────────── -->
+    <div
+      v-else
+      class="max-w-2xl space-y-6 mx-auto"
+    >
+      <div class="rounded-lg border border-default p-5">
+        <h2 class="font-medium text-highlighted">
+          Install a connector
+        </h2>
+        <p class="mt-1 mb-4 text-sm text-muted">
+          Paste a connector definition (JSON), or install one from a URL.
+        </p>
+        <UTabs
+          v-model="addMode"
+          :items="[
+            { label: 'Paste JSON', value: 'json', icon: 'i-lucide-code' },
+            { label: 'From URL', value: 'url', icon: 'i-lucide-link' }
+          ]"
+          :content="false"
+          size="sm"
+          class="mb-4"
+        />
+        <UTextarea
+          v-if="addMode === 'json'"
+          v-model="defText"
+          :rows="8"
+          placeholder="Paste a connector definition (JSON)…"
+          class="w-full font-mono text-xs"
+        />
+        <UInput
+          v-else
+          v-model="defUrl"
+          placeholder="https://example.com/my-connector.json"
+          class="w-full mx-auto"
+          variant="soft"
+          size="sm"
+        />
+        <UButton
+          label="Install connector"
+          icon="i-lucide-download"
+          class="mt-4 mx-auto"
+          size="sm"
+          variant="soft"
+          :loading="addingConnector"
+          :disabled="addMode === 'json' ? !defText.trim() : !defUrl.trim()"
+          @click="addConnector"
+        />
+      </div>
+
+      <div class="rounded-lg border border-default p-5">
+        <h2 class="font-medium text-highlighted">
+          Generate from an API spec
+        </h2>
+        <p class="mt-1 mb-4 text-sm text-muted">
+          Turn an OpenAPI / Swagger document into a connector — every endpoint becomes a flow action.
+        </p>
+        <UButton
+          label="Import from OpenAPI / Swagger"
+          icon="i-lucide-wand-2"
+          variant="soft"
+          size="sm"
+          class="mx-auto"
+          @click="importOpen = true"
+        />
       </div>
     </div>
 

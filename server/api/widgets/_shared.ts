@@ -60,10 +60,13 @@ export type WidgetKind = (typeof WIDGET_KINDS)[number]
 
 type WidgetFields = Pick<NewWidgetRow, 'kind' | 'refId' | 'content' | 'cardStyle' | 'bg' | 'bgLight' | 'bgDark' | 'w' | 'h' | 'sortOrder'>
 
+// Bento spans are grid cells: 1–16 (the grid is up to 16 columns wide). Sections
+// ignore width but still pass through here, so the same clamp applies.
+const MAX_SPAN = 16
 function clampSpan(value: unknown, fallback: number): number {
   const n = Number(value)
   if (!Number.isFinite(n)) return fallback
-  return Math.min(4, Math.max(1, Math.round(n)))
+  return Math.min(MAX_SPAN, Math.max(1, Math.round(n)))
 }
 
 function isSelfContained(kind: WidgetKind): boolean {

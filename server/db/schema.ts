@@ -446,9 +446,9 @@ export const widgets = sqliteTable(
     bgLight: text('bg_light'),
     /** solid background colour (hex) for dark theme; used when bg === "solid" */
     bgDark: text('bg_dark'),
-    /** column span on the bento grid (1–4) */
+    /** column span on the bento grid, in cells (1–16); app always sets this */
     w: integer('w').notNull().default(1),
-    /** row span on the bento grid (1–4) */
+    /** row span on the bento grid, in cells (1–16); app always sets this */
     h: integer('h').notNull().default(1),
     /** ordering on the grid (ascending) */
     sortOrder: integer('sort_order').notNull().default(0),

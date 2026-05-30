@@ -525,72 +525,11 @@ async function onDragEnd() {
 
 // ── resize (pointer-drag a corner handle, snaps to grid cells) ───────────────
 // Spans are stored and manipulated in grid cells (1–MAX_SPAN). The grid is fine-
-// grained so tiles can be sized freely down to a single cell. Legacy boards used
-// a coarse 1–4 span; those are upgraded ×CELL_SCALE once on load (see the lazy
-// backfill below) so a former 1×1 tile keeps its 4×4-cell footprint.
-const CELL_SCALE = 4
+// grained so tiles can be sized freely down to a single cell. Boards created
+// before the fine grid were scaled ×4 by migration 0016, so their tiles keep
+// the same footprint.
 // max width/height a tile may span, in grid cells
 const MAX_SPAN = 16
-
-// ── lazy span upgrade (coarse 1–4 → cells) ───────────────────────────────────
-// Older boards stored spans in coarse 1–4 units; the grid now works in cells, so
-// those need ×CELL_SCALE to keep their footprint. We can't tell a legacy span
-// apart from an already-upgraded one purely by value, so we upgrade each board
-// once and remember it in localStorage. A board "looks legacy" when every non-
-// section tile fits in the old 1–CELL_SCALE range; once upgraded we mark it and
-// never touch it again on this device.
-const UPGRADE_KEY = 'bento:span-upgraded:v4'
-function upgradedBoards(): Set<string> {
-  if (!import.meta.client) return new Set()
-  try {
-    return new Set(JSON.parse(localStorage.getItem(UPGRADE_KEY) || '[]'))
-  } catch {
-    return new Set()
-  }
-}
-function markUpgraded(boardId: string) {
-  if (!import.meta.client) return
-  const set = upgradedBoards()
-  set.add(boardId)
-  try {
-    localStorage.setItem(UPGRADE_KEY, JSON.stringify([...set]))
-  } catch { /* storage full / disabled — worst case we re-scan, which no-ops */ }
-}
-
-// boards currently mid-upgrade this session, so the widgets-watch can't kick off
-// a second pass during the async PUTs (before localStorage is marked)
-const upgrading = new Set<string>()
-async function maybeUpgradeSpans() {
-  if (!import.meta.client) return
-  const boardId = activeBoardId.value
-  if (!boardId || upgrading.has(boardId) || upgradedBoards().has(boardId)) return
-  upgrading.add(boardId)
-  const tiles = widgets.value.filter(w => w.kind !== 'section')
-  // a legacy board: every tile still fits the old coarse range
-  const looksLegacy = tiles.length > 0
-    && tiles.every(w => w.w <= CELL_SCALE && w.h <= CELL_SCALE)
-  if (looksLegacy) {
-    // scale up + persist each tile (optimistic local update first)
-    const updates = tiles.map((w) => {
-      const nw = w.w * CELL_SCALE
-      const nh = w.h * CELL_SCALE
-      w.w = nw
-      w.h = nh
-      return $fetch(`/api/widgets/${w.id}`, { method: 'PUT', body: { w: nw, h: nh } })
-    })
-    try {
-      await Promise.all(updates)
-    } catch {
-      await refresh()
-    }
-  }
-  markUpgraded(boardId)
-  upgrading.delete(boardId)
-}
-// run once whenever a board's widgets settle (board switch or initial load)
-watch([activeBoardId, widgets], () => {
-  void maybeUpgradeSpans()
-}, { immediate: true })
 
 // TransitionGroup ref resolves to a component proxy; unwrap to its root <div>.
 const gridRef = ref<{ $el?: HTMLElement } | HTMLElement | null>(null)

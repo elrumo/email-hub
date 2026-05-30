@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Connection, Flow } from '~/types'
 import type { FlowChatApplyPayload } from '~/composables/useFlowChat'
-import { relTime, scheduleSummary } from '~/composables/format'
+import { scheduleSummary } from '~/composables/format'
 
 const { data: flows, refresh } = await useFetch<Flow[]>('/api/flows', {
   key: 'flows',
@@ -93,6 +93,30 @@ async function confirmDelete() {
   await refresh()
   toast.add({ title: 'Flow deleted', color: 'success' })
 }
+
+// ── share / export ───────────────────────────────────────────────────────────
+async function exportFlow(f: Flow) {
+  try {
+    const bundle = await $fetch(`/api/flows/${f.id}/export`)
+    const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${f.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'flow'}.flow.json`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.add({ title: `Exported “${f.name}”`, description: 'Share the downloaded .flow.json', color: 'success' })
+  } catch {
+    toast.add({ title: 'Export failed', color: 'error' })
+  }
+}
+
+// ── import ───────────────────────────────────────────────────────────────────
+const importOpen = ref(false)
+async function onImported(flowId: string) {
+  await refresh()
+  router.push(`/flows/${flowId}`)
+}
 </script>
 
 <template>
@@ -106,12 +130,20 @@ async function confirmDelete() {
           Automations that run on a schedule, a webhook, or a button. Each is a trigger followed by a list of actions.
         </p>
       </div>
-      <UButton
-        icon="i-lucide-plus"
-        label="New flow"
-        to="/flows/new"
-        class="self-start"
-      />
+      <div class="flex items-center gap-2 self-start">
+        <UButton
+          icon="i-lucide-download"
+          label="Import"
+          color="neutral"
+          variant="outline"
+          @click="importOpen = true"
+        />
+        <UButton
+          icon="i-lucide-plus"
+          label="New flow"
+          to="/flows/new"
+        />
+      </div>
     </div>
 
     <!-- Claude-style AI launcher on top of the list -->
@@ -187,70 +219,17 @@ async function confirmDelete() {
       v-else
       class="space-y-3"
     >
-      <UCard
+      <FlowCard
         v-for="f in flows"
         :key="f.id"
-        :ui="{ body: 'flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4' }"
-      >
-        <div class="min-w-0 flex-1">
-          <div class="flex items-center gap-2">
-            <NuxtLink
-              :to="`/flows/${f.id}`"
-              class="truncate font-medium text-highlighted hover:text-primary"
-            >
-              {{ f.name }}
-            </NuxtLink>
-            <UBadge
-              :color="f.enabled ? 'success' : 'neutral'"
-              variant="soft"
-              size="sm"
-            >
-              {{ f.enabled ? 'Enabled' : 'Disabled' }}
-            </UBadge>
-          </div>
-          <p class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-muted">
-            <UIcon
-              name="i-lucide-zap"
-              class="size-3.5"
-            />
-            {{ triggerSummary(f) }}
-            <span class="text-dimmed">·</span>
-            <span class="text-dimmed">last run {{ relTime(f.lastRunAt) }}</span>
-          </p>
-        </div>
-
-        <div class="flex items-center gap-1 self-end sm:self-auto">
-          <UButton
-            icon="i-lucide-play"
-            label="Run now"
-            color="neutral"
-            variant="soft"
-            size="sm"
-            :loading="running === f.id"
-            @click="runNow(f)"
-          />
-          <USwitch
-            :model-value="f.enabled"
-            @update:model-value="toggle(f)"
-          />
-          <UButton
-            icon="i-lucide-pencil"
-            color="neutral"
-            variant="ghost"
-            size="sm"
-            aria-label="Edit"
-            :to="`/flows/${f.id}`"
-          />
-          <UButton
-            icon="i-lucide-trash-2"
-            color="error"
-            variant="ghost"
-            size="sm"
-            aria-label="Delete"
-            @click="deleteTarget = f"
-          />
-        </div>
-      </UCard>
+        :flow="f"
+        :running="running === f.id"
+        :trigger-summary="triggerSummary(f)"
+        @run="runNow(f)"
+        @toggle="toggle(f)"
+        @delete="deleteTarget = f"
+        @export="exportFlow(f)"
+      />
     </div>
 
     <!-- ── Discover: community flows, then templates ──────────────────────────
@@ -316,5 +295,10 @@ async function confirmDelete() {
         />
       </template>
     </UModal>
+
+    <FlowImportModal
+      v-model:open="importOpen"
+      @imported="onImported"
+    />
   </UContainer>
 </template>

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { applyConnector } from '../../connectors/registry'
+import { fetchRemoteJson } from '../../connectors/fetchRemote'
 import { validateConnectorDef } from '../../connectors/validate'
 import { getDb } from '../../db'
 import { connectors } from '../../db/schema'
@@ -7,16 +8,28 @@ import { getIntegration } from '../../engine/registry'
 import { userIntegrationId } from '../../connectors/compile'
 
 /**
- * Install a user connector from an uploaded `ConnectorDef` JSON. Validates the
- * def, persists it, and registers the compiled integration immediately so it
- * shows up in the catalog without a restart.
+ * Install a user connector, from one of:
+ *  - `def`: an inline `ConnectorDef` JSON (paste / file upload / OpenAPI review)
+ *  - `url`: a link to a raw `ConnectorDef` JSON (fetched here, SSRF-guarded) —
+ *    e.g. a marketplace entry or a gist
  *
- * Body: { def: ConnectorDef, source?: string }
+ * Validates the def, persists it, and registers the compiled integration
+ * immediately so it shows up in the catalog without a restart.
+ *
+ * Body: { def?: ConnectorDef, url?: string, source?: string }
  */
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
 
-  const result = validateConnectorDef(body?.def)
+  // resolve the def: inline, or fetched from a url
+  let rawDef = body?.def
+  let source: string | null = typeof body?.source === 'string' ? body.source : null
+  if (!rawDef && typeof body?.url === 'string' && body.url.trim()) {
+    rawDef = await fetchRemoteJson(body.url)
+    source = source ?? body.url.trim()
+  }
+
+  const result = validateConnectorDef(rawDef)
   if (!result.ok || !result.value) {
     throw createError({ statusCode: 400, statusMessage: result.error ?? 'invalid connector' })
   }
@@ -39,7 +52,7 @@ export default defineEventHandler(async (event) => {
       name: def.name,
       enabled: true,
       def: def as unknown as Record<string, unknown>,
-      source: typeof body?.source === 'string' ? body.source : null,
+      source,
       createdAt: now,
       updatedAt: now
     })

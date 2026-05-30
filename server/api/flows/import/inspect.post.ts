@@ -1,4 +1,5 @@
 import { eq } from 'drizzle-orm'
+import { fetchRemoteJson } from '../../../connectors/fetchRemote'
 import { getDb } from '../../../db'
 import { connections } from '../../../db/schema'
 import { hasIntegration } from '../../../engine/registry'
@@ -11,14 +12,19 @@ import { requireUser } from '../../../utils/auth'
  * it needs (installed vs missing), and list the connection slots to fill —
  * each with the user's compatible connections so the UI can render a picker.
  *
- * Body: { bundle: FlowBundle }
+ * Body: { bundle?: FlowBundle, url?: string }  (url fetched SSRF-guarded)
  */
 export default defineEventHandler(async (event) => {
   registerAllIntegrations()
   const user = await requireUser(event)
   const body = await readBody(event)
 
-  const validation = validateFlowBundle(body?.bundle)
+  let rawBundle = body?.bundle
+  if (!rawBundle && typeof body?.url === 'string' && body.url.trim()) {
+    rawBundle = await fetchRemoteJson(body.url)
+  }
+
+  const validation = validateFlowBundle(rawBundle)
   if (!validation.ok || !validation.value) {
     throw createError({ statusCode: 400, statusMessage: validation.error ?? 'invalid bundle' })
   }

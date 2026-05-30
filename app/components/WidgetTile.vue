@@ -40,15 +40,10 @@
     </div>
 
     <!-- section: a chrome-less, full-width heading band between tile groups -->
-    <div
+    <SectionCard
       v-if="widget.kind === 'section'"
-      class="flex h-full items-center gap-3"
-    >
-      <h2 class="shrink-0 text-base font-semibold tracking-tight text-highlighted">
-        {{ widget.content || 'Section' }}
-      </h2>
-      <span class="h-px flex-1 bg-default" />
-    </div>
+      :title="widget.content"
+    />
 
     <!-- missing reference -->
     <UCard
@@ -76,47 +71,12 @@
     <UCard
       v-else-if="widget.kind === 'shortcut' && shortcut"
       class="h-full"
-      :ui="{ root: cardClass, body: 'flex h-full flex-col gap-2' }"
+      :ui="{ root: cardClass, body: 'h-full' }"
     >
-      <a
-        :href="shortcut.url"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="text-highlighted hover:text-primary"
-        :class="isLarge ? 'flex flex-col gap-3' : 'flex items-center gap-2.5'"
-      >
-        <span
-          class="flex shrink-0 items-center justify-center rounded-2xl bg-elevated text-muted"
-          :class="isLarge ? 'size-12' : 'size-9'"
-        >
-          <img
-            v-if="isImageIcon(shortcut.icon)"
-            :src="shortcut.icon"
-            alt=""
-            class="rounded"
-            :class="isLarge ? 'size-7' : 'size-5'"
-          >
-          <UIcon
-            v-else
-            :name="shortcut.icon || 'i-lucide-link'"
-            :class="isLarge ? 'size-7' : 'size-5'"
-          />
-        </span>
-        <span class="min-w-0">
-          <span class="flex items-center gap-1 font-medium">
-            <span class="truncate">{{ shortcut.name }}</span>
-            <UIcon
-              name="i-lucide-arrow-up-right"
-              class="size-3.5 shrink-0 text-dimmed transition-all duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary"
-            />
-          </span>
-          <span class="block truncate text-sm text-dimmed">{{ host }}</span>
-        </span>
-      </a>
-      <PingDot
-        v-if="shortcut.pingEnabled"
-        :state="ping"
-        class="mt-auto"
+      <ShortcutCard
+        :shortcut="shortcut"
+        :ping="ping"
+        :size="cardSize"
       />
     </UCard>
 
@@ -124,48 +84,14 @@
     <UCard
       v-else-if="widget.kind === 'flow' && flow"
       class="h-full"
-      :ui="{ root: cardClass, body: 'flex h-full flex-col gap-2' }"
+      :ui="{ root: cardClass, body: 'h-full' }"
     >
-      <div class="flex items-start justify-between gap-2">
-        <NuxtLink
-          :to="`/flows/${flow.id}`"
-          class="flex items-center gap-2 font-medium text-highlighted hover:text-primary"
-        >
-          <span class="flex size-8 shrink-0 items-center justify-center rounded-xl bg-elevated text-muted">
-            <UIcon
-              name="i-lucide-workflow"
-              class="size-4"
-            />
-          </span>
-          <span class="truncate">{{ flow.name }}</span>
-        </NuxtLink>
-        <UBadge
-          :color="flow.enabled ? 'success' : 'neutral'"
-          variant="soft"
-          size="sm"
-        >
-          {{ flow.enabled ? 'On' : 'Off' }}
-        </UBadge>
-      </div>
-      <p
-        v-if="isTall && flow.description"
-        class="text-sm text-muted"
-        :class="isLarge ? 'line-clamp-3' : 'line-clamp-2'"
-      >
-        {{ flow.description }}
-      </p>
-      <p class="text-sm text-dimmed">
-        last run {{ relTime(flow.lastRunAt) }}
-      </p>
-      <UButton
-        icon="i-lucide-play"
-        label="Run now"
-        color="neutral"
-        variant="soft"
-        size="sm"
-        class="mt-auto self-start"
-        :loading="running"
-        @click="runFlow"
+      <FlowCard
+        :flow="flow"
+        :size="cardSize"
+        :is-tall="isTall"
+        :running="running"
+        @run="runFlow"
       />
     </UCard>
 
@@ -186,21 +112,10 @@
       class="h-full"
       :ui="{ root: cardClass, body: 'h-full' }"
     >
-      <!-- eslint-disable vue/no-v-html -- author-owned content from the Nuxt UI editor -->
-      <div
-        v-if="noteIsHtml"
-        class="bento-richtext h-full overflow-auto"
-        :class="isLarge ? 'text-base' : 'text-sm'"
-        v-html="widget.content"
+      <NoteCard
+        :content="widget.content"
+        :size="cardSize"
       />
-      <!-- eslint-enable vue/no-v-html -->
-      <p
-        v-else
-        class="h-full overflow-auto whitespace-pre-wrap text-muted"
-        :class="isLarge ? 'text-base' : 'text-sm'"
-      >
-        {{ widget.content || 'Empty note' }}
-      </p>
     </UCard>
 
     <!-- image (content is the image URL; fills the tile, edge to edge) -->
@@ -257,7 +172,6 @@
 <script setup lang="ts">
 import type { PingState } from '~/composables/usePing'
 import type { Flow, IntegrationMeta, Monitor, Shortcut, Widget } from '~/types'
-import { relTime } from '~/composables/format'
 
 /**
  * One tile on the home bento grid. Resolves its referenced entity from the
@@ -292,13 +206,14 @@ const sizeW = computed(() => props.span?.w ?? props.widget.w)
 const sizeH = computed(() => props.span?.h ?? props.widget.h)
 const isTall = computed(() => sizeH.value >= 8)
 const isLarge = computed(() => sizeW.value * sizeH.value >= 64)
+// size bucket handed to ShortcutCard / FlowCard so they pick a widget layout
+const cardSize = computed<'sm' | 'lg'>(() => (isLarge.value ? 'lg' : 'sm'))
 
 // Per-tile card chrome + background fill, shared with the public board view.
 const cardClass = computed(() => bentoCardClass(props.widget.cardStyle, props.widget.bg))
 // CSS vars feeding the solid fill; set on the wrapper so the (possibly nested)
 // .bento-card inherits them. Empty unless this tile has a solid background.
 const cardVars = computed(() => bentoCardVars(props.widget))
-const noteIsHtml = computed(() => isRichTextHtml(props.widget.content))
 
 const emit = defineEmits<{ remove: [], edit: [] }>()
 
@@ -324,13 +239,4 @@ async function runFlow() {
     running.value = false
   }
 }
-
-const host = computed(() => {
-  if (!shortcut.value) return ''
-  try {
-    return new URL(shortcut.value.url).host
-  } catch {
-    return shortcut.value.url
-  }
-})
 </script>
