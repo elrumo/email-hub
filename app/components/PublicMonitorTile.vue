@@ -4,7 +4,11 @@ import type { PublicBoard, SnapshotResponse } from '~/types'
 const props = defineProps<{
   boardSlug: string
   monitor: PublicBoard['monitors'][number]
+  /** bento card chrome classes (shadow/outline/none); from bentoCardClass() */
+  cardClass?: string
 }>()
+
+const cardClass = computed(() => props.cardClass ?? bentoCardClass('shadow'))
 
 const response = ref<SnapshotResponse | null>(null)
 const loading = ref(false)
@@ -53,15 +57,16 @@ watch(
 </script>
 
 <template>
-  <UCard
-    class="h-full"
-    :ui="{ body: 'flex h-full flex-col gap-3' }"
+  <div
+    :class="`${cardClass} flex h-full flex-col gap-3 bg-default p-4`"
   >
     <div class="flex items-center gap-2 font-medium text-highlighted">
-      <UIcon
-        name="i-lucide-activity"
-        class="size-4 shrink-0 text-dimmed"
-      />
+      <span class="flex size-8 shrink-0 items-center justify-center rounded-xl bg-elevated text-muted">
+        <UIcon
+          name="i-lucide-activity"
+          class="size-4"
+        />
+      </span>
       <span class="truncate">{{ monitor.name }}</span>
     </div>
 
@@ -116,6 +121,41 @@ watch(
     </div>
 
     <div
+      v-else-if="snapshot?.kind === 'stats'"
+      class="space-y-2"
+    >
+      <div class="grid grid-cols-2 gap-2">
+        <div
+          v-for="s in snapshot.stats"
+          :key="s.key"
+          class="rounded-lg bg-elevated/40 p-2"
+        >
+          <span class="flex items-center gap-1 text-xs text-muted">
+            <UIcon
+              v-if="s.icon"
+              :name="s.icon"
+              class="size-3"
+            />
+            {{ s.label }}
+          </span>
+          <span class="mt-0.5 block text-base font-semibold text-highlighted tabular-nums">
+            {{ s.value == null ? '—' : (typeof s.value === 'number' ? s.value.toLocaleString() : s.value)
+            }}<span
+              v-if="s.unit && s.value != null"
+              class="text-xs text-dimmed"
+            > {{ s.unit }}</span>
+          </span>
+        </div>
+      </div>
+      <p
+        v-if="snapshot.detail"
+        class="text-xs text-dimmed"
+      >
+        {{ snapshot.detail }}
+      </p>
+    </div>
+
+    <div
       v-else-if="snapshot?.kind === 'status'"
       class="mt-auto flex items-center gap-2"
     >
@@ -146,5 +186,5 @@ watch(
     >
       No data yet.
     </p>
-  </UCard>
+  </div>
 </template>

@@ -370,12 +370,35 @@ export const boards = sqliteTable(
     name: text('name').notNull(),
     /** url-safe unique identifier used for the public `/b/<slug>` view */
     slug: text('slug').notNull(),
+    /**
+     * Optional board avatar. Either a lucide icon name (e.g. "i-lucide-home")
+     * rendered via <UIcon>, or an image URL / `data:image/…` URI (an uploaded
+     * picture) rendered via <img>. When null the board falls back to a monogram
+     * of the first letter of its name.
+     */
+    icon: text('icon'),
     /** the board the home page opens on; exactly one per user is true */
     isDefault: integer('is_default', { mode: 'boolean' }).notNull().default(false),
     /** viewable read-only by unauthenticated visitors at /b/<slug> */
     isPublic: integer('is_public', { mode: 'boolean' }).notNull().default(false),
     /** allow public visitors to trigger every flow on this board (overrides per-flow flag) */
     publicTrigger: integer('public_trigger', { mode: 'boolean' }).notNull().default(false),
+    /**
+     * Optional analytics provider for this board: a connection of an integration
+     * with a `webAnalytics` capability (e.g. Plausible, Google Analytics). When
+     * set and the board is public, the public `/b/<slug>` page injects that
+     * provider's tracking script so board visits are counted. Cleared (set null)
+     * if the connection is deleted.
+     */
+    analyticsConnectionId: text('analytics_connection_id').references(() => connections.id, { onDelete: 'set null' }),
+    /**
+     * Optional site domain for the board's analytics provider, when that provider
+     * tracks a specific site rather than being keyed solely by its connection
+     * config — e.g. Plausible's `data-domain` (the domain is chosen per board now,
+     * not on the connection). Providers like Google Analytics ignore this. Only
+     * meaningful alongside `analyticsConnectionId`.
+     */
+    analyticsDomain: text('analytics_domain'),
     /** ordering in the board switcher (ascending) */
     sortOrder: integer('sort_order').notNull().default(0),
     createdAt: integer('created_at').notNull(),
@@ -393,8 +416,12 @@ export const boards = sqliteTable(
  *   - "shortcut" → refId = shortcuts.id (link tile, live ping if configured)
  *   - "flow"     → refId = flows.id     (enabled/last-run + run-now)
  *   - "monitor"  → refId = monitors.id  (live gauges/status card)
- *   - "note"     → refId = null, content holds free markdown text
- * `w`/`h` are the tile's span in grid columns/rows (1–4). The referenced row
+ *   - "note"     → refId = null, content holds rich text (Tiptap HTML; legacy
+ *                  rows may hold plain text, rendered verbatim)
+ *   - "section"  → refId = null, content holds a section-title string; renders
+ *                  as a full-width heading band between groups of tiles
+ * `w`/`h` are the tile's span in grid columns/rows (1–4). `cardStyle` chooses
+ * the per-tile chrome (soft shadow / outline ring / none). The referenced row
  * may be deleted independently; the home page skips dangling widgets.
  */
 export const widgets = sqliteTable(
@@ -405,12 +432,20 @@ export const widgets = sqliteTable(
     ownerId: text('owner_id').references(() => users.id, { onDelete: 'cascade' }),
     /** the board this tile lives on (FK→boards.id); nullable only as a migration artifact, always set on insert */
     boardId: text('board_id').references(() => boards.id, { onDelete: 'cascade' }),
-    /** "shortcut" | "flow" | "monitor" | "note" */
+    /** "shortcut" | "flow" | "monitor" | "note" | "section" | "image" | "iframe" */
     kind: text('kind').notNull(),
-    /** id of the referenced entity, or null for self-contained tiles (note) */
+    /** id of the referenced entity, or null for self-contained tiles (note, section, image, iframe) */
     refId: text('ref_id'),
-    /** free text for "note" tiles (markdown) */
+    /** rich text (note), title (section), or URL (image/iframe src); null for reference tiles */
     content: text('content'),
+    /** per-tile card chrome: "shadow" | "outline" | "none" */
+    cardStyle: text('card_style').notNull().default('shadow'),
+    /** per-tile background fill: "none" (default surface) | "solid" (custom colour) */
+    bg: text('bg').notNull().default('none'),
+    /** solid background colour (hex) for light theme; used when bg === "solid" */
+    bgLight: text('bg_light'),
+    /** solid background colour (hex) for dark theme; used when bg === "solid" */
+    bgDark: text('bg_dark'),
     /** column span on the bento grid (1–4) */
     w: integer('w').notNull().default(1),
     /** row span on the bento grid (1–4) */

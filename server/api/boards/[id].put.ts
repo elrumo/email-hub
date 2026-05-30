@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm'
 import { getDb } from '../../db'
 import { boards } from '../../db/schema'
 import { logActivity, requireUser } from '../../utils/auth'
-import { clearOtherDefaults, uniqueSlug } from './_shared'
+import { clearOtherDefaults, normalizeAnalyticsDomain, normalizeBoardIcon, resolveAnalyticsConnectionId, uniqueSlug } from './_shared'
 
 /** Update a board (rename, slug, default/public/publicTrigger flags). */
 export default defineEventHandler(async (event) => {
@@ -25,8 +25,18 @@ export default defineEventHandler(async (event) => {
   if (body?.slug !== undefined) {
     update.slug = await uniqueSlug(db, String(body.slug || existing.name), id)
   }
+  if (body?.icon !== undefined) update.icon = normalizeBoardIcon(body.icon)
   if (body?.isPublic !== undefined) update.isPublic = !!body.isPublic
   if (body?.publicTrigger !== undefined) update.publicTrigger = !!body.publicTrigger
+  if (body?.analyticsConnectionId !== undefined) {
+    update.analyticsConnectionId = await resolveAnalyticsConnectionId(db, user.id, body.analyticsConnectionId)
+  }
+  if (body?.analyticsDomain !== undefined) {
+    update.analyticsDomain = normalizeAnalyticsDomain(body.analyticsDomain)
+  }
+  // A domain without a tracking connection is meaningless — drop it when the
+  // connection is being cleared in this same update.
+  if (update.analyticsConnectionId === null) update.analyticsDomain = null
 
   // A user always has exactly one default; you can promote a board but not
   // un-default it directly (promote another instead).

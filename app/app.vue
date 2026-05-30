@@ -30,11 +30,16 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuth()
 
+// Apply the persisted accent palette app-wide. Called here (not only inside
+// ThemePicker) so the theme is applied on every page — including the auth
+// pages, where the header chrome and its picker aren't rendered.
+useTheme()
+
 // Hide the app chrome (header/footer/nav) on pages that render standalone: the
-// auth pages (centered card) and public board views at /b/<slug> (no sign-in,
-// their own minimal header).
-const isAuthPage = computed(() =>
-  route.path === '/login' || route.path === '/setup' || route.path.startsWith('/b/')
+// marketing landing page (`/`, its own header + CTAs), the auth pages (centered
+// card) and public board views at /b/<slug> (no sign-in, their own minimal header).
+const isStandalonePage = computed(() =>
+  route.path === '/' || route.path === '/login' || route.path === '/setup' || route.path.startsWith('/b/')
 )
 
 async function onLogout() {
@@ -52,7 +57,7 @@ const userMenu = computed(() => [
 ])
 
 const nav = [
-  { label: 'Home', to: '/', icon: 'i-lucide-layout-grid' },
+  { label: 'Home', to: '/home', icon: 'i-lucide-layout-grid' },
   { label: 'Flows', to: '/flows', icon: 'i-lucide-workflow' },
   { label: 'Emails', to: '/emails', icon: 'i-lucide-mail' },
   { label: 'Shortcuts', to: '/shortcuts', icon: 'i-lucide-link' },
@@ -60,7 +65,7 @@ const nav = [
   { label: 'Monitoring', to: '/monitoring', icon: 'i-lucide-activity' }
 ]
 function isActive(to: string) {
-  return to === '/' ? route.path === '/' : route.path.startsWith(to)
+  return to === '/home' ? route.path === '/home' : route.path.startsWith(to)
 }
 
 useSeoMeta({
@@ -75,8 +80,8 @@ useSeoMeta({
 
 <template>
   <UApp>
-    <!-- Auth pages render their own centered card with no app chrome. -->
-    <UMain v-if="isAuthPage">
+    <!-- Standalone pages (landing, auth, public boards) render with no app chrome. -->
+    <UMain v-if="isStandalonePage">
       <NuxtPage />
     </UMain>
 
@@ -116,6 +121,8 @@ useSeoMeta({
 
         <template #right>
           <PushToggle />
+
+          <ThemePicker />
 
           <UColorModeButton />
 

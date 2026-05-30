@@ -1,0 +1,1 @@
+ALTER TABLE `boards` ADD `analytics_connection_id` text REFERENCES connections(id);

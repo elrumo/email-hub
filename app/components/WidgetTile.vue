@@ -8,6 +8,10 @@ import { relTime } from '~/composables/format'
  * lists the page already fetched and renders the right body per kind. A tile
  * whose reference has been deleted renders a "missing" state so it can be
  * cleaned up (the home page also skips dangling widgets server-side on delete).
+ *
+ * Card chrome (shadow / outline / none) is per-tile via `widget.cardStyle`;
+ * "section" tiles render as a chrome-less heading band, "note" tiles render
+ * rich text authored with the Nuxt UI editor.
  */
 const props = defineProps<{
   widget: Widget
@@ -31,7 +35,14 @@ const sizeH = computed(() => props.span?.h ?? props.widget.h)
 const isTall = computed(() => sizeH.value >= 2)
 const isLarge = computed(() => sizeW.value * sizeH.value >= 4)
 
-const emit = defineEmits<{ remove: [], run: [shortcut: Flow] }>()
+// Per-tile card chrome + background fill, shared with the public board view.
+const cardClass = computed(() => bentoCardClass(props.widget.cardStyle, props.widget.bg))
+// CSS vars feeding the solid fill; set on the wrapper so the (possibly nested)
+// .bento-card inherits them. Empty unless this tile has a solid background.
+const cardVars = computed(() => bentoCardVars(props.widget))
+const noteIsHtml = computed(() => isRichTextHtml(props.widget.content))
+
+const emit = defineEmits<{ remove: [], edit: [] }>()
 
 const shortcut = computed(() => props.shortcuts.find(s => s.id === props.widget.refId))
 const flow = computed(() => props.flows.find(f => f.id === props.widget.refId))
@@ -67,8 +78,11 @@ const host = computed(() => {
 </script>
 
 <template>
-  <div class="group relative h-full">
-    <!-- edit-mode controls: drag handle + remove. The tile itself has
+  <div
+    class="group relative h-full"
+    :style="cardVars"
+  >
+    <!-- edit-mode controls: drag handle + edit + remove. The tile itself has
          pointer-events disabled while editing (so it drags as one piece);
          these controls opt back in. -->
     <div
@@ -85,6 +99,15 @@ const host = computed(() => {
         />
       </span>
       <UButton
+        icon="i-lucide-pencil"
+        color="neutral"
+        variant="soft"
+        size="xs"
+        aria-label="Edit tile"
+        @pointerdown.stop
+        @click="emit('edit')"
+      />
+      <UButton
         icon="i-lucide-x"
         color="error"
         variant="soft"
@@ -95,11 +118,22 @@ const host = computed(() => {
       />
     </div>
 
+    <!-- section: a chrome-less, full-width heading band between tile groups -->
+    <div
+      v-if="widget.kind === 'section'"
+      class="flex h-full items-center gap-3"
+    >
+      <h2 class="shrink-0 text-base font-semibold tracking-tight text-highlighted">
+        {{ widget.content || 'Section' }}
+      </h2>
+      <span class="h-px flex-1 bg-default" />
+    </div>
+
     <!-- missing reference -->
     <UCard
-      v-if="missing"
+      v-else-if="missing"
       class="h-full"
-      :ui="{ body: 'flex h-full flex-col items-center justify-center gap-2 text-center' }"
+      :ui="{ root: cardClass, body: 'flex h-full flex-col items-center justify-center gap-2 text-center' }"
     >
       <UIcon
         name="i-lucide-unlink"
@@ -121,7 +155,7 @@ const host = computed(() => {
     <UCard
       v-else-if="widget.kind === 'shortcut' && shortcut"
       class="h-full"
-      :ui="{ body: 'flex h-full flex-col gap-2' }"
+      :ui="{ root: cardClass, body: 'flex h-full flex-col gap-2' }"
     >
       <a
         :href="shortcut.url"
@@ -131,10 +165,18 @@ const host = computed(() => {
         :class="isLarge ? 'flex flex-col gap-3' : 'flex items-center gap-2.5'"
       >
         <span
-          class="flex shrink-0 items-center justify-center rounded-md bg-elevated text-muted"
+          class="flex shrink-0 items-center justify-center rounded-2xl bg-elevated text-muted"
           :class="isLarge ? 'size-12' : 'size-9'"
         >
+          <img
+            v-if="isImageIcon(shortcut.icon)"
+            :src="shortcut.icon"
+            alt=""
+            class="rounded"
+            :class="isLarge ? 'size-7' : 'size-5'"
+          >
           <UIcon
+            v-else
             :name="shortcut.icon || 'i-lucide-link'"
             :class="isLarge ? 'size-7' : 'size-5'"
           />
@@ -143,8 +185,8 @@ const host = computed(() => {
           <span class="flex items-center gap-1 font-medium">
             <span class="truncate">{{ shortcut.name }}</span>
             <UIcon
-              name="i-lucide-external-link"
-              class="size-3.5 shrink-0 text-dimmed"
+              name="i-lucide-arrow-up-right"
+              class="size-3.5 shrink-0 text-dimmed transition-all duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary"
             />
           </span>
           <span class="block truncate text-sm text-dimmed">{{ host }}</span>
@@ -161,17 +203,19 @@ const host = computed(() => {
     <UCard
       v-else-if="widget.kind === 'flow' && flow"
       class="h-full"
-      :ui="{ body: 'flex h-full flex-col gap-2' }"
+      :ui="{ root: cardClass, body: 'flex h-full flex-col gap-2' }"
     >
       <div class="flex items-start justify-between gap-2">
         <NuxtLink
           :to="`/flows/${flow.id}`"
           class="flex items-center gap-2 font-medium text-highlighted hover:text-primary"
         >
-          <UIcon
-            name="i-lucide-workflow"
-            class="size-4 shrink-0 text-dimmed"
-          />
+          <span class="flex size-8 shrink-0 items-center justify-center rounded-xl bg-elevated text-muted">
+            <UIcon
+              name="i-lucide-workflow"
+              class="size-4"
+            />
+          </span>
           <span class="truncate">{{ flow.name }}</span>
         </NuxtLink>
         <UBadge
@@ -207,24 +251,82 @@ const host = computed(() => {
     <!-- monitor (reuses the Monitoring page card, self-fetches its snapshot) -->
     <MonitorCard
       v-else-if="widget.kind === 'monitor' && monitor"
-      class="h-full"
+      :class="`${cardClass} h-full`"
       :monitor="monitor"
       :icon="metaFor(monitor.integrationId)?.icon"
       :img="metaFor(monitor.integrationId)?.img"
     />
 
-    <!-- note -->
+    <!-- note (rich text) -->
     <UCard
       v-else-if="widget.kind === 'note'"
       class="h-full"
-      :ui="{ body: 'h-full' }"
+      :ui="{ root: cardClass, body: 'h-full' }"
     >
+      <!-- eslint-disable vue/no-v-html -- author-owned content from the Nuxt UI editor -->
+      <div
+        v-if="noteIsHtml"
+        class="bento-richtext h-full overflow-auto"
+        :class="isLarge ? 'text-base' : 'text-sm'"
+        v-html="widget.content"
+      />
+      <!-- eslint-enable vue/no-v-html -->
       <p
+        v-else
         class="h-full overflow-auto whitespace-pre-wrap text-muted"
         :class="isLarge ? 'text-base' : 'text-sm'"
       >
         {{ widget.content || 'Empty note' }}
       </p>
     </UCard>
+
+    <!-- image (content is the image URL; fills the tile, edge to edge) -->
+    <div
+      v-else-if="widget.kind === 'image'"
+      :class="`${cardClass} h-full overflow-hidden bg-elevated`"
+    >
+      <img
+        v-if="widget.content"
+        :src="widget.content"
+        alt=""
+        class="size-full object-cover"
+        loading="lazy"
+        referrerpolicy="no-referrer"
+      >
+      <div
+        v-else
+        class="flex h-full items-center justify-center text-dimmed"
+      >
+        <UIcon
+          name="i-lucide-image"
+          class="size-6"
+        />
+      </div>
+    </div>
+
+    <!-- iframe (content is the embed URL; owner-authored, like notes) -->
+    <div
+      v-else-if="widget.kind === 'iframe'"
+      :class="`${cardClass} h-full overflow-hidden bg-default`"
+    >
+      <iframe
+        v-if="widget.content"
+        :src="widget.content"
+        title="Embedded content"
+        class="size-full border-0"
+        loading="lazy"
+        referrerpolicy="no-referrer"
+        allow="fullscreen; clipboard-write"
+      />
+      <div
+        v-else
+        class="flex h-full items-center justify-center text-dimmed"
+      >
+        <UIcon
+          name="i-lucide-app-window"
+          class="size-6"
+        />
+      </div>
+    </div>
   </div>
 </template>

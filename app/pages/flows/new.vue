@@ -15,7 +15,14 @@ const selectedExampleId = computed(() => {
   return typeof raw === 'string' ? raw : null
 })
 const selectedExample = computed(() => getFlowExample(selectedExampleId.value))
-const draft = computed(() => buildFlowExampleDraft(selectedExampleId.value))
+
+// An AI-proposed flow handed over from the list launcher. Consume it once so a
+// refresh starts blank again.
+const pendingDraft = usePendingFlowDraft()
+const aiDraft = pendingDraft.value
+if (aiDraft) pendingDraft.value = null
+
+const draft = computed(() => aiDraft ?? buildFlowExampleDraft(selectedExampleId.value))
 
 function chooseExample(id: string) {
   router.replace({ query: { ...route.query, example: id } })
@@ -32,7 +39,7 @@ function clearExample() {
   <UContainer class="max-w-6xl py-10 sm:py-14">
     <div class="mb-8">
       <UButton
-        to="/"
+        to="/home"
         icon="i-lucide-arrow-left"
         label="Flows"
         color="neutral"
@@ -68,7 +75,15 @@ function clearExample() {
       </div>
 
       <UAlert
-        v-if="selectedExample"
+        v-if="aiDraft"
+        color="primary"
+        variant="soft"
+        icon="i-lucide-sparkles"
+        title="Drafted by the assistant"
+        description="The builder below is prefilled from your chat. Review and tweak every step, then save."
+      />
+      <UAlert
+        v-else-if="selectedExample"
         color="primary"
         variant="soft"
         icon="i-lucide-sparkles"

@@ -1,0 +1,1 @@
+ALTER TABLE `widgets` ADD `card_style` text DEFAULT 'shadow' NOT NULL;

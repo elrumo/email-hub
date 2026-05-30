@@ -5,14 +5,18 @@ export interface AssistOption {
   value: string | number
 }
 
+export type AssistQuestionKind = 'select' | 'multiselect' | 'boolean' | 'text' | 'number'
+
 export interface AssistQuestion {
   id: string
   label: string
-  kind: 'select'
+  kind: AssistQuestionKind
   options: AssistOption[]
   required?: boolean
   help?: string
 }
+
+const QUESTION_KINDS: AssistQuestionKind[] = ['select', 'multiselect', 'boolean', 'text', 'number']
 
 export interface AssistConnectionContext {
   id: string
@@ -90,25 +94,39 @@ export function normalizeAssistQuestions(raw: unknown): Array<string | AssistQue
       if (!q || typeof q !== 'object') return null
 
       const obj = q as Record<string, unknown>
-      const options = Array.isArray(obj.options)
+      const label = typeof obj.label === 'string' && obj.label.trim() ? obj.label.trim() : ''
+
+      let options = Array.isArray(obj.options)
         ? obj.options
             .map((opt): AssistOption | null => {
               if (!opt || typeof opt !== 'object') return null
               const option = opt as Record<string, unknown>
               const value = option.value
               if (typeof value !== 'string' && typeof value !== 'number') return null
-              const label = typeof option.label === 'string' ? option.label : String(value)
-              return { label, value }
+              const optLabel = typeof option.label === 'string' ? option.label : String(value)
+              return { label: optLabel, value }
             })
             .filter((opt): opt is AssistOption => !!opt)
         : []
 
-      if (!options.length) return typeof obj.label === 'string' ? obj.label : null
+      const requestedKind = typeof obj.kind === 'string' ? obj.kind as AssistQuestionKind : undefined
+      const kind: AssistQuestionKind = requestedKind && QUESTION_KINDS.includes(requestedKind)
+        ? requestedKind
+        : (options.length ? 'select' : 'text')
+
+      // choice kinds need options; if none were supplied, degrade to a plain
+      // open-ended (string) question rather than rendering an empty control
+      if ((kind === 'select' || kind === 'multiselect') && !options.length) {
+        return label || null
+      }
+      if (kind === 'boolean' && !options.length) {
+        options = [{ label: 'Yes', value: 'yes' }, { label: 'No', value: 'no' }]
+      }
 
       return {
         id: typeof obj.id === 'string' && obj.id.trim() ? obj.id.trim() : 'choice',
-        label: typeof obj.label === 'string' && obj.label.trim() ? obj.label.trim() : 'Choose an option',
-        kind: 'select',
+        label: label || 'Choose an option',
+        kind,
         options,
         required: obj.required !== false,
         help: typeof obj.help === 'string' ? obj.help : undefined

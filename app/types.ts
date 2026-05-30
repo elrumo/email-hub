@@ -37,9 +37,18 @@ export interface TriggerMeta {
 }
 
 export interface MonitoringCapability {
-  kind: 'gauges' | 'status'
+  kind: 'gauges' | 'status' | 'stats'
   snapshotAction: string
   targetSchema: FieldSchema[]
+}
+
+/** A public-safe analytics `<script>` tag injected on a tracked public board. */
+export interface AnalyticsScriptTag {
+  src?: string
+  async?: boolean
+  defer?: boolean
+  innerHTML?: string
+  attrs?: Record<string, string>
 }
 
 export interface IntegrationMeta {
@@ -49,6 +58,12 @@ export interface IntegrationMeta {
   img?: string
   canTest?: boolean
   monitoring?: MonitoringCapability
+  /**
+   * Present when the integration can track public boards (Plausible / GA).
+   * `domainField` is set when the provider also needs a per-board site domain
+   * (e.g. Plausible's `data-domain`); absent for connection-keyed providers (GA).
+   */
+  webAnalytics?: { domainField?: { label: string, placeholder?: string, help?: string } }
   connectionSchema: FieldSchema[]
   triggers: TriggerMeta[]
   actions: ActionMeta[]
@@ -91,6 +106,12 @@ export type MonitorSnapshot
     detail?: string
     raw?: unknown
   }
+  | {
+    kind: 'stats'
+    stats: Array<{ key: string, label: string, icon?: string, value: number | string | null, unit?: string, hint?: string }>
+    detail?: string
+    raw?: unknown
+  }
 
 /** Wrapper around a snapshot fetch: ok=false carries an error reason to show inline. */
 export type SnapshotResponse
@@ -122,16 +143,30 @@ export interface PingResult {
   checkedAt: number
 }
 
-export type WidgetKind = 'shortcut' | 'flow' | 'monitor' | 'note'
+export type WidgetKind = 'shortcut' | 'flow' | 'monitor' | 'note' | 'section' | 'image' | 'iframe'
+
+/** Per-tile card chrome on the bento grid. */
+export type CardStyle = 'shadow' | 'outline' | 'none'
+
+/** Per-tile background fill: the default surface, or a custom solid colour. */
+export type CardBg = 'none' | 'solid'
 
 /** A tile on the home bento grid. See server/db/schema.ts `widgets`. */
 export interface Widget {
   id: string
   kind: WidgetKind
-  /** id of the referenced shortcut/flow/monitor, or null for notes */
+  /** id of the referenced shortcut/flow/monitor, or null for note/section */
   refId?: string | null
-  /** markdown body for note tiles */
+  /** rich text (note), title (section), or URL (image/iframe src); null for reference tiles */
   content?: string | null
+  /** card chrome — soft shadow, outline ring, or none */
+  cardStyle?: CardStyle
+  /** background fill — 'none' keeps the default surface, 'solid' uses the colours below */
+  bg?: CardBg
+  /** solid background colour (hex) used in light theme when bg === 'solid' */
+  bgLight?: string | null
+  /** solid background colour (hex) used in dark theme when bg === 'solid' */
+  bgDark?: string | null
   /** column span (1–4) */
   w: number
   /** row span (1–4) */
@@ -147,12 +182,18 @@ export interface Board {
   name: string
   /** url-safe unique id used for the public /b/<slug> view */
   slug: string
+  /** lucide icon name or an image URL / data: URI used as the board avatar; null = monogram */
+  icon?: string | null
   /** the board the home page opens on (one per user) */
   isDefault: boolean
   /** viewable read-only by unauthenticated visitors */
   isPublic: boolean
   /** allow public visitors to run every flow on this board (overrides per-flow flag) */
   publicTrigger: boolean
+  /** connection used to track visits to this board (Plausible / Google Analytics), or null */
+  analyticsConnectionId?: string | null
+  /** site domain for the analytics provider when it tracks a specific site (Plausible), or null */
+  analyticsDomain?: string | null
   sortOrder: number
   createdAt: number
   updatedAt: number
@@ -160,8 +201,10 @@ export interface Board {
 
 /** Shape returned by the public board endpoint (display-only, no secrets). */
 export interface PublicBoard {
-  board: { id: string, name: string, slug: string, publicTrigger: boolean }
-  widgets: Array<Pick<Widget, 'id' | 'kind' | 'refId' | 'content' | 'w' | 'h' | 'sortOrder'>>
+  board: { id: string, name: string, slug: string, icon?: string | null, publicTrigger: boolean }
+  /** public-safe analytics script tags to inject on the board page (may be empty) */
+  analytics?: { tags: AnalyticsScriptTag[] }
+  widgets: Array<Pick<Widget, 'id' | 'kind' | 'refId' | 'content' | 'cardStyle' | 'bg' | 'bgLight' | 'bgDark' | 'w' | 'h' | 'sortOrder'>>
   shortcuts: Array<{ id: string, name: string, url: string, icon?: string | null }>
   flows: Array<{ id: string, name: string, description?: string | null, enabled: boolean, canTrigger: boolean }>
   monitors: Array<{ id: string, name: string, integrationId: string, publicVisible: boolean }>
