@@ -482,14 +482,76 @@ function spanFor(w: Widget) {
 <template>
   <UContainer class="py-10 sm:py-14">
     <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-      <div class="min-w-0">
+      
+      <div class="flex flex-row gap-2 min-w-0">
         <h1 class="text-xl font-semibold tracking-tight text-highlighted">
           Home
         </h1>
-        <p class="mt-1 text-sm text-muted">
+
+        <div
+          v-if="activeBoard"
+          class="ml-auto flex items-center gap-2"
+        >
+          <UTooltip :delay-duration="0" text="Copy public link">
+            <UButton
+              v-if="activeBoard.isPublic"
+              icon="i-lucide-link"
+              color="neutral"
+              variant="soft"
+              size="xs"
+              @click="copyPublicUrl"
+            />
+          </UTooltip>
+
+          <UTooltip :delay-duration="0" text="Board settings">
+            <UButton
+              icon="i-lucide-settings-2"
+              color="neutral"
+              variant="soft"
+              size="xs"
+              @click="openEditBoard"
+            />
+          </UTooltip>
+        </div>
+        <!-- <p class="mt-1 text-sm text-muted">
           Your dashboard. Pin the shortcuts, flows and monitors you care about into a grid.
-        </p>
+        </p> -->
       </div>
+
+      <!-- board switcher -->
+      <div class="mb-6 flex flex-wrap items-center gap-2">
+        <UButton
+          v-for="b in boards"
+          :key="b.id"
+          :color="b.id === activeBoardId ? 'primary' : 'neutral'"
+          :variant="b.id === activeBoardId ? 'solid' : 'soft'"
+          size="sm"
+          @click="activeBoardId = b.id"
+        >
+          <UIcon
+            v-if="b.isDefault"
+            name="i-lucide-star"
+            class="size-3.5"
+          />
+          {{ b.name }}
+          <UIcon
+            v-if="b.isPublic"
+            name="i-lucide-globe"
+            class="size-3.5 opacity-70"
+          />
+        </UButton>
+        <UButton
+          icon="i-lucide-plus"
+          label="New board"
+          color="neutral"
+          variant="ghost"
+          size="sm"
+          @click="openNewBoard"
+        />
+      </div>
+    </div>
+
+
       <div class="flex items-center gap-2 self-start">
         <UButton
           :icon="editMode ? 'i-lucide-check' : 'i-lucide-layout-grid'"
@@ -504,61 +566,6 @@ function spanFor(w: Widget) {
           @click="openAdd"
         />
       </div>
-    </div>
-
-    <!-- board switcher -->
-    <div class="mb-6 flex flex-wrap items-center gap-2">
-      <UButton
-        v-for="b in boards"
-        :key="b.id"
-        :color="b.id === activeBoardId ? 'primary' : 'neutral'"
-        :variant="b.id === activeBoardId ? 'solid' : 'soft'"
-        size="sm"
-        @click="activeBoardId = b.id"
-      >
-        <UIcon
-          v-if="b.isDefault"
-          name="i-lucide-star"
-          class="size-3.5"
-        />
-        {{ b.name }}
-        <UIcon
-          v-if="b.isPublic"
-          name="i-lucide-globe"
-          class="size-3.5 opacity-70"
-        />
-      </UButton>
-      <UButton
-        icon="i-lucide-plus"
-        label="New board"
-        color="neutral"
-        variant="ghost"
-        size="sm"
-        @click="openNewBoard"
-      />
-      <div
-        v-if="activeBoard"
-        class="ml-auto flex items-center gap-2"
-      >
-        <UButton
-          v-if="activeBoard.isPublic"
-          icon="i-lucide-link"
-          label="Copy public link"
-          color="neutral"
-          variant="ghost"
-          size="sm"
-          @click="copyPublicUrl"
-        />
-        <UButton
-          icon="i-lucide-settings-2"
-          label="Board settings"
-          color="neutral"
-          variant="ghost"
-          size="sm"
-          @click="openEditBoard"
-        />
-      </div>
-    </div>
 
     <div
       v-if="widgets.length === 0"
