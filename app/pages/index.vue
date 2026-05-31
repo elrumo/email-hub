@@ -59,19 +59,9 @@
     </header>
 
     <!-- ── hero ───────────────────────────────────────────────────────────── -->
-    <section class="relative isolate overflow-hidden">
-      <!-- animated aurora + grid backdrop -->
-      <div
-        class="pointer-events-none absolute inset-0 -z-10"
-        aria-hidden="true"
-      >
-        <div class="aurora aurora-a" />
-        <div class="aurora aurora-b" />
-        <div class="grid-mask absolute inset-0" />
-      </div>
-
+    <section class="relative">
       <div class="mx-auto max-w-6xl px-4 pt-20 pb-16 text-center sm:px-6 sm:pt-28 sm:pb-24">
-        <div class="reveal mx-auto inline-flex items-center gap-2 rounded-full border border-default bg-elevated/50 px-3 py-1 text-xs font-medium text-muted">
+        <div class="mx-auto inline-flex items-center gap-2 rounded-full border border-default bg-elevated/50 px-3 py-1 text-xs font-medium text-muted">
           <span class="relative flex size-2">
             <span class="absolute inline-flex size-full animate-ping rounded-full bg-primary/60" />
             <span class="relative inline-flex size-2 rounded-full bg-primary" />
@@ -79,18 +69,18 @@
           Self-hosted automation for your infrastructure
         </div>
 
-        <h1 class="reveal reveal-1 mx-auto mt-6 max-w-3xl text-balance text-4xl font-semibold tracking-tight text-highlighted sm:text-6xl">
+        <h1 class="mx-auto mt-6 max-w-3xl text-balance text-4xl font-semibold tracking-tight text-highlighted sm:text-6xl">
           Automate your infrastructure,
           <span class="bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">visually</span>.
         </h1>
 
-        <p class="reveal reveal-2 mx-auto mt-6 max-w-2xl text-pretty text-base text-muted sm:text-lg">
+        <p class="mx-auto mt-6 max-w-2xl text-pretty text-base text-muted sm:text-lg">
           Flow Hub turns your servers, DNS, monitors and notifications into
           trigger&nbsp;→&nbsp;action flows that run on a schedule, a webhook, or the
           tap of a button. One container. Your data.
         </p>
 
-        <div class="reveal reveal-3 mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
+        <div class="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <UButton
             to="/login"
             label="Get started free"
@@ -109,7 +99,7 @@
         </div>
 
         <!-- app preview mock -->
-        <div class="reveal reveal-4 mx-auto mt-16 max-w-4xl">
+        <div class="mx-auto mt-16 max-w-4xl">
           <div class="overflow-hidden rounded-2xl border border-default bg-elevated/40 shadow-2xl shadow-primary/5 ring-1 ring-default/50">
             <div class="flex items-center gap-1.5 border-b border-default/60 bg-default/40 px-4 py-3">
               <span class="size-3 rounded-full bg-red-400/70" />
@@ -260,13 +250,7 @@
 
     <!-- ── final CTA ──────────────────────────────────────────────────────── -->
     <section class="mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-28">
-      <div class="relative isolate overflow-hidden rounded-3xl border border-primary/20 bg-primary/5 px-6 py-16 text-center sm:px-12">
-        <div
-          class="pointer-events-none absolute inset-0 -z-10 opacity-60"
-          aria-hidden="true"
-        >
-          <div class="aurora aurora-a" />
-        </div>
+      <div class="relative rounded-3xl border border-primary/20 bg-primary/5 px-6 py-16 text-center sm:px-12">
         <h2 class="mx-auto max-w-2xl text-3xl font-semibold tracking-tight text-highlighted sm:text-4xl">
           Put your infrastructure on autopilot
         </h2>
@@ -428,80 +412,3 @@ const steps = [
 
 const year = new Date().getFullYear()
 </script>
-
-<style scoped>
-/* ── soft animated aurora blobs behind the hero / CTA ──────────────────────── */
-.aurora {
-  position: absolute;
-  border-radius: 9999px;
-  filter: blur(80px);
-  opacity: 0.5;
-  will-change: transform;
-}
-.aurora-a {
-  top: -12rem;
-  left: 50%;
-  width: 38rem;
-  height: 38rem;
-  background: radial-gradient(circle at 30% 30%, var(--ui-primary), transparent 65%);
-  transform: translateX(-60%);
-  animation: drift-a 18s ease-in-out infinite alternate;
-}
-.aurora-b {
-  top: -6rem;
-  left: 50%;
-  width: 30rem;
-  height: 30rem;
-  background: radial-gradient(circle at 70% 40%, color-mix(in oklab, var(--ui-primary) 60%, #a855f7), transparent 60%);
-  transform: translateX(-10%);
-  animation: drift-b 22s ease-in-out infinite alternate;
-}
-
-@keyframes drift-a {
-  from { transform: translateX(-60%) translateY(0) scale(1); }
-  to { transform: translateX(-45%) translateY(2rem) scale(1.12); }
-}
-@keyframes drift-b {
-  from { transform: translateX(-10%) translateY(0) scale(1); }
-  to { transform: translateX(-28%) translateY(1.5rem) scale(1.08); }
-}
-
-/* faint grid that fades out toward the edges */
-.grid-mask {
-  background-image:
-    linear-gradient(to right, color-mix(in oklab, var(--ui-text) 8%, transparent) 1px, transparent 1px),
-    linear-gradient(to bottom, color-mix(in oklab, var(--ui-text) 8%, transparent) 1px, transparent 1px);
-  background-size: 56px 56px;
-  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 30%, transparent 75%);
-  mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 30%, transparent 75%);
-}
-
-/* ── staggered entrance for the hero content ───────────────────────────────── */
-.reveal {
-  opacity: 0;
-  transform: translateY(16px);
-  animation: reveal-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-.reveal-1 { animation-delay: 0.08s; }
-.reveal-2 { animation-delay: 0.16s; }
-.reveal-3 { animation-delay: 0.24s; }
-.reveal-4 { animation-delay: 0.34s; }
-
-@keyframes reveal-up {
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .aurora,
-  .reveal {
-    animation: none;
-  }
-  .reveal {
-    opacity: 1;
-    transform: none;
-  }
-}
-</style>
