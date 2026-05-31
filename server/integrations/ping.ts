@@ -291,6 +291,7 @@ export const pingIntegration: Integration = {
         'Pings a URL on every check and fires when the response passes the chosen test. Like other poll triggers it fires on EVERY check while the test passes — add a state cooldown/threshold gate in the flow if you want it to act once on an up→down transition. The full response is exposed as {{ trigger.status }} / {{ trigger.body }} / {{ trigger.json }}.',
       kind: 'poll',
       needsConnection: false,
+      outputKeys: ['url', 'ok', 'status', 'statusText', 'body', 'json', 'headers', 'durationMs', 'error'],
       configSchema: [
         ...REQUEST_FIELDS,
         {

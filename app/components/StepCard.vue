@@ -2,7 +2,7 @@
 import type { EmailDocument } from '#shared/email/blocks'
 import { extractTemplateVariables } from '#shared/email/placeholders'
 import type { ActionStep, Connection, FlowStep, ForEachStep, IntegrationMeta, StateStep, ConditionStep } from '~/types'
-import { STATE_OPS, stepTitle } from '~/composables/builder'
+import { STATE_OPS, stepAccent, stepTitle } from '~/composables/builder'
 
 const props = defineProps<{
   step: FlowStep
@@ -25,15 +25,7 @@ function patch(p: Partial<FlowStep>) {
 }
 
 const title = computed(() => stepTitle(props.step, props.catalog))
-const icon = computed(() => {
-  switch (props.step.type) {
-    case 'action': return 'i-lucide-zap'
-    case 'condition': return 'i-lucide-git-branch'
-    case 'forEach': return 'i-lucide-repeat'
-    case 'state': return 'i-lucide-database'
-  }
-  return 'i-lucide-circle'
-})
+const accent = computed(() => stepAccent(props.step))
 
 // ---- action step helpers ----
 const asAction = computed(() => props.step as ActionStep)
@@ -49,6 +41,19 @@ const actionItems = computed(() =>
 const currentAction = computed(() =>
   currentIntegration.value?.actions.find(a => a.id === asAction.value.actionId)
 )
+// short line under the title in the card header (the "app" the action belongs to)
+const subtitle = computed(() => {
+  if (props.step.type === 'action') return currentIntegration.value?.name ?? ''
+  if (props.step.type === 'forEach') return 'Loop'
+  if (props.step.type === 'condition') return 'Check'
+  if (props.step.type === 'state') return 'Remember'
+  return ''
+})
+// the magic-variable refs this step makes available to later steps
+const provides = computed<string[]>(() => {
+  if (props.step.type !== 'action') return []
+  return (currentAction.value?.outputKeys ?? []).map(k => `${k}`)
+})
 const connectionItems = computed(() =>
   props.connections
     .filter(c => c.integrationId === asAction.value.integrationId)
@@ -170,15 +175,18 @@ const showGate = computed(() => showAmount.value)
 
 <template>
   <div
-    class="rounded-xl border border-default bg-default"
+    class="overflow-hidden rounded-2xl border border-default bg-default shadow-sm transition-shadow hover:shadow-md"
     :class="depth ? 'border-dashed' : ''"
   >
     <!-- header row -->
-    <div class="flex items-center gap-3 px-4 py-3">
-      <span class="flex size-7 shrink-0 items-center justify-center rounded-lg bg-elevated text-muted">
+    <div class="flex items-center gap-3 px-3 py-2.5">
+      <span
+        class="flex size-9 shrink-0 items-center justify-center rounded-xl shadow-sm"
+        :class="accent.tile"
+      >
         <UIcon
-          :name="icon"
-          class="size-4"
+          :name="accent.icon"
+          class="size-4.5"
         />
       </span>
       <button
@@ -186,8 +194,14 @@ const showGate = computed(() => showAmount.value)
         class="min-w-0 flex-1 text-left"
         @click="expanded = !expanded"
       >
-        <p class="truncate text-sm font-medium text-highlighted">
+        <p class="truncate text-sm font-medium leading-tight text-highlighted">
           <span class="text-dimmed">{{ index + 1 }}.</span> {{ title }}
+        </p>
+        <p
+          v-if="subtitle"
+          class="truncate text-xs text-muted"
+        >
+          {{ subtitle }}
         </p>
       </button>
       <div class="flex items-center gap-0.5">
@@ -426,6 +440,25 @@ const showGate = computed(() => showAmount.value)
         </p>
         <slot name="nested" />
       </template>
+    </div>
+
+    <!-- provides: the variables later steps can reference from this one -->
+    <div
+      v-if="expanded && provides.length"
+      class="flex flex-wrap items-center gap-1.5 border-t border-default bg-elevated/40 px-4 py-2.5"
+    >
+      <span class="inline-flex items-center gap-1 text-xs font-medium text-dimmed">
+        <UIcon
+          name="i-lucide-braces"
+          class="size-3.5"
+        />
+        Provides
+      </span>
+      <span
+        v-for="k in provides"
+        :key="k"
+        class="rounded-full border border-default bg-default px-2 py-0.5 font-mono text-xs text-muted"
+      >{{ k }}</span>
     </div>
   </div>
 </template>

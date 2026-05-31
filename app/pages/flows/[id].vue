@@ -35,6 +35,26 @@ function statusColor(s: string) {
   return s === 'success' ? 'success' : s === 'error' ? 'error' : s === 'running' ? 'info' : 'neutral'
 }
 const expandedRun = ref<string | null>(null)
+// per-(run+step) toggle for the input/output detail, keyed "runId:index"
+const openIO = ref<Record<string, boolean>>({})
+function toggleIO(key: string) {
+  openIO.value = { ...openIO.value, [key]: !openIO.value[key] }
+}
+function hasValue(v: unknown): boolean {
+  if (v == null || v === '') return false
+  if (typeof v === 'object') return Object.keys(v as object).length > 0
+  return true
+}
+/** Pretty-print a step's input/output for the run detail, capped so a huge body can't blow up the page. */
+function fmtIO(v: unknown): string {
+  let s: string
+  try {
+    s = typeof v === 'string' ? v : JSON.stringify(v, null, 2)
+  } catch {
+    s = String(v)
+  }
+  return s.length > 2000 ? `${s.slice(0, 2000)}…` : s
+}
 </script>
 
 <template>
@@ -131,22 +151,53 @@ const expandedRun = ref<string | null>(null)
             <div
               v-for="(s, i) in (r.steps ?? [])"
               :key="i"
-              class="flex items-start gap-2 text-xs"
+              class="text-xs"
             >
-              <UIcon
-                :name="s.status === 'success' ? 'i-lucide-check' : s.status === 'skipped' ? 'i-lucide-minus' : 'i-lucide-x'"
-                class="mt-0.5 size-3.5 shrink-0"
-                :class="s.status === 'success' ? 'text-success' : s.status === 'skipped' ? 'text-dimmed' : 'text-error'"
-              />
-              <span class="font-mono text-muted">{{ s.stepId }}</span>
-              <span
-                v-if="s.error"
-                class="text-error"
-              >— {{ s.error }}</span>
-              <span
-                v-else-if="s.logs?.length"
-                class="text-dimmed"
-              >— {{ s.logs.join('; ') }}</span>
+              <div class="flex items-start gap-2">
+                <UIcon
+                  :name="s.status === 'success' ? 'i-lucide-check' : s.status === 'skipped' ? 'i-lucide-minus' : 'i-lucide-x'"
+                  class="mt-0.5 size-3.5 shrink-0"
+                  :class="s.status === 'success' ? 'text-success' : s.status === 'skipped' ? 'text-dimmed' : 'text-error'"
+                />
+                <span class="font-mono text-muted">{{ s.stepId }}</span>
+                <span
+                  v-if="s.error"
+                  class="text-error"
+                >— {{ s.error }}</span>
+                <span
+                  v-else-if="s.logs?.length"
+                  class="text-dimmed"
+                >— {{ s.logs.join('; ') }}</span>
+                <button
+                  v-if="hasValue(s.input) || hasValue(s.output)"
+                  type="button"
+                  class="ml-auto inline-flex items-center gap-1 text-dimmed hover:text-highlighted"
+                  @click="toggleIO(`${r.id}:${i}`)"
+                >
+                  <UIcon
+                    name="i-lucide-braces"
+                    class="size-3"
+                  />
+                  {{ openIO[`${r.id}:${i}`] ? 'Hide' : 'I/O' }}
+                </button>
+              </div>
+              <div
+                v-if="openIO[`${r.id}:${i}`]"
+                class="ml-5 mt-1.5 space-y-1.5"
+              >
+                <div v-if="hasValue(s.input)">
+                  <p class="mb-0.5 font-medium text-dimmed">
+                    Input
+                  </p>
+                  <pre class="overflow-x-auto rounded-lg bg-elevated p-2 font-mono text-[11px] text-muted">{{ fmtIO(s.input) }}</pre>
+                </div>
+                <div v-if="hasValue(s.output)">
+                  <p class="mb-0.5 font-medium text-dimmed">
+                    Output
+                  </p>
+                  <pre class="overflow-x-auto rounded-lg bg-elevated p-2 font-mono text-[11px] text-muted">{{ fmtIO(s.output) }}</pre>
+                </div>
+              </div>
             </div>
           </div>
         </div>

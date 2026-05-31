@@ -4,6 +4,7 @@ import { bookloreIntegration } from './booklore'
 import { browserIntegration } from './browser'
 import { bunnyIntegration } from './bunny'
 import { dokployIntegration } from './dokploy'
+import { fetchIntegration } from './fetch'
 import { googleAnalyticsIntegration } from './google-analytics'
 import { homeAssistantIntegration } from './homeassistant'
 import { jellyfinIntegration } from './jellyfin'
@@ -36,6 +37,7 @@ export function registerAllIntegrations(): void {
     kumaIntegration,
     probeIntegration,
     pingIntegration,
+    fetchIntegration,
     notifyIntegration,
     browserIntegration,
     telegramIntegration,

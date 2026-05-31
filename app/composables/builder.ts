@@ -64,6 +64,23 @@ export function stepTitle(step: FlowStep, catalog: IntegrationMeta[]): string {
   }
 }
 
+/**
+ * Per-step-type visual identity for the Siri-Shortcuts-style cards: a coloured,
+ * rounded icon tile. `tile` is the icon-badge background/foreground, `ring` the
+ * card's hover accent. Kept as static Tailwind class strings so they survive the
+ * JIT compiler (no dynamic `bg-${x}` interpolation).
+ */
+export interface StepAccent { icon: string, tile: string }
+const STEP_ACCENTS: Record<FlowStep['type'], StepAccent> = {
+  action: { icon: 'i-lucide-zap', tile: 'bg-blue-500 text-white' },
+  condition: { icon: 'i-lucide-git-branch', tile: 'bg-amber-500 text-white' },
+  forEach: { icon: 'i-lucide-repeat', tile: 'bg-emerald-500 text-white' },
+  state: { icon: 'i-lucide-database', tile: 'bg-violet-500 text-white' }
+}
+export function stepAccent(step: FlowStep): StepAccent {
+  return STEP_ACCENTS[step.type] ?? { icon: 'i-lucide-circle', tile: 'bg-gray-500 text-white' }
+}
+
 export const STEP_TYPE_OPTIONS = [
   { type: 'action', label: 'Do something', icon: 'i-lucide-zap', help: 'Call a service — Bunny, Dokploy, send a message…' },
   { type: 'condition', label: 'Only continue if…', icon: 'i-lucide-git-branch', help: 'Stop the flow unless a check passes.' },
