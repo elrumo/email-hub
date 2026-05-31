@@ -1,4 +1,4 @@
-import type { FlowStep, IntegrationMeta } from '~/types'
+import type { Flow, FlowStep, IntegrationMeta } from '~/types'
 
 let counter = 0
 export function newStepId(prefix = 'step'): string {
@@ -87,3 +87,55 @@ export const STEP_TYPE_OPTIONS = [
   { type: 'forEach', label: 'Repeat for each item', icon: 'i-lucide-repeat', help: 'Loop over a list from an earlier step.' },
   { type: 'state', label: 'Remember / cooldown', icon: 'i-lucide-database', help: 'Counters and time-based gates.' }
 ] as const
+
+/**
+ * Siri-Shortcuts-style tile colours for the Flows home grid. Each flow gets a
+ * vivid diagonal gradient picked deterministically from its id, so the grid
+ * reads like Apple's "All Shortcuts" wall of colour while staying stable across
+ * reloads. Kept as full static class strings so Tailwind's JIT keeps them (no
+ * dynamic `from-${x}` interpolation, which the compiler can't see).
+ */
+export const FLOW_GRADIENTS = [
+  'from-sky-400 to-blue-600',
+  'from-cyan-400 to-sky-600',
+  'from-blue-500 to-indigo-600',
+  'from-indigo-500 to-violet-600',
+  'from-violet-500 to-purple-600',
+  'from-fuchsia-500 to-pink-600',
+  'from-rose-400 to-red-500',
+  'from-orange-400 to-rose-500',
+  'from-amber-400 to-orange-500',
+  'from-emerald-400 to-teal-600',
+  'from-teal-400 to-cyan-600',
+  'from-lime-500 to-emerald-600'
+] as const
+
+/** Stable small hash of a string → non-negative integer. */
+function hashString(s: string): number {
+  let h = 0
+  for (let i = 0; i < s.length; i++) {
+    h = (h * 31 + s.charCodeAt(i)) | 0
+  }
+  return Math.abs(h)
+}
+
+/** The diagonal gradient classes for a flow's home tile (deterministic by id). */
+export function flowGradient(flow: Pick<Flow, 'id' | 'name'>): string {
+  const key = flow.id || flow.name || ''
+  return FLOW_GRADIENTS[hashString(key) % FLOW_GRADIENTS.length]!
+}
+
+/**
+ * The glyph shown on a flow's tile and in the builder. Prefers a flow's own
+ * `icon`, otherwise derives a sensible one from how it's triggered so the wall
+ * of tiles is scannable at a glance.
+ */
+export function flowGlyph(flow: Pick<Flow, 'icon' | 'definition'>): string {
+  if (flow.icon) return flow.icon
+  const t = flow.definition?.trigger
+  if (!t) return 'i-lucide-workflow'
+  if (t.integrationId === 'core' && t.triggerId === 'cron') return 'i-lucide-clock'
+  if (t.triggerId === 'webhook') return 'i-lucide-webhook'
+  if (t.triggerId === 'manual') return 'i-lucide-mouse-pointer-click'
+  return 'i-lucide-radio'
+}

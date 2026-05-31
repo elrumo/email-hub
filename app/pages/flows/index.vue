@@ -17,6 +17,16 @@ const toast = useToast()
 const running = ref<string | null>(null)
 const router = useRouter()
 
+// ── search (Siri "All Shortcuts" filter) ─────────────────────────────────────
+const search = ref('')
+const filteredFlows = computed(() => {
+  const q = search.value.trim().toLowerCase()
+  if (!q) return flows.value
+  return flows.value.filter(f =>
+    f.name.toLowerCase().includes(q) || (f.description ?? '').toLowerCase().includes(q)
+  )
+})
+
 // ── AI launcher (Claude-style composer → floating chat) ──────────────────────
 const pendingDraft = usePendingFlowDraft()
 const chatPrompt = ref('')
@@ -121,82 +131,49 @@ async function onImported(flowId: string) {
 
 <template>
   <UContainer class="py-10 sm:py-14">
-    <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-      <div>
-        <h1 class="text-xl font-semibold tracking-tight text-highlighted">
-          Flows
-        </h1>
-        <p class="mt-1 text-sm text-muted">
-          Automations that run on a schedule, a webhook, or a button. Each is a trigger followed by a list of actions.
-        </p>
-      </div>
-      <div class="flex items-center gap-2 self-start">
+    <!-- Siri "All Shortcuts" header: a big bold title with the primary actions
+         tucked to the side. -->
+    <div class="mb-5 flex items-center justify-between gap-4">
+      <h1 class="text-3xl font-bold tracking-tight text-highlighted sm:text-4xl">
+        Flows
+      </h1>
+      <div class="flex items-center gap-2">
         <UButton
           icon="i-lucide-download"
           label="Import"
           color="neutral"
-          variant="outline"
+          variant="ghost"
+          class="hidden sm:inline-flex"
           @click="importOpen = true"
         />
         <UButton
           icon="i-lucide-plus"
           label="New flow"
+          class="rounded-full"
           to="/flows/new"
         />
       </div>
     </div>
 
-    <!-- Claude-style AI launcher on top of the list -->
-    <div class="mb-8 rounded-2xl border border-default bg-default p-4 sm:p-5">
-      <div class="mb-3 flex items-start gap-2.5">
-        <span class="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-          <UIcon
-            name="i-lucide-sparkles"
-            class="size-4"
-          />
-        </span>
-        <div>
-          <p class="text-sm font-semibold text-highlighted">
-            Build a flow with AI
-          </p>
-          <p class="text-sm text-muted">
-            Describe what you want to automate — I’ll pick monitors and conditions with you, then draft it.
-          </p>
-        </div>
-      </div>
+    <!-- Siri-style rounded search bar -->
+    <UInput
+      v-model="search"
+      icon="i-lucide-search"
+      size="xl"
+      placeholder="Search"
+      class="mb-8 w-full"
+      :ui="{ base: 'rounded-full bg-elevated/60' }"
+    />
 
-      <UChatPrompt
-        v-model="chatPrompt"
-        placeholder="e.g. Alert me when my API monitor goes down for 5 minutes…"
-        @submit="launchChat()"
-      >
-        <UChatPromptSubmit
-          label="Start"
-          icon="i-lucide-arrow-up"
-        />
-      </UChatPrompt>
-
-      <div class="mt-3 flex flex-wrap gap-2">
-        <button
-          v-for="s in promptSuggestions"
-          :key="s"
-          type="button"
-          class="rounded-full border border-default px-3 py-1 text-xs text-muted transition-colors hover:bg-elevated hover:text-highlighted"
-          @click="launchChat(s)"
-        >
-          {{ s }}
-        </button>
-      </div>
-    </div>
-
+    <!-- empty: no flows at all -->
     <div
       v-if="flows.length === 0"
-      class="flex flex-col gap-5 rounded-2xl border border-dashed border-default p-6 text-center sm:flex-row sm:items-start sm:text-left sm:p-8"
+      class="flex flex-col items-center gap-5 rounded-3xl border border-dashed border-default px-6 py-16 text-center"
     >
-      <span class="flex size-12 shrink-0 items-center justify-center self-center rounded-2xl bg-elevated text-dimmed sm:self-start">
+      <span class="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-elevated text-dimmed">
         <UIcon
           name="i-lucide-workflow"
-          class="size-6"
+          class="size-7"
         />
       </span>
       <div class="space-y-1">
@@ -204,25 +181,35 @@ async function onImported(flowId: string) {
           No flows yet
         </p>
         <p class="text-sm text-muted">
-          Start from scratch, describe one to the assistant above, or grab a template below and make it yours.
+          Start from scratch, describe one to the assistant below, or grab a template and make it yours.
         </p>
       </div>
       <UButton
         icon="i-lucide-plus"
         label="New blank flow"
+        class="rounded-full"
         to="/flows/new"
-        class="self-center sm:ml-auto sm:self-start"
       />
     </div>
 
+    <!-- empty: search matched nothing -->
+    <div
+      v-else-if="filteredFlows.length === 0"
+      class="rounded-3xl border border-dashed border-default px-6 py-16 text-center text-sm text-muted"
+    >
+      No flows match “{{ search }}”.
+    </div>
+
+    <!-- the colourful tile wall -->
     <div
       v-else
-      class="space-y-3"
+      class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4"
     >
       <FlowCard
-        v-for="f in flows"
+        v-for="f in filteredFlows"
         :key="f.id"
         :flow="f"
+        size="grid"
         :running="running === f.id"
         :trigger-summary="triggerSummary(f)"
         @run="runNow(f)"
@@ -232,11 +219,54 @@ async function onImported(flowId: string) {
       />
     </div>
 
-    <!-- ── Discover: community flows, then templates ──────────────────────────
+    <!-- ── Discover: build-with-AI, community flows, then templates ───────────
          The community-flows feature is being built separately; it mounts into
          the #community-flows anchor below. Templates sit *behind* it as the
          always-available fallback so there's never an empty discover area. -->
     <section class="mt-12 space-y-8">
+      <!-- Claude-style AI launcher -->
+      <div class="rounded-3xl border border-default bg-default p-4 sm:p-5">
+        <div class="mb-3 flex items-start gap-2.5">
+          <span class="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <UIcon
+              name="i-lucide-sparkles"
+              class="size-4"
+            />
+          </span>
+          <div>
+            <p class="text-sm font-semibold text-highlighted">
+              Build a flow with AI
+            </p>
+            <p class="text-sm text-muted">
+              Describe what you want to automate — I’ll pick monitors and conditions with you, then draft it.
+            </p>
+          </div>
+        </div>
+
+        <UChatPrompt
+          v-model="chatPrompt"
+          placeholder="e.g. Alert me when my API monitor goes down for 5 minutes…"
+          @submit="launchChat()"
+        >
+          <UChatPromptSubmit
+            label="Start"
+            icon="i-lucide-arrow-up"
+          />
+        </UChatPrompt>
+
+        <div class="mt-3 flex flex-wrap gap-2">
+          <button
+            v-for="s in promptSuggestions"
+            :key="s"
+            type="button"
+            class="rounded-full border border-default px-3 py-1 text-xs text-muted transition-colors hover:bg-elevated hover:text-highlighted"
+            @click="launchChat(s)"
+          >
+            {{ s }}
+          </button>
+        </div>
+      </div>
+
       <!-- community flows mount point (filled by the community feature) -->
       <div id="community-flows" />
 

@@ -35,10 +35,11 @@ function optionByValue(v: unknown): SelectItem | undefined {
     :required="field.required"
     :description="field.help"
   >
-    <USelect
+    <USelectMenu
       v-if="field.type === 'select'"
       :model-value="(modelValue[field.key] as string | number)"
       :items="selectItems(field)"
+      value-key="value"
       :placeholder="field.placeholder || 'Choose…'"
       class="w-full"
       @update:model-value="set(field.key, $event)"
@@ -60,8 +61,8 @@ function optionByValue(v: unknown): SelectItem | undefined {
         />
       </template>
       <!--
-        Own the leading area so the logo renders consistently: USelect draws the
-        `icon` field natively but not `img`, so we render either ourselves and
+        Own the leading area so the logo renders consistently: USelectMenu draws
+        the `icon` field natively but not `img`, so we render either ourselves and
         avoid the doubled-icon that a #item-label override caused.
       -->
       <template
@@ -80,7 +81,7 @@ function optionByValue(v: unknown): SelectItem | undefined {
           class="size-4"
         />
       </template>
-    </USelect>
+    </USelectMenu>
     <USwitch
       v-else-if="field.type === 'boolean'"
       :model-value="modelValue[field.key] !== false"
