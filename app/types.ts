@@ -34,6 +34,8 @@ export interface TriggerMeta {
   kind: 'cron' | 'manual' | 'webhook' | 'poll'
   needsConnection: boolean
   configSchema: FieldSchema[]
+  /** keys this trigger emits into {{ trigger.* }}, used for the variables panel */
+  outputKeys?: string[]
 }
 
 export interface MonitoringCapability {

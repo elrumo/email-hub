@@ -344,18 +344,29 @@ async function save() {
         Then do this…
       </h2>
 
-      <div class="space-y-2">
-        <StepCard
+      <div class="space-y-1">
+        <template
           v-for="(s, i) in steps"
           :key="s.id"
-          :step="s"
-          :index="i"
-          :catalog="catalog"
-          :connections="connections"
-          @update="updateStep(i, $event)"
-          @remove="removeStep(i)"
-          @move="moveStep(i, $event)"
-        />
+        >
+          <!-- Siri-Shortcuts-style connector linking each card to the next -->
+          <div
+            v-if="i > 0"
+            class="flex justify-center"
+            aria-hidden="true"
+          >
+            <span class="h-3 w-px bg-default" />
+          </div>
+          <StepCard
+            :step="s"
+            :index="i"
+            :catalog="catalog"
+            :connections="connections"
+            @update="updateStep(i, $event)"
+            @remove="removeStep(i)"
+            @move="moveStep(i, $event)"
+          />
+        </template>
 
         <!-- friendly empty state before any actions exist -->
         <div
@@ -373,7 +384,10 @@ async function save() {
           </p>
         </div>
 
-        <UPopover v-model:open="addOpen">
+        <UPopover
+          v-model:open="addOpen"
+          class="block pt-2"
+        >
           <UButton
             icon="i-lucide-plus"
             :label="steps.length === 0 ? 'Add the first action' : 'Add another action'"
@@ -404,6 +418,13 @@ async function save() {
         </UPopover>
       </div>
     </section>
+
+    <!-- variables: everything the flow makes available to reference -->
+    <FlowVariables
+      :catalog="catalog"
+      :trigger="trigger"
+      :steps="steps"
+    />
 
     <!-- options: the less-common settings, tucked away so the main path stays
          simple (name → when → what → create) -->

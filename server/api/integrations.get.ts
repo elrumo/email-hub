@@ -29,7 +29,8 @@ export default defineEventHandler(() => {
       description: t.description,
       kind: t.kind,
       needsConnection: t.needsConnection ?? false,
-      configSchema: t.configSchema
+      configSchema: t.configSchema,
+      outputKeys: t.outputKeys ?? []
     })),
     actions: i.actions.map(a => ({
       id: a.id,

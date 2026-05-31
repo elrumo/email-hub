@@ -93,6 +93,8 @@ export interface TriggerDef {
   kind: 'cron' | 'manual' | 'webhook' | 'poll'
   needsConnection?: boolean
   configSchema: FieldSchema[]
+  /** keys this trigger emits into {{ trigger.* }} — documentation + builder variable hints */
+  outputKeys?: string[]
   /**
    * For poll triggers only: return the event payload if the trigger should
    * fire this tick, or null to skip. Cron/manual/webhook triggers don't
