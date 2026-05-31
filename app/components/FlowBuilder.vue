@@ -212,7 +212,7 @@ async function save() {
 <template>
   <div class="space-y-8">
     <!-- name + meta -->
-    <UCard>
+    <UCard :ui="{ root: 'rounded-2xl' }">
       <div class="space-y-4">
         <UFormField
           label="Name this flow"
@@ -244,7 +244,7 @@ async function save() {
         <span class="flex size-6 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">1</span>
         When should this run?
       </h2>
-      <UCard>
+      <UCard :ui="{ root: 'rounded-2xl' }">
         <div class="space-y-5">
           <!-- tappable trigger-kind cards -->
           <div class="grid grid-cols-2 gap-2 lg:grid-cols-4">
@@ -390,9 +390,18 @@ async function save() {
           </p>
         </div>
 
+        <!-- connector from the last step into the add-action bar -->
+        <div
+          v-if="steps.length"
+          class="flex justify-center"
+          aria-hidden="true"
+        >
+          <span class="h-3 w-px bg-default" />
+        </div>
+
         <UPopover
           v-model:open="addOpen"
-          class="block pt-2"
+          class="block"
         >
           <UButton
             icon="i-lucide-plus"
@@ -400,6 +409,7 @@ async function save() {
             color="neutral"
             :variant="steps.length === 0 ? 'solid' : 'soft'"
             block
+            class="rounded-full"
           />
           <template #content>
             <div class="w-80 p-2">
