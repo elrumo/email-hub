@@ -305,9 +305,10 @@ async function save() {
 
           <template v-else-if="triggerKind === 'poll'">
             <UFormField label="Event">
-              <USelect
+              <USelectMenu
                 :model-value="`${trigger.integrationId}:${trigger.triggerId}`"
                 :items="pollItems"
+                value-key="value"
                 placeholder="Choose an event"
                 class="w-full"
                 @update:model-value="onPollSelect($event as string)"
@@ -317,9 +318,10 @@ async function save() {
               v-if="selectedPoll?.trigger.needsConnection"
               label="Connection"
             >
-              <USelect
+              <USelectMenu
                 :model-value="trigger.connectionId ?? undefined"
                 :items="pollConnItems"
+                value-key="value"
                 placeholder="Choose a connection"
                 class="w-full"
                 @update:model-value="trigger.connectionId = $event"

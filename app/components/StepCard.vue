@@ -255,18 +255,20 @@ const showGate = computed(() => showAmount.value)
       <template v-if="step.type === 'action'">
         <div class="grid gap-3 sm:grid-cols-2">
           <UFormField label="Service">
-            <USelect
+            <USelectMenu
               :model-value="asAction.integrationId"
               :items="integrationItems"
+              value-key="value"
               placeholder="Choose a service"
               class="w-full"
               @update:model-value="setIntegration($event as string)"
             />
           </UFormField>
           <UFormField label="Action">
-            <USelect
+            <USelectMenu
               :model-value="asAction.actionId"
               :items="actionItems"
+              value-key="value"
               :disabled="!asAction.integrationId"
               placeholder="Choose an action"
               class="w-full"
@@ -287,9 +289,10 @@ const showGate = computed(() => showAmount.value)
           label="Connection"
           description="Which saved credentials to use."
         >
-          <USelect
+          <USelectMenu
             :model-value="asAction.connectionId ?? undefined"
             :items="connectionItems"
+            value-key="value"
             placeholder="Choose a connection"
             class="w-full"
             @update:model-value="patch({ connectionId: $event } as Partial<ActionStep>)"
