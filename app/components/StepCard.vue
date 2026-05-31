@@ -96,7 +96,13 @@ const kumaActionSchema = useKumaMonitorSchema({
   schema: computed(() => mailgunSchema.value),
   values: computed(() => asAction.value.input)
 })
-const renderedActionSchema = computed(() => kumaActionSchema.schema.value)
+const haActionSchema = useHomeAssistantSchema({
+  enabled: computed(() => asAction.value.integrationId === 'homeassistant'),
+  connectionId: computed(() => asAction.value.connectionId),
+  schema: computed(() => kumaActionSchema.schema.value),
+  values: computed(() => asAction.value.input)
+})
+const renderedActionSchema = computed(() => haActionSchema.schema.value)
 const selectedTemplateId = computed(() => {
   if (!isMailgunSend.value || asAction.value.input.contentMode !== 'template') return ''
   return String(asAction.value.input.templateId ?? '').trim()

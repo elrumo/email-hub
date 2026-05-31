@@ -49,6 +49,72 @@ async function call<T = unknown>(
   return { status: res.status, data: data as T }
 }
 
+// ---------------------------------------------------------------------------
+// Auto-discovery for the flow builder. Given a Home Assistant connection, reads
+// the live instance and returns every entity (with its friendly name + domain)
+// and every service domain → service. The builder uses this to turn the
+// free-text Entity ID / Domain / Service fields into pickers, so users choose
+// from what their HA actually exposes instead of typing IDs by hand.
+// ---------------------------------------------------------------------------
+
+export interface DiscoveredEntity {
+  entityId: string
+  /** attributes.friendly_name when set, else null */
+  friendlyName: string | null
+  /** the entity_id prefix, e.g. "light" for "light.kitchen" */
+  domain: string
+}
+
+export interface DiscoveredServiceDomain {
+  domain: string
+  /** service names within the domain, e.g. ["turn_on", "turn_off", "toggle"] */
+  services: string[]
+}
+
+export interface HomeAssistantCatalog {
+  entities: DiscoveredEntity[]
+  services: DiscoveredServiceDomain[]
+}
+
+export async function discoverHomeAssistant(
+  config: Record<string, unknown>,
+  signal: AbortSignal
+): Promise<HomeAssistantCatalog> {
+  // /api/states → every entity with its current state + attributes
+  const { data: states } = await call<Array<{ entity_id?: string, attributes?: Record<string, unknown> }>>(
+    config, 'GET', '/api/states', null, signal
+  )
+  const entities: DiscoveredEntity[] = (Array.isArray(states) ? states : [])
+    .map((s) => {
+      const entityId = String(s?.entity_id ?? '')
+      if (!entityId) return null
+      const friendly = s?.attributes?.friendly_name
+      return {
+        entityId,
+        friendlyName: friendly == null ? null : String(friendly),
+        domain: entityId.split('.')[0] ?? ''
+      }
+    })
+    .filter((e): e is DiscoveredEntity => e !== null)
+    .sort((a, b) => a.entityId.localeCompare(b.entityId))
+
+  // /api/services → [{ domain, services: { <name>: {...} } }, ...]
+  const { data: svc } = await call<Array<{ domain?: string, services?: Record<string, unknown> }>>(
+    config, 'GET', '/api/services', null, signal
+  )
+  const services: DiscoveredServiceDomain[] = (Array.isArray(svc) ? svc : [])
+    .map((d) => {
+      const domain = String(d?.domain ?? '')
+      if (!domain) return null
+      const names = d?.services && typeof d.services === 'object' ? Object.keys(d.services) : []
+      return { domain, services: names.sort((a, b) => a.localeCompare(b)) }
+    })
+    .filter((d): d is DiscoveredServiceDomain => d !== null)
+    .sort((a, b) => a.domain.localeCompare(b.domain))
+
+  return { entities, services }
+}
+
 export const homeAssistantIntegration: Integration = {
   id: 'homeassistant',
   name: 'Home Assistant',

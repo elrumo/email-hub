@@ -137,7 +137,13 @@ const kumaTriggerSchema = useKumaMonitorSchema({
   schema: computed(() => selectedPoll.value?.trigger.configSchema ?? []),
   values: computed(() => trigger.value.config)
 })
-const renderedTriggerSchema = computed(() => kumaTriggerSchema.schema.value)
+const haTriggerSchema = useHomeAssistantSchema({
+  enabled: computed(() => triggerKind.value === 'poll' && trigger.value.integrationId === 'homeassistant'),
+  connectionId: computed(() => trigger.value.connectionId),
+  schema: computed(() => kumaTriggerSchema.schema.value),
+  values: computed(() => trigger.value.config)
+})
+const renderedTriggerSchema = computed(() => haTriggerSchema.schema.value)
 function onPollSelect(v: string) {
   const [iid, tid] = v.split(':')
   trigger.value = { integrationId: iid!, triggerId: tid!, connectionId: null, config: {} }
