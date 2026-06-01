@@ -89,7 +89,7 @@ const TARGET_SCHEMA = [
 export const seerrIntegration: Integration = {
   id: 'seerr',
   name: 'Overseerr / Jellyseerr',
-  icon: 'i-simple-icons-overseerr',
+  img: 'https://img.logo.dev/name/Overseerr?token=pk_IfeEO2FvQ2uFp8XsvXUPUw&retina=true',
   connectionSchema: [
     {
       key: 'provider',

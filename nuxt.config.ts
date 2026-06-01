@@ -3,7 +3,9 @@ export default defineNuxtConfig({
   modules: ['@nuxt/eslint', '@nuxt/ui', '@comark/nuxt', '@vite-pwa/nuxt', '@vueuse/nuxt'],
 
   devtools: {
-    enabled: true
+    // Off: DevTools instruments the whole module graph, which slows HMR
+    // rebuilds. Re-enable when you actually need the inspector.
+    enabled: false
   },
 
   css: ['~/assets/css/main.css'],
@@ -132,8 +134,10 @@ export default defineNuxtConfig({
       installPrompt: true
     },
     devOptions: {
-      // Let the service worker run in `nuxt dev` so installability can be tested.
-      enabled: true,
+      // Off by default in dev: the SW regenerates on every rebuild, which slows
+      // HMR and can serve stale modules. Flip to `true` (or set
+      // NUXT_PWA_DEV=1) only when you specifically need to test installability.
+      enabled: process.env.NUXT_PWA_DEV === '1',
       type: 'module'
     }
   }

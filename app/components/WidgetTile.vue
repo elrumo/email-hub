@@ -68,23 +68,22 @@
     </UCard>
 
     <!-- shortcut -->
-    <UCard
+    <div
       v-else-if="widget.kind === 'shortcut' && shortcut"
-      class="h-full"
-      :ui="{ root: cardClass, body: 'h-full' }"
+      :class="`${cardClass} h-full`"
     >
       <ShortcutCard
         :shortcut="shortcut"
         :ping="ping"
         :size="cardSize"
+        :span="{ w: sizeW, h: sizeH }"
       />
-    </UCard>
+    </div>
 
     <!-- flow -->
-    <UCard
+    <div
       v-else-if="widget.kind === 'flow' && flow"
-      class="h-full"
-      :ui="{ root: cardClass, body: 'h-full' }"
+      :class="`${cardClass} h-full`"
     >
       <FlowCard
         :flow="flow"
@@ -93,7 +92,7 @@
         :running="running"
         @run="runFlow"
       />
-    </UCard>
+    </div>
 
     <!-- monitor (reuses the Monitoring page card, self-fetches its snapshot) -->
     <MonitorCard

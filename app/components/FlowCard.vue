@@ -65,7 +65,7 @@ const menuItems = computed(() => [
        it so they stay independently tappable. -->
   <div
     v-if="size === 'grid'"
-    class="group relative flex aspect-[5/4] flex-col justify-between overflow-hidden rounded-3xl bg-linear-to-br p-3.5 text-white shadow-sm transition-all duration-300 hover:shadow-lg sm:hover:-translate-y-0.5"
+    class="group relative flex aspect-[5/3] flex-col justify-between overflow-hidden rounded-lg bg-linear-to-br p-3.5 text-white shadow-sm transition-all duration-300 hover:shadow-lg sm:hover:-translate-y-0.5"
     :class="[gradient, flow.enabled ? '' : 'opacity-60 saturate-50', running ? 'animate-pulse' : '']"
   >
     <NuxtLink

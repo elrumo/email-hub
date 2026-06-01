@@ -185,7 +185,7 @@ async function confirmDelete() {
 
     <div
       v-else
-      class="grid gap-3 sm:grid-cols-2"
+      class="grid gap-3 sm:grid-cols-4"
     >
       <ShortcutCard
         v-for="s in shortcuts"

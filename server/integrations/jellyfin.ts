@@ -70,7 +70,7 @@ const TARGET_SCHEMA = [
 export const jellyfinIntegration: Integration = {
   id: 'jellyfin',
   name: 'Jellyfin',
-  icon: 'i-simple-icons-jellyfin',
+  img: 'https://uxwing.com/wp-content/themes/uxwing/download/brands-and-social-media/jellyfin-icon.png',
   connectionSchema: [
     {
       key: 'baseUrl',

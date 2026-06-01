@@ -164,7 +164,7 @@ async function fetchActiveUsers(config: Record<string, unknown>, signal: AbortSi
 export const googleAnalyticsIntegration: Integration = {
   id: 'google-analytics',
   name: 'Google Analytics',
-  icon: 'i-simple-icons-googleanalytics',
+  img: 'https://images.seeklogo.com/logo-png/32/1/google-analytics-logo-png_seeklogo-325027.png',
   connectionSchema: [
     {
       key: 'measurementId',

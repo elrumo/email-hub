@@ -17,8 +17,10 @@ const router = useRouter()
 
 const initialFlow = props.flow ?? props.draft ?? null
 
-const name = ref(initialFlow?.name ?? '')
-const description = ref(initialFlow?.description ?? '')
+// Name + description are edited as an inline title in the page header, so the
+// parent owns them via v-model. They still default from the flow/draft here.
+const name = defineModel<string>('name', { default: '' })
+const description = defineModel<string>('description', { default: '' })
 const enabled = ref(initialFlow?.enabled ?? true)
 // allow unauthenticated visitors of a public board to run this flow
 const publicTrigger = ref(initialFlow?.publicTrigger ?? false)
@@ -83,8 +85,8 @@ const pollTriggers = computed(() =>
 const triggerKindItems = [
   { label: 'I tap a button', value: 'manual', icon: 'i-lucide-mouse-pointer-click', hint: 'Run it on demand' },
   { label: 'On a schedule', value: 'cron', icon: 'i-lucide-clock', hint: 'Every morning, hourly…' },
-  { label: 'A webhook calls in', value: 'webhook', icon: 'i-lucide-webhook', hint: 'From GitHub, CI, anything' },
-  { label: 'A service event', value: 'poll', icon: 'i-lucide-radio', hint: 'A monitor goes down, etc.' }
+  { label: 'A webhook calls in', value: 'webhook', icon: 'i-lucide-webhook', hint: 'From GitHub, CI etc.' },
+  { label: 'A service event', value: 'poll', icon: 'i-lucide-radio', hint: 'Monitor goes down etc.' }
 ]
 
 function onTriggerKind(k: TriggerKind) {
@@ -129,7 +131,17 @@ const pollConnItems = computed(() =>
   props.connections.filter(c => c.integrationId === trigger.value.integrationId).map(c => ({ label: c.name, value: c.id }))
 )
 const pollItems = computed(() =>
-  pollTriggers.value.map(p => ({ label: `${p.integration.name}: ${p.trigger.name}`, value: `${p.integration.id}:${p.trigger.id}` }))
+  pollTriggers.value.map(p => ({
+    label: `${p.integration.name}: ${p.trigger.name}`,
+    value: `${p.integration.id}:${p.trigger.id}`,
+    icon: p.integration.icon,
+    img: p.integration.img
+  }))
+)
+const selectedPollItem = computed(() =>
+  selectedPoll.value
+    ? { icon: selectedPoll.value.integration.icon, img: selectedPoll.value.integration.img }
+    : undefined
 )
 const kumaTriggerSchema = useKumaMonitorSchema({
   enabled: computed(() => triggerKind.value === 'poll' && trigger.value.integrationId === 'kuma'),
@@ -167,6 +179,39 @@ function moveStep(i: number, dir: -1 | 1) {
   ;[copy[i], copy[j]] = [copy[j]!, copy[i]!]
   steps.value = copy
 }
+
+// ---- drag-to-reorder (native HTML5 DnD, no extra deps) ----
+const dragIndex = ref<number | null>(null)
+const dragOverIndex = ref<number | null>(null)
+function onDragStart(i: number, e: DragEvent) {
+  dragIndex.value = i
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move'
+    // Firefox requires data to be set for a drag to begin.
+    e.dataTransfer.setData('text/plain', String(i))
+  }
+}
+function onDragOver(i: number) {
+  if (dragIndex.value === null || dragIndex.value === i) return
+  dragOverIndex.value = i
+}
+function onDrop(i: number) {
+  const from = dragIndex.value
+  if (from !== null && from !== i) reorderStep(from, i)
+  dragIndex.value = null
+  dragOverIndex.value = null
+}
+function onDragEnd() {
+  dragIndex.value = null
+  dragOverIndex.value = null
+}
+function reorderStep(from: number, to: number) {
+  const copy = [...steps.value]
+  const [moved] = copy.splice(from, 1)
+  copy.splice(to, 0, moved!)
+  steps.value = copy
+}
+
 const addOpen = ref(false)
 
 // webhook url display
@@ -211,64 +256,48 @@ async function save() {
 
 <template>
   <div class="space-y-8">
-    <!-- name + meta -->
-    <UCard :ui="{ root: 'rounded-2xl' }">
-      <div class="space-y-4">
-        <UFormField
-          label="Name this flow"
-          required
-        >
-          <UInput
-            v-model="name"
-            placeholder="e.g. Morning backup check"
-            size="lg"
-            class="w-full"
-          />
-        </UFormField>
-        <UFormField
-          label="Description"
-          description="Optional — a one-line reminder of what it does."
-        >
-          <UInput
-            v-model="description"
-            placeholder="What does this flow do?"
-            class="w-full"
-          />
-        </UFormField>
-      </div>
-    </UCard>
-
     <!-- trigger -->
     <section>
-      <h2 class="mb-3 flex items-center gap-2.5 text-sm font-semibold text-highlighted">
-        <span class="flex size-6 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">1</span>
+      <h2 class="mb-3 flex items-center gap-2.5 text-lg font-semibold text-highlighted mt-4 w-full opacity-80">
+        <!-- <span class="flex size-6 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">1</span> -->
         When should this run?
       </h2>
-      <UCard :ui="{ root: 'rounded-2xl' }">
+
+      <UCard
+        :ui="{ root: 'rounded-lg' }"
+        variant="soft"
+      >
         <div class="space-y-5">
           <!-- tappable trigger-kind cards -->
           <div class="grid grid-cols-2 gap-2 lg:grid-cols-4">
-            <button
+            <UButton
               v-for="opt in triggerKindItems"
               :key="opt.value"
               type="button"
-              class="flex flex-col items-start gap-1.5 rounded-xl border p-3 text-left transition-all"
-              :class="triggerKind === opt.value
-                ? 'border-primary bg-primary/10 ring-1 ring-primary/30'
-                : 'border-default hover:border-primary/40 hover:bg-elevated'"
+              variant="soft"
+              class="rounded-md"
+              :color="triggerKind === opt.value
+                ? 'primary'
+                : 'neutral'"
               @click="onTriggerKind(opt.value as TriggerKind)"
             >
-              <UIcon
-                :name="opt.icon"
-                class="size-5"
-                :class="triggerKind === opt.value ? 'text-primary' : 'text-muted'"
-              />
-              <span
-                class="text-sm font-medium leading-tight"
-                :class="triggerKind === opt.value ? 'text-primary' : 'text-highlighted'"
-              >{{ opt.label }}</span>
-              <span class="text-xs text-muted">{{ opt.hint }}</span>
-            </button>
+              <div class="flex flex-col items-start gap-1.5 text-left py-1">
+                <UIcon
+                  :name="opt.icon"
+                  class="size-4"
+                  :class="triggerKind === opt.value ? 'text-primary' : 'text-muted'"
+                />
+
+                <span
+                  class="text-sm font-medium leading-tight"
+                  :class="triggerKind === opt.value ? 'text-primary' : 'text-highlighted'"
+                >
+                  {{ opt.label }}
+                </span>
+
+                <span class="text-xs text-muted -mt-1">{{ opt.hint }}</span>
+              </div>
+            </UButton>
           </div>
 
           <ScheduleBuilder
@@ -312,7 +341,39 @@ async function save() {
                 placeholder="Choose an event"
                 class="w-full"
                 @update:model-value="onPollSelect($event as string)"
-              />
+              >
+                <template #leading>
+                  <div
+                    v-if="selectedPollItem"
+                    class="flex items-center"
+                  >
+                    <img
+                      v-if="selectedPollItem.img"
+                      :src="selectedPollItem.img"
+                      alt=""
+                      class="size-4.5"
+                    >
+                    <UIcon
+                      v-else-if="selectedPollItem.icon"
+                      :name="selectedPollItem.icon"
+                      class="size-4 text-muted"
+                    />
+                  </div>
+                </template>
+                <template #item-leading="{ item }">
+                  <img
+                    v-if="item.img"
+                    :src="item.img"
+                    alt=""
+                    class="size-4.5"
+                  >
+                  <UIcon
+                    v-else-if="item.icon"
+                    :name="item.icon"
+                    class="size-4 text-muted"
+                  />
+                </template>
+              </USelectMenu>
             </UFormField>
             <UFormField
               v-if="selectedPoll?.trigger.needsConnection"
@@ -335,53 +396,68 @@ async function save() {
             />
           </template>
 
-          <p
+          <!-- <p
             v-else
             class="text-sm text-muted"
           >
             This flow runs only when you press “Run now”.
-          </p>
+          </p> -->
         </div>
       </UCard>
     </section>
 
     <!-- steps -->
     <section>
-      <h2 class="mb-3 flex items-center gap-2.5 text-sm font-semibold text-highlighted">
-        <span class="flex size-6 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">2</span>
+      <h2 class="mb-3 flex items-center gap-2.5 text-lg font-semibold text-highlighted w-full opacity-80">
+        <!-- <span class="flex size-6 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">2</span> -->
         Then do this…
       </h2>
 
       <div class="space-y-1">
-        <template
-          v-for="(s, i) in steps"
-          :key="s.id"
+        <TransitionGroup
+          tag="div"
+          class="relative space-y-1"
+          name="step"
         >
-          <!-- Siri-Shortcuts-style connector linking each card to the next -->
           <div
-            v-if="i > 0"
-            class="flex justify-center"
-            aria-hidden="true"
+            v-for="(s, i) in steps"
+            :key="s.id"
+            class="step-item"
+            :class="{
+              'opacity-40': dragIndex === i,
+              'ring-2 ring-primary/40 rounded-lg': dragOverIndex === i && dragIndex !== i
+            }"
+            @dragover.prevent="onDragOver(i)"
+            @drop.prevent="onDrop(i)"
           >
-            <span class="h-3 w-px bg-default" />
+            <!-- Siri-Shortcuts-style connector linking each card to the next -->
+            <div
+              v-if="i > 0"
+              class="flex justify-center"
+              aria-hidden="true"
+            >
+              <span class="h-3 w-px bg-default" />
+            </div>
+            <StepCard
+              :step="s"
+              :index="i"
+              :catalog="catalog"
+              :connections="connections"
+              @dragstart="onDragStart(i, $event)"
+              @dragend="onDragEnd"
+              @update="updateStep(i, $event)"
+              @remove="removeStep(i)"
+              @move="moveStep(i, $event)"
+            />
           </div>
-          <StepCard
-            :step="s"
-            :index="i"
-            :catalog="catalog"
-            :connections="connections"
-            @update="updateStep(i, $event)"
-            @remove="removeStep(i)"
-            @move="moveStep(i, $event)"
-          />
-        </template>
+        </TransitionGroup>
 
         <!-- friendly empty state before any actions exist -->
         <div
           v-if="steps.length === 0"
-          class="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-default px-6 py-10 text-center"
+          class="flex flex-col items-center gap-3 rounded-lg border border-dashed border-default px-6 py-10 text-center"
         >
-          <span class="flex size-11 items-center justify-center rounded-2xl bg-elevated text-dimmed">
+          <span class="flex size-11 items-center justify-center rounded-lg bg-elevated text-dimmed">
             <UIcon
               name="i-lucide-list-plus"
               class="size-5.5"
@@ -410,16 +486,18 @@ async function save() {
             :label="steps.length === 0 ? 'Add the first action' : 'Add another action'"
             color="neutral"
             :variant="steps.length === 0 ? 'solid' : 'soft'"
-            block
-            class="rounded-full"
+            class="rounded-full flex items-center justify-center mx-auto mt-3"
           />
           <template #content>
-            <div class="w-80 p-2">
-              <button
+            <div class="w-90 p-2">
+              <UButton
                 v-for="opt in STEP_TYPE_OPTIONS"
                 :key="opt.type"
-                type="button"
-                class="flex w-full items-start gap-3 rounded-lg p-2.5 text-left hover:bg-elevated"
+                size="sm"
+                block
+                color="neutral"
+                variant="ghost"
+                class="flex items-start justify-start gap-2 text-left rounded-sm"
                 @click="addStep(opt.type)"
               >
                 <UIcon
@@ -430,95 +508,95 @@ async function save() {
                   <span class="block text-sm font-medium text-highlighted">{{ opt.label }}</span>
                   <span class="block text-xs text-muted">{{ opt.help }}</span>
                 </span>
-              </button>
+              </UButton>
             </div>
           </template>
         </UPopover>
       </div>
     </section>
 
-    <!-- variables: everything the flow makes available to reference -->
-    <FlowVariables
-      :catalog="catalog"
-      :trigger="trigger"
-      :steps="steps"
-    />
+    <div class="flex flex-row items-center justify-between gap-4">
+      <!-- variables: everything the flow makes available to reference -->
+      <FlowVariables
+        :catalog="catalog"
+        :trigger="trigger"
+        :steps="steps"
+      />
 
-    <!-- options: the less-common settings, tucked away so the main path stays
-         simple (name → when → what → create) -->
-    <UCollapsible
-      :default-open="notifyOnRun !== 'never' || publicTrigger"
-      class="rounded-2xl border border-default"
-    >
-      <UButton
-        color="neutral"
-        variant="ghost"
-        block
-        trailing-icon="i-lucide-chevron-down"
-        class="group justify-between p-4"
-        :ui="{ trailingIcon: 'group-data-[state=open]:rotate-180 transition-transform' }"
-      >
-        <span class="flex items-center gap-2 text-sm font-semibold text-highlighted">
-          <UIcon
-            name="i-lucide-sliders-horizontal"
-            class="size-4 text-muted"
-          />
-          Options
-        </span>
-      </UButton>
-
-      <template #content>
-        <div class="space-y-6 border-t border-default p-4">
-          <!-- notify on run -->
-          <div class="space-y-3">
-            <div class="flex items-center gap-2 text-sm font-medium text-highlighted">
-              <UIcon
-                name="i-lucide-bell"
-                class="size-4 text-muted"
-              />
-              Notify me when it runs
-            </div>
-            <USelect
-              v-model="notifyOnRun"
-              :items="notifyItems"
-              class="w-full"
+      <!-- options: the less-common settings, tucked away so the main path stays
+          simple (name → when → what → create) -->
+      <UPopover>
+        <UButton
+          color="neutral"
+          variant="soft"
+          block
+          size="sm"
+          trailing-icon="i-lucide-chevron-down"
+          class="group justify-between rounded-sm"
+          :ui="{ trailingIcon: 'group-data-[state=open]:rotate-180 transition-transform' }"
+        >
+          <span class="flex items-center gap-2 text-sm font-semibold text-highlighted">
+            <UIcon
+              name="i-lucide-sliders-horizontal"
+              class="size-4 text-muted"
             />
-            <p class="text-xs text-muted">
-              Sends a browser notification to every device that has notifications turned on (the bell in the top bar).
-            </p>
-            <UAlert
-              v-if="notifyOnRun !== 'never' && pushSupported && !pushEnabled"
-              color="warning"
-              variant="soft"
-              icon="i-lucide-bell-off"
-              title="Notifications are off on this device"
-              description="Turn them on with the bell in the top bar to receive these on this browser."
-              :ui="{ description: 'text-xs' }"
-            />
-          </div>
+            Options
+          </span>
+        </UButton>
 
-          <!-- public triggering -->
-          <div class="flex items-start justify-between gap-4 border-t border-default pt-5">
-            <div class="space-y-1">
-              <p class="flex items-center gap-2 text-sm font-medium text-highlighted">
+        <template #content>
+          <div class="space-y-6 border-t border-default p-4">
+            <!-- notify on run -->
+            <div class="space-y-3">
+              <div class="flex items-center gap-2 text-sm font-medium text-highlighted">
                 <UIcon
-                  name="i-lucide-globe"
+                  name="i-lucide-bell"
                   class="size-4 text-muted"
                 />
-                Public triggering
+                Notify me when it runs
+              </div>
+              <USelect
+                v-model="notifyOnRun"
+                :items="notifyItems"
+                class="w-full"
+              />
+              <p class="text-xs text-muted">
+                Sends a browser notification to every device that has notifications turned on (the bell in the top bar).
               </p>
-              <p class="text-sm text-muted">
-                Let unauthenticated visitors run this flow when it appears on a public board.
-              </p>
-              <p class="text-xs text-dimmed">
-                A board marked “public trigger” overrides this and enables it for every flow on that board.
-              </p>
+              <UAlert
+                v-if="notifyOnRun !== 'never' && pushSupported && !pushEnabled"
+                color="warning"
+                variant="soft"
+                icon="i-lucide-bell-off"
+                title="Notifications are off on this device"
+                description="Turn them on with the bell in the top bar to receive these on this browser."
+                :ui="{ description: 'text-xs' }"
+              />
             </div>
-            <USwitch v-model="publicTrigger" />
+
+            <!-- public triggering -->
+            <div class="flex items-start justify-between gap-4 border-t border-default pt-5">
+              <div class="space-y-1">
+                <p class="flex items-center gap-2 text-sm font-medium text-highlighted">
+                  <UIcon
+                    name="i-lucide-globe"
+                    class="size-4 text-muted"
+                  />
+                  Public triggering
+                </p>
+                <p class="text-sm text-muted">
+                  Let unauthenticated visitors run this flow when it appears on a public board.
+                </p>
+                <p class="text-xs text-dimmed">
+                  A board marked “public trigger” overrides this and enables it for every flow on that board.
+                </p>
+              </div>
+              <USwitch v-model="publicTrigger" />
+            </div>
           </div>
-        </div>
-      </template>
-    </UCollapsible>
+        </template>
+      </UPopover>
+    </div>
 
     <!-- footer actions -->
     <div
@@ -553,3 +631,27 @@ async function save() {
     />
   </div>
 </template>
+
+<style scoped>
+/* New steps fade + slide in; reordering animates positions via FLIP. */
+.step-enter-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.step-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  /* take the leaving node out of flow so siblings glide up */
+  position: absolute;
+  width: 100%;
+}
+.step-enter-from {
+  opacity: 0;
+  transform: translateY(-8px) scale(0.97);
+}
+.step-leave-to {
+  opacity: 0;
+  transform: translateY(-8px) scale(0.97);
+}
+.step-move {
+  transition: transform 0.25s ease;
+}
+</style>

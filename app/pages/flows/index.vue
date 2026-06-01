@@ -203,7 +203,7 @@ async function onImported(flowId: string) {
     <!-- the colourful tile wall -->
     <div
       v-else
-      class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4"
+      class="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5"
     >
       <FlowCard
         v-for="f in filteredFlows"
@@ -225,18 +225,12 @@ async function onImported(flowId: string) {
          always-available fallback so there's never an empty discover area. -->
     <section class="mt-12 space-y-8">
       <!-- Claude-style AI launcher -->
-      <div class="rounded-3xl border border-default bg-default p-4 sm:p-5">
+      <div class="rounded-xl bg-default p-4 sm:p-5">
         <div class="mb-3 flex items-start gap-2.5">
-          <span class="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-            <UIcon
-              name="i-lucide-sparkles"
-              class="size-4"
-            />
-          </span>
           <div>
-            <p class="text-sm font-semibold text-highlighted">
+            <!-- <p class="text-sm font-semibold text-highlighted">
               Build a flow with AI
-            </p>
+            </p> -->
             <p class="text-sm text-muted">
               Describe what you want to automate — I’ll pick monitors and conditions with you, then draft it.
             </p>

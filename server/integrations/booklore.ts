@@ -65,7 +65,7 @@ const TARGET_SCHEMA = [
 export const bookloreIntegration: Integration = {
   id: 'booklore',
   name: 'BookLore',
-  icon: 'i-lucide-book-open-text',
+  img: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/booklore.png',
   connectionSchema: [
     {
       key: 'baseUrl',

@@ -93,7 +93,7 @@ async function installFromMarketplace(slug: string) {
 }
 
 // ── add your own: paste JSON / install from URL ──────────────────────────────
-const addMode = ref<'json' | 'url'>('json')
+const addMode = ref<'json' | 'url'>('url')
 const defText = ref('')
 const defUrl = ref('')
 const addingConnector = ref(false)
@@ -321,15 +321,50 @@ function metaFor(integrationId: string) {
   return catalog.value.find(i => i.id === integrationId)
 }
 
-function openAdd() {
+function openAdd(integrationId?: string) {
   editing.value = null
-  selectedIntegrationId.value = catalog.value[0]?.id ?? ''
+  selectedIntegrationId.value = integrationId ?? catalog.value[0]?.id ?? ''
   name.value = ''
   config.value = {}
   resetAiModels()
   testResult.value = null
   open.value = true
 }
+
+// Native (built-in) services shown first in Browse. These come from the catalog
+// and aren't community marketplace connectors; clicking one opens the
+// add-connection modal preselected on that service.
+const nativeIntegrations = computed(() =>
+  catalog.value.filter(i => !marketplaceIntegrationIds.value.has(i.id))
+)
+
+// How many saved connections exist per native integration, so a Browse card can
+// show "Connected" with a count instead of just "Connect".
+const connectionCountByIntegration = computed(() => {
+  const counts: Record<string, number> = {}
+  for (const c of connections.value) {
+    counts[c.integrationId] = (counts[c.integrationId] ?? 0) + 1
+  }
+  return counts
+})
+
+// Community connectors, minus the ones that just duplicate a native service.
+// Marketplace slugs follow "<base>-community" and titles "<Name> (community)";
+// a connector is redundant when its base slug matches a native integration id,
+// or its base title matches a native name (case-insensitive).
+function normalize(s: string) {
+  return s.trim().toLowerCase().replace(/\s*\(community\)\s*$/, '').replace(/-community$/, '')
+}
+const communityConnectors = computed(() => {
+  const nativeKeys = new Set<string>()
+  for (const i of nativeIntegrations.value) {
+    nativeKeys.add(normalize(i.id))
+    nativeKeys.add(normalize(i.name))
+  }
+  return market.value.connectors.filter(c =>
+    !nativeKeys.has(normalize(c.slug)) && !nativeKeys.has(normalize(c.title))
+  )
+})
 
 function openEdit(c: Connection) {
   editing.value = c
@@ -353,6 +388,17 @@ async function save() {
         method: 'PUT',
         body: { name: name.value, config: config.value }
       })
+      // Only one AI connection can be the assist default — clear it on the
+      // others when this one was just marked as the default.
+      if (selectedIntegrationId.value === 'ai' && config.value.defaultForAssist === true) {
+        const others = connections.value.filter(c => c.integrationId === 'ai' && c.id !== editing.value!.id)
+        await Promise.all(others.map(c =>
+          $fetch(`/api/connections/${c.id}`, {
+            method: 'PUT',
+            body: { name: c.name, config: { ...c.config, defaultForAssist: false } }
+          })
+        ))
+      }
     } else {
       await $fetch('/api/connections', {
         method: 'POST',
@@ -367,28 +413,6 @@ async function save() {
     toast.add({ title: msg, color: 'error' })
   } finally {
     saving.value = false
-  }
-}
-
-// Mark one AI connection as the default for the flow assistant (stored as
-// config.defaultForAssist). Setting it on one clears it on the others. Redacted
-// secrets are merged back server-side, so sending the redacted config is safe.
-const settingDefault = ref<string | null>(null)
-async function setAssistDefault(target: Connection) {
-  settingDefault.value = target.id
-  try {
-    const ai = connections.value.filter(c => c.integrationId === 'ai')
-    await Promise.all(ai.map(c =>
-      $fetch(`/api/connections/${c.id}`, {
-        method: 'PUT',
-        body: { name: c.name, config: { ...c.config, defaultForAssist: c.id === target.id } }
-      })
-    ))
-    await refresh()
-  } catch (e: unknown) {
-    toast.add({ title: (e as { data?: { statusMessage?: string } })?.data?.statusMessage || 'Could not update default', color: 'error' })
-  } finally {
-    settingDefault.value = null
   }
 }
 
@@ -418,6 +442,55 @@ async function toggleConnector(c: ConnectorRow) {
     toast.add({ title: errMsg(e, 'Update failed'), color: 'error' })
   }
 }
+
+// ── edit an installed connector's definition ─────────────────────────────────
+// The list endpoint returns metadata only; the full editable `def` lives at
+// GET /api/connectors/:id. Load it as JSON, let the user tweak it, then PUT it
+// back. The connectorId is immutable server-side, so we keep def.id as-is.
+const connectorEditOpen = ref(false)
+const connectorEditTarget = ref<ConnectorRow | null>(null)
+const connectorEditText = ref('')
+const connectorEditLoading = ref(false)
+const connectorEditSaving = ref(false)
+
+async function openConnectorEdit(c: ConnectorRow) {
+  connectorEditTarget.value = c
+  connectorEditText.value = ''
+  connectorEditOpen.value = true
+  connectorEditLoading.value = true
+  try {
+    const full = await $fetch<{ def: unknown }>(`/api/connectors/${c.id}`)
+    connectorEditText.value = JSON.stringify(full.def, null, 2)
+  } catch (e) {
+    toast.add({ title: errMsg(e, 'Could not load connector'), color: 'error' })
+    connectorEditOpen.value = false
+  } finally {
+    connectorEditLoading.value = false
+  }
+}
+
+async function saveConnectorEdit() {
+  if (!connectorEditTarget.value) return
+  let def: unknown
+  try {
+    def = JSON.parse(connectorEditText.value)
+  } catch {
+    toast.add({ title: 'That is not valid JSON', color: 'error' })
+    return
+  }
+  connectorEditSaving.value = true
+  try {
+    await $fetch(`/api/connectors/${connectorEditTarget.value.id}`, { method: 'PUT', body: { def } })
+    connectorEditOpen.value = false
+    connectorEditTarget.value = null
+    await Promise.all([refreshConnectors(), refreshMarket(), refreshNuxtData('integrations')])
+    toast.add({ title: 'Connector updated', color: 'success' })
+  } catch (e) {
+    toast.add({ title: errMsg(e, 'Update failed'), color: 'error' })
+  } finally {
+    connectorEditSaving.value = false
+  }
+}
 </script>
 
 <template>
@@ -431,13 +504,13 @@ async function toggleConnector(c: ConnectorRow) {
           Your saved credentials for each service, plus the community marketplace for new connectors and flows.
         </p>
       </div>
-      <UButton
+      <!-- <UButton
         v-if="tab === 'connections'"
         icon="i-lucide-plus"
         label="Add connection"
         class="self-start"
-        @click="openAdd"
-      />
+        @click="openAdd()"
+      /> -->
     </div>
 
     <UTabs
@@ -470,13 +543,13 @@ async function toggleConnector(c: ConnectorRow) {
         <UButton
           icon="i-lucide-plus"
           label="Add connection"
-          @click="openAdd"
+          @click="openAdd()"
         />
       </div>
 
       <div
         v-else
-        class="grid gap-3 sm:grid-cols-2"
+        class="grid gap-3 sm:grid-cols-3"
       >
         <UCard
           v-for="c in connections"
@@ -484,7 +557,7 @@ async function toggleConnector(c: ConnectorRow) {
           variant="sm"
           :ui="{ body: 'flex items-center gap-3' }"
         >
-          <div class="flex items-center gap-2 group w-full">
+          <div class="flex items-center gap-2 group w-full relative">
             <span class="flex size-10 shrink-0 items-center justify-center rounded-md bg-elevated">
               <UIcon
                 v-if="metaFor(c.integrationId)?.icon"
@@ -499,16 +572,25 @@ async function toggleConnector(c: ConnectorRow) {
               >
             </span>
 
-            <div class="min-w-0 flex-1">
-              <div class="flex items-center gap-1.5">
+            <div class="min-w-0 flex-1 group-hover:pr-4 transition-all">
+              <div class="flex items-center gap-2">
                 <p class="truncate font-medium text-highlighted">
                   {{ c.name }}
                 </p>
+
+                <UBadge
+                  v-if="c.integrationId === 'ai' && c.config?.defaultForAssist === true"
+                  label="AI default"
+                  color="primary"
+                  variant="soft"
+                  size="sm"
+                  icon="i-lucide-sparkles"
+                />
                 <UBadge
                   v-if="isMarketplaceConnection(c)"
                   label="marketplace"
                   color="primary"
-                  variant="subtle"
+                  variant="soft"
                   size="sm"
                 />
               </div>
@@ -517,21 +599,7 @@ async function toggleConnector(c: ConnectorRow) {
               </p>
             </div>
 
-            <UTooltip
-              v-if="c.integrationId === 'ai'"
-              text="Use for AI assist by default"
-            >
-              <USwitch
-                :model-value="c.config?.defaultForAssist === true"
-                size="sm"
-                :loading="settingDefault === c.id"
-                :disabled="settingDefault !== null"
-                aria-label="Use for AI assist by default"
-                @update:model-value="setAssistDefault(c)"
-              />
-            </UTooltip>
-
-            <div class="reveal-on-hover flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div class="absolute top-1/2 -translate-y-1/2 -right-4 flex items-center gap-1 opacity-0 group-hover:opacity-100 group-hover:-translate-x-4 transition-all">
               <UButton
                 icon="i-lucide-pencil"
                 color="neutral"
@@ -558,7 +626,7 @@ async function toggleConnector(c: ConnectorRow) {
          new service you can then create connections for. -->
       <div
         v-if="userConnectors.length"
-        class="mt-12"
+        class="mt-8"
       >
         <div class="mb-4 flex items-center justify-between gap-4">
           <div>
@@ -610,6 +678,14 @@ async function toggleConnector(c: ConnectorRow) {
                   @update:model-value="toggleConnector(c)"
                 />
                 <UButton
+                  icon="i-lucide-pencil"
+                  color="neutral"
+                  variant="ghost"
+                  size="sm"
+                  aria-label="Edit connector"
+                  @click="openConnectorEdit(c)"
+                />
+                <UButton
                   icon="i-lucide-trash-2"
                   color="error"
                   variant="ghost"
@@ -624,14 +700,84 @@ async function toggleConnector(c: ConnectorRow) {
       </div>
     </div>
 
-    <!-- ── Browse tab: community marketplace ──────────────────────────────── -->
+    <!-- ── Browse tab: native services first, then community marketplace ────── -->
     <div v-else-if="tab === 'browse'">
+      <!-- native (built-in) services: click to add a connection -->
       <h2 class="mb-3 text-sm font-medium text-highlighted">
         Connectors
       </h2>
       <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <div
-          v-for="c in market.connectors"
+          v-for="i in nativeIntegrations"
+          :key="i.id"
+          class="flex flex-col gap-3 rounded-lg border border-default p-4"
+        >
+          <div class="flex items-start gap-3">
+            <img
+              v-if="i.img"
+              :src="i.img"
+              :alt="i.name"
+              class="size-8 rounded"
+            >
+            <UIcon
+              v-else
+              :name="i.icon || 'i-lucide-plug'"
+              class="size-8 text-dimmed"
+            />
+            <div class="min-w-0 flex-1">
+              <div class="min-w-0 flex-1 flex flex-row items-center justify-between gap-1">
+                <p class="truncate font-medium text-highlighted flex-1">
+                  {{ i.name }}
+                </p>
+                <UButton
+                  v-if="connectionCountByIntegration[i.id]"
+                  :label="`Connected · ${connectionCountByIntegration[i.id]}`"
+                  color="neutral"
+                  variant="soft"
+                  size="xs"
+                  @click="openAdd(i.id)"
+                />
+                <UButton
+                  v-if="connectionCountByIntegration[i.id]"
+                  icon="i-lucide-plus"
+                  color="neutral"
+                  variant="soft"
+                  size="xs"
+                  @click="openAdd(i.id)"
+                />
+                <UButton
+                  v-else
+                  label="Connect"
+                  icon="i-lucide-plus"
+                  size="xs"
+                  @click="openAdd(i.id)"
+                />
+              </div>
+              <p class="truncate text-xs text-muted">
+                {{ i.actions.length }} action{{ i.actions.length === 1 ? '' : 's' }}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- community marketplace connectors (those duplicating a native service
+         are hidden) -->
+      <h2 class="mb-3 mt-8 text-sm font-medium text-highlighted">
+        Community
+      </h2>
+      <div
+        v-if="communityConnectors.length === 0"
+        class="rounded-lg border border-dashed border-default p-6 text-center text-sm text-muted"
+      >
+        No community connectors beyond the built-in ones yet. Add your own under the “Add your own” tab.
+      </div>
+      <div
+        v-else
+        class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+      >
+        <div
+          v-for="c in communityConnectors"
           :key="c.slug"
           class="flex flex-col gap-3 rounded-lg border border-default p-4"
         >
@@ -648,9 +794,36 @@ async function toggleConnector(c: ConnectorRow) {
               class="size-8 text-dimmed"
             />
             <div class="min-w-0 flex-1">
-              <p class="truncate font-medium text-highlighted">
-                {{ c.title }}
-              </p>
+              <div class="min-w-0 flex-1 flex flex-row items-center justify-between gap-1">
+                <div class="min-w-0 flex-1 flex items-center gap-1.5">
+                  <p class="truncate font-medium text-highlighted">
+                    {{ c.title }}
+                  </p>
+                  <UBadge
+                    label="community"
+                    color="primary"
+                    variant="subtle"
+                    size="sm"
+                  />
+                </div>
+                <UButton
+                  v-if="c.installed"
+                  label="Installed"
+                  icon="i-lucide-check"
+                  color="neutral"
+                  variant="soft"
+                  size="xs"
+                  disabled
+                />
+                <UButton
+                  v-else
+                  label="Install"
+                  icon="i-lucide-download"
+                  size="xs"
+                  :loading="installingSlug === c.slug"
+                  @click="installFromMarketplace(c.slug)"
+                />
+              </div>
               <p class="truncate text-xs text-muted">
                 {{ c.author ? `by ${c.author} · ` : '' }}{{ c.actionCount }} action{{ c.actionCount === 1 ? '' : 's' }}
               </p>
@@ -659,25 +832,6 @@ async function toggleConnector(c: ConnectorRow) {
           <p class="line-clamp-2 text-sm text-muted">
             {{ c.summary }}
           </p>
-          <UButton
-            v-if="c.installed"
-            label="Installed"
-            icon="i-lucide-check"
-            color="neutral"
-            variant="soft"
-            size="sm"
-            disabled
-            block
-          />
-          <UButton
-            v-else
-            label="Install"
-            icon="i-lucide-download"
-            size="sm"
-            block
-            :loading="installingSlug === c.slug"
-            @click="installFromMarketplace(c.slug)"
-          />
         </div>
       </div>
 
@@ -731,25 +885,29 @@ async function toggleConnector(c: ConnectorRow) {
     <!-- ── Add your own tab ───────────────────────────────────────────────── -->
     <div
       v-else
-      class="max-w-2xl space-y-6 mx-auto"
+      class="flex flex-col md:flex-row md:items-start gap-5"
     >
-      <div class="rounded-lg border border-default p-5">
+      <div class="flex flex-col items-center rounded-lg border border-default p-5 flex-1">
         <h2 class="font-medium text-highlighted">
           Install a connector
         </h2>
-        <p class="mt-1 mb-4 text-sm text-muted">
+
+        <p class="mt-1 mb-4 text-sm text-muted text-center">
           Paste a connector definition (JSON), or install one from a URL.
         </p>
+
         <UTabs
           v-model="addMode"
           :items="[
-            { label: 'Paste JSON', value: 'json', icon: 'i-lucide-code' },
-            { label: 'From URL', value: 'url', icon: 'i-lucide-link' }
+            { label: 'From URL', value: 'url', icon: 'i-lucide-link' },
+            { label: 'Paste JSON', value: 'json', icon: 'i-lucide-code' }
           ]"
           :content="false"
-          size="sm"
+          color="neutral"
+          size="xs"
           class="mb-4"
         />
+
         <UTextarea
           v-if="addMode === 'json'"
           v-model="defText"
@@ -757,6 +915,7 @@ async function toggleConnector(c: ConnectorRow) {
           placeholder="Paste a connector definition (JSON)…"
           class="w-full font-mono text-xs"
         />
+
         <UInput
           v-else
           v-model="defUrl"
@@ -765,11 +924,12 @@ async function toggleConnector(c: ConnectorRow) {
           variant="soft"
           size="sm"
         />
+
         <UButton
           label="Install connector"
           icon="i-lucide-download"
           class="mt-4 mx-auto"
-          size="sm"
+          size="md"
           variant="soft"
           :loading="addingConnector"
           :disabled="addMode === 'json' ? !defText.trim() : !defUrl.trim()"
@@ -777,11 +937,11 @@ async function toggleConnector(c: ConnectorRow) {
         />
       </div>
 
-      <div class="rounded-lg border border-default p-5">
+      <div class="flex flex-col items-center rounded-lg border border-default p-5 flex-1">
         <h2 class="font-medium text-highlighted">
           Generate from an API spec
         </h2>
-        <p class="mt-1 mb-4 text-sm text-muted">
+        <p class="mt-1 mb-4 text-sm text-muted text-center">
           Turn an OpenAPI / Swagger document into a connector — every endpoint becomes a flow action.
         </p>
         <UButton
@@ -789,7 +949,7 @@ async function toggleConnector(c: ConnectorRow) {
           icon="i-lucide-wand-2"
           variant="soft"
           size="sm"
-          class="mx-auto"
+          class="mt-2 mx-auto"
           @click="importOpen = true"
         />
       </div>
@@ -866,6 +1026,21 @@ async function toggleConnector(c: ConnectorRow) {
             v-model="config"
             :schema="connectionSchema"
           />
+
+          <template v-if="editing && selectedIntegrationId === 'ai'">
+            <USeparator />
+            <UFormField
+              label="Use for AI assist by default"
+              description="Make this the connection the flow assistant uses. Setting it here clears the default on your other AI connections."
+            >
+              <USwitch
+                :model-value="config.defaultForAssist === true"
+                size="sm"
+                aria-label="Use for AI assist by default"
+                @update:model-value="(v) => (config.defaultForAssist = v)"
+              />
+            </UFormField>
+          </template>
 
           <UAlert
             v-if="selectedIntegrationId === 'ai' && aiModelsError"
@@ -962,6 +1137,51 @@ async function toggleConnector(c: ConnectorRow) {
           label="Remove"
           color="error"
           @click="confirmConnectorDelete"
+        />
+      </template>
+    </UModal>
+
+    <!-- connector edit: tweak the installed connector's definition (JSON) -->
+    <UModal
+      v-model:open="connectorEditOpen"
+      :title="connectorEditTarget ? `Edit “${connectorEditTarget.name}”` : 'Edit connector'"
+      :ui="{ footer: 'justify-end' }"
+    >
+      <template #body>
+        <div class="space-y-3">
+          <p class="text-sm text-muted">
+            Edit the connector definition. The connector id can’t change — flows and connections that reference it would break.
+          </p>
+          <div
+            v-if="connectorEditLoading"
+            class="flex items-center justify-center py-12 text-muted"
+          >
+            <UIcon
+              name="i-lucide-loader-circle"
+              class="size-5 animate-spin"
+            />
+          </div>
+          <UTextarea
+            v-else
+            v-model="connectorEditText"
+            :rows="16"
+            class="w-full font-mono text-xs"
+            spellcheck="false"
+          />
+        </div>
+      </template>
+      <template #footer>
+        <UButton
+          label="Cancel"
+          color="neutral"
+          variant="outline"
+          @click="connectorEditOpen = false"
+        />
+        <UButton
+          label="Save"
+          :loading="connectorEditSaving"
+          :disabled="connectorEditLoading || !connectorEditText.trim()"
+          @click="saveConnectorEdit"
         />
       </template>
     </UModal>

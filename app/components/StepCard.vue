@@ -16,6 +16,8 @@ const emit = defineEmits<{
   update: [FlowStep]
   remove: []
   move: [dir: -1 | 1]
+  dragstart: [DragEvent]
+  dragend: [DragEvent]
 }>()
 
 const expanded = ref(props.step.type === 'action' && !(props.step as ActionStep).actionId)
@@ -30,7 +32,7 @@ const accent = computed(() => stepAccent(props.step))
 // ---- action step helpers ----
 const asAction = computed(() => props.step as ActionStep)
 const integrationItems = computed(() =>
-  props.catalog.map(i => ({ label: i.name, value: i.id, icon: i.icon }))
+  props.catalog.map(i => ({ label: i.name, value: i.id, icon: i.icon, img: i.img }))
 )
 const currentIntegration = computed<IntegrationMeta | undefined>(() =>
   props.catalog.find(i => i.id === asAction.value.integrationId)
@@ -114,7 +116,7 @@ const templateVariableKeys = computed(() =>
   selectedTemplate.value ? extractTemplateVariables(selectedTemplate.value.document) : []
 )
 const configuredTemplateVariables = computed(() => {
-  const raw = asAction.value.input.templateVariables
+  const raw = asAction.value.input?.templateVariables
   return raw && typeof raw === 'object' && !Array.isArray(raw)
     ? raw as Record<string, unknown>
     : {}
@@ -181,18 +183,30 @@ const showGate = computed(() => showAmount.value)
 
 <template>
   <div
-    class="overflow-hidden rounded-2xl border border-default bg-default shadow-sm transition-shadow hover:shadow-md"
+    class="group/step overflow-hidden rounded-lg border border-default bg-default shadow-sm transition-shadow hover:shadow-md"
     :class="depth ? 'border-dashed' : ''"
   >
     <!-- header row -->
     <div class="flex items-center gap-3 px-3 py-2.5">
       <span
-        class="flex size-9 shrink-0 items-center justify-center rounded-xl shadow-sm"
+        draggable="true"
+        class="flex shrink-0 cursor-grab text-dimmed opacity-0 transition-opacity group-hover/step:opacity-100 active:cursor-grabbing"
+        aria-label="Drag to reorder"
+        @dragstart="emit('dragstart', $event)"
+        @dragend="emit('dragend', $event)"
+      >
+        <UIcon
+          name="i-lucide-grip-vertical"
+          class="size-4"
+        />
+      </span>
+      <span
+        class="flex size-7 shrink-0 items-center justify-center rounded-xl shadow-sm"
         :class="accent.tile"
       >
         <UIcon
           :name="accent.icon"
-          class="size-4.5"
+          class="size-4"
         />
       </span>
       <button
@@ -249,7 +263,7 @@ const showGate = computed(() => showAmount.value)
     <!-- expanded body -->
     <div
       v-if="expanded"
-      class="space-y-4 border-t border-default px-4 py-4"
+      class="space-y-4 px-4 pb-4 pt-2"
     >
       <!-- ACTION -->
       <template v-if="step.type === 'action'">
@@ -262,7 +276,39 @@ const showGate = computed(() => showAmount.value)
               placeholder="Choose a service"
               class="w-full"
               @update:model-value="setIntegration($event as string)"
-            />
+            >
+              <template #leading>
+                <div
+                  v-if="currentIntegration"
+                  class="flex items-center"
+                >
+                  <img
+                    v-if="currentIntegration?.img"
+                    :src="currentIntegration.img"
+                    alt=""
+                    class="size-4.5"
+                  >
+                  <UIcon
+                    v-else-if="currentIntegration?.icon"
+                    :name="currentIntegration.icon"
+                    class="size-4 text-muted"
+                  />
+                </div>
+              </template>
+              <template #item-leading="{ item }">
+                <img
+                  v-if="item.img"
+                  :src="item.img"
+                  alt=""
+                  class="size-4.5"
+                >
+                <UIcon
+                  v-else-if="item.icon"
+                  :name="item.icon"
+                  class="size-4 text-muted"
+                />
+              </template>
+            </USelectMenu>
           </UFormField>
           <UFormField label="Action">
             <USelectMenu

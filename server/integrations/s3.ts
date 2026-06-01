@@ -59,7 +59,7 @@ function requireKey(ctx: ActionContext): string {
 export const s3Integration: Integration = {
   id: 's3',
   name: 'MinIO / S3',
-  icon: 'i-simple-icons-minio',
+  img: 'https://img.logo.dev/name/Minio?token=pk_IfeEO2FvQ2uFp8XsvXUPUw&retina=true',
   connectionSchema: [
     {
       key: 'endpoint',

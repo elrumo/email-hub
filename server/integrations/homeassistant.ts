@@ -118,7 +118,7 @@ export async function discoverHomeAssistant(
 export const homeAssistantIntegration: Integration = {
   id: 'homeassistant',
   name: 'Home Assistant',
-  icon: 'i-simple-icons-homeassistant',
+  img: 'https://img.logo.dev/name/Home%20Assistant?token=pk_IfeEO2FvQ2uFp8XsvXUPUw&retina=true',
   connectionSchema: [
     {
       key: 'baseUrl',

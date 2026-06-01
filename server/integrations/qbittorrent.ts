@@ -138,7 +138,7 @@ const TARGET_SCHEMA = [
 export const qbittorrentIntegration: Integration = {
   id: 'qbittorrent',
   name: 'qBittorrent',
-  icon: 'i-simple-icons-qbittorrent',
+  img: 'https://img.logo.dev/name/qBittorrent?token=pk_IfeEO2FvQ2uFp8XsvXUPUw&retina=true',
   connectionSchema: [
     {
       key: 'baseUrl',

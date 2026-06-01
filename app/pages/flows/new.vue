@@ -24,6 +24,18 @@ if (aiDraft) pendingDraft.value = null
 
 const draft = computed(() => aiDraft ?? buildFlowExampleDraft(selectedExampleId.value))
 
+// Name + description are edited inline in the header. They default from the
+// draft (AI/template) and otherwise to a friendly "New flow" title, which the
+// user can click to rename. Re-seed when the draft changes (e.g. picking a
+// template) so the header reflects the new starting point.
+const DEFAULT_NAME = 'New flow'
+const name = ref(draft.value?.name || DEFAULT_NAME)
+const description = ref(draft.value?.description || '')
+watch(draft, (d) => {
+  name.value = d?.name || DEFAULT_NAME
+  description.value = d?.description || ''
+})
+
 function clearExample() {
   const query = { ...route.query }
   delete query.example
@@ -36,20 +48,17 @@ function clearExample() {
 const startFrom = computed(() => {
   if (aiDraft) {
     return {
-      icon: 'i-lucide-sparkles',
       title: 'Drafted by the assistant',
       body: 'Prefilled from your chat. Review and tweak every step, then save.'
     }
   }
   if (selectedExample.value) {
     return {
-      icon: selectedExample.value.icon,
       title: `Starting from “${selectedExample.value.name}”`,
       body: 'Prefilled from a template. Swap in your connections and adjust anything before you save.'
     }
   }
   return {
-    icon: 'i-lucide-wand-2',
     title: 'A blank flow',
     body: 'Pick when it runs, then add what it should do. You can also browse templates on the Flows page.'
   }
@@ -57,8 +66,8 @@ const startFrom = computed(() => {
 </script>
 
 <template>
-  <UContainer class="max-w-3xl py-10 sm:py-14">
-    <div class="mb-6">
+  <UContainer class="max-w-5xl flex flex-col md:flex-row gap-5 items-start md:gap-10 pb-8 pt-6">
+    <div class="mb-6 min-w-0 flex-1 flex-col flex">
       <UButton
         to="/flows"
         icon="i-lucide-arrow-left"
@@ -66,24 +75,18 @@ const startFrom = computed(() => {
         color="neutral"
         variant="ghost"
         size="sm"
-        class="-ml-2 mb-3"
+        class="-ml-2 mb-3 self-start"
       />
-      <h1 class="text-xl font-semibold tracking-tight text-highlighted">
-        New flow
-      </h1>
-      <p class="mt-1 text-sm text-muted">
-        A flow is just a trigger — <span class="text-highlighted">when</span> it runs — and a short list of actions — <span class="text-highlighted">what</span> it does.
-      </p>
+      <!-- name + description: click the title to rename, defaults to "New flow" -->
+      <FlowTitleEditor
+        v-model:name="name"
+        v-model:description="description"
+        placeholder="New flow"
+      />
     </div>
 
     <!-- where this flow is starting from -->
-    <div class="mb-8 flex items-start gap-3 rounded-2xl border border-default bg-elevated/40 p-4">
-      <span class="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/15">
-        <UIcon
-          :name="startFrom.icon"
-          class="size-5"
-        />
-      </span>
+    <!-- <div class="mb-8 flex items-start gap-3">
       <div class="min-w-0 flex-1">
         <p class="text-sm font-medium text-highlighted">
           {{ startFrom.title }}
@@ -102,10 +105,12 @@ const startFrom = computed(() => {
         class="shrink-0"
         @click="clearExample"
       />
-    </div>
+    </div> -->
 
     <FlowBuilder
       :key="selectedExampleId ?? 'blank'"
+      v-model:name="name"
+      v-model:description="description"
       :catalog="catalog"
       :connections="connections"
       :flow="null"

@@ -13,7 +13,7 @@ const meta = computed(() => {
 
 <template>
   <span
-    class="inline-flex items-center gap-1.5 text-xs text-muted"
+    class="inline-flex items-center gap-1.5 text-[11px] text-muted truncate"
     :title="meta.label"
   >
     <span

@@ -156,7 +156,7 @@ const TARGET_SCHEMA = [
 export const servarrIntegration: Integration = {
   id: 'servarr',
   name: 'Servarr (Radarr / Sonarr / …)',
-  icon: 'i-simple-icons-sonarr',
+  img: 'https://avatars.githubusercontent.com/u/57051827?s=200&v=4',
   connectionSchema: [
     {
       key: 'provider',

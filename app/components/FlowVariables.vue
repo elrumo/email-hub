@@ -26,16 +26,14 @@ async function copy(ref: string) {
 </script>
 
 <template>
-  <UCollapsible
-    :default-open="false"
-    class="rounded-2xl border border-default"
-  >
+  <UPopover>
     <UButton
       color="neutral"
-      variant="ghost"
+      variant="soft"
       block
+      size="sm"
       trailing-icon="i-lucide-chevron-down"
-      class="group justify-between p-4"
+      class="group justify-between rounded-sm"
       :ui="{ trailingIcon: 'group-data-[state=open]:rotate-180 transition-transform' }"
     >
       <span class="flex items-center gap-2 text-sm font-semibold text-highlighted">
@@ -53,11 +51,7 @@ async function copy(ref: string) {
     </UButton>
 
     <template #content>
-      <div class="space-y-5 border-t border-default p-4">
-        <p class="text-xs text-muted">
-          Values your flow produces. Tap one to copy its reference, then paste it into any field below — like a magic variable.
-        </p>
-
+      <div class="space-y-5 p-4">
         <div
           v-for="g in groups"
           :key="g.key"
@@ -88,6 +82,10 @@ async function copy(ref: string) {
           </div>
         </div>
 
+        <p class="text-xs text-muted">
+          Values your flow produces. Tap one to copy its reference, then paste it into any field below — like a magic variable.
+        </p>
+
         <p
           v-if="groups.length === 0"
           class="text-xs text-dimmed"
@@ -96,5 +94,5 @@ async function copy(ref: string) {
         </p>
       </div>
     </template>
-  </UCollapsible>
+  </UPopover>
 </template>

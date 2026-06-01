@@ -71,7 +71,7 @@ const TARGET_SCHEMA = [
 export const komgaIntegration: Integration = {
   id: 'komga',
   name: 'Komga',
-  icon: 'i-simple-icons-komga',
+  img: 'https://komga.org/img/logo.svg',
   connectionSchema: [
     {
       key: 'baseUrl',

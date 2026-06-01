@@ -107,7 +107,7 @@ function fmtDuration(seconds: number | null | undefined): string {
 export const plausibleIntegration: Integration = {
   id: 'plausible',
   name: 'Plausible Analytics',
-  icon: 'i-simple-icons-plausibleanalytics',
+  img: 'https://storage.googleapis.com/swipe-insight/content/images/sources_logos/plausible-analytics.webp',
   connectionSchema: [
     {
       key: 'baseUrl',
