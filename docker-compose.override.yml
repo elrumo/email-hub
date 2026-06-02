@@ -1,0 +1,11 @@
+# Single-host / local deploy.
+#
+# Docker Compose merges this file automatically, publishing the app on the host
+# so it's reachable at http://<host>:3000 with no reverse proxy. For a
+# proxy-fronted production deploy (TLS terminated upstream), either delete this
+# file or run `docker compose -f docker-compose.yml up` and point your proxy at
+# the `app` service on port 3000 over the shared network.
+services:
+  app:
+    ports:
+      - "3000:3000"

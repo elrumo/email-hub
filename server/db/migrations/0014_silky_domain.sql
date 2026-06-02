@@ -1,1 +1,0 @@
-ALTER TABLE `boards` ADD `analytics_domain` text;

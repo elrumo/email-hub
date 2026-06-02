@@ -1,70 +1,47 @@
-import type { AuthState, PublicUser } from '~/types'
+import type { PublicUser } from '~~/server/utils/auth'
 
 /**
- * Single source of truth for the current session. Backed by useState so the
- * value is shared across the app and survives navigation. `ensureLoaded` fetches
- * /api/auth/state once (the global route middleware calls it before each guard).
+ * Client auth state. The current user is loaded once (SSR-friendly via
+ * useState) and refreshed after login/signup/logout.
  */
 export function useAuth() {
   const user = useState<PublicUser | null>('auth:user', () => null)
-  const needsSetup = useState<boolean>('auth:needsSetup', () => false)
   const loaded = useState<boolean>('auth:loaded', () => false)
 
-  async function fetchState(): Promise<AuthState> {
-    // useRequestFetch forwards the incoming cookie during SSR so the session is
-    // visible on the first server render; on the client it's a plain $fetch.
-    const state = await useRequestFetch()<AuthState>('/api/auth/state')
-    user.value = state.user
-    needsSetup.value = state.needsSetup
-    loaded.value = true
-    return state
+  async function fetchUser() {
+    try {
+      const { user: u } = await $fetch<{ user: PublicUser | null }>('/api/auth/me')
+      user.value = u
+    } catch {
+      user.value = null
+    } finally {
+      loaded.value = true
+    }
   }
 
-  async function ensureLoaded(): Promise<void> {
-    if (!loaded.value) await fetchState()
-  }
-
-  async function login(username: string, password: string): Promise<void> {
-    const res = await $fetch<{ user: PublicUser }>('/api/auth/login', {
+  async function login(email: string, password: string) {
+    const { user: u } = await $fetch<{ user: PublicUser }>('/api/auth/login', {
       method: 'POST',
-      body: { username, password }
+      body: { email, password }
     })
-    user.value = res.user
-    needsSetup.value = false
-    loaded.value = true
+    user.value = u
+    return u
   }
 
-  async function signup(username: string, password: string, email?: string): Promise<void> {
-    const res = await $fetch<{ user: PublicUser }>('/api/auth/signup', {
+  async function signup(email: string, password: string, name?: string) {
+    const { user: u } = await $fetch<{ user: PublicUser }>('/api/auth/signup', {
       method: 'POST',
-      body: { username, password, email }
+      body: { email, password, name }
     })
-    user.value = res.user
-    needsSetup.value = false
-    loaded.value = true
+    user.value = u
+    return u
   }
 
-  async function setup(username: string, password: string, email?: string): Promise<void> {
-    const res = await $fetch<{ user: PublicUser }>('/api/auth/setup', {
-      method: 'POST',
-      body: { username, password, email }
-    })
-    user.value = res.user
-    needsSetup.value = false
-    loaded.value = true
-  }
-
-  async function logout(): Promise<void> {
+  async function logout() {
     await $fetch('/api/auth/logout', { method: 'POST' })
-    // Clear all cached session state. `loaded` must be reset too, otherwise the
-    // route middleware's `ensureLoaded()` short-circuits and never re-checks the
-    // (now destroyed) session on subsequent navigations.
     user.value = null
-    needsSetup.value = false
-    loaded.value = false
+    await navigateTo('/login')
   }
 
-  const isAdmin = computed(() => user.value?.role === 'admin')
-
-  return { user, needsSetup, loaded, isAdmin, fetchState, ensureLoaded, login, signup, setup, logout }
+  return { user, loaded, fetchUser, login, signup, logout }
 }

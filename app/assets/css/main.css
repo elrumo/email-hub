@@ -1,464 +1,152 @@
 @import "tailwindcss";
 @import "@nuxt/ui";
 
-@theme static {
-  /* Inter is the closest open analogue to Apple's SF — clean, optical, neutral.
-     @nuxt/fonts loads it automatically. */
-  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+/**
+ * Postcard design language — "native macOS, designed by Apple".
+ *
+ * The whole product is framed as a desktop app: frosted material surfaces,
+ * hairline separators, deep-but-soft shadows, SF-style typography, traffic-light
+ * window controls, and restrained, confident motion. These tokens drive both the
+ * marketing site and the studio.
+ */
 
-  /* Tabular figures for metrics, clocks and addresses. */
-  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+@theme {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+  /* Apple system accent (macOS blue) */
+  --color-primary-50: #eef4ff;
+  --color-primary-100: #d9e6ff;
+  --color-primary-200: #bcd3ff;
+  --color-primary-300: #8eb5ff;
+  --color-primary-400: #598dff;
+  --color-primary-500: #0a84ff; /* macOS accent */
+  --color-primary-600: #0066d6;
+  --color-primary-700: #0050a8;
+  --color-primary-800: #073f80;
+  --color-primary-900: #0a356a;
+  --color-primary-950: #07213f;
+
+  --radius-window: 14px;
+  --radius-card: 12px;
 }
 
 :root {
-  /* Generous, rounded geometry — the single most "Apple" lever. */
-  --ui-radius: 0.625rem;
-  --ui-container: 76rem;
+  --pc-bg: #ececf0;
+  --pc-window: rgba(255, 255, 255, 0.72);
+  --pc-window-solid: #fbfbfd;
+  --pc-sidebar: rgba(245, 245, 248, 0.6);
+  --pc-border: rgba(0, 0, 0, 0.09);
+  --pc-border-strong: rgba(0, 0, 0, 0.14);
+  --pc-text: #1d1d1f;
+  --pc-text-dim: #6e6e73;
+  --pc-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.28), 0 2px 8px -2px rgba(0, 0, 0, 0.12);
+  --pc-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06), 0 1px 1px rgba(0, 0, 0, 0.04);
 }
 
-/*
- * Installed mobile PWAs render beneath the translucent status bar / notch, so
- * the header needs to reserve the top safe-area inset or it gets overlapped by
- * the OS clock and battery indicator. We can't rely on the
- * `display-mode: standalone` media query here: iOS apps launched via
- * `apple-mobile-web-app-capable` don't reliably match it. The `.pwa-standalone`
- * class is toggled at runtime by the pwa-standalone client plugin, which also
- * checks iOS's non-standard `navigator.standalone`.
- */
-@media (max-width: 767px) {
-  .pwa-standalone .app-header {
-    padding-top: calc(env(safe-area-inset-top, 0px) + 0.5rem);
-  }
+.dark {
+  --pc-bg: #1a1a1c;
+  --pc-window: rgba(40, 40, 44, 0.72);
+  --pc-window-solid: #232326;
+  --pc-sidebar: rgba(30, 30, 33, 0.55);
+  --pc-border: rgba(255, 255, 255, 0.1);
+  --pc-border-strong: rgba(255, 255, 255, 0.16);
+  --pc-text: #f5f5f7;
+  --pc-text-dim: #98989d;
+  --pc-shadow: 0 16px 50px -12px rgba(0, 0, 0, 0.6), 0 2px 10px -2px rgba(0, 0, 0, 0.4);
+  --pc-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
-/*
- * iOS Safari zooms the viewport whenever a focused form control renders below
- * 16px. Nuxt UI inputs default to text-sm (14px) — and the sm/xs variants go
- * smaller still — so any field would trigger that zoom-and-pan on focus. Force
- * the real control elements to 16px on touch-capable, narrow screens only; on
- * pointer devices the design's smaller type is kept. Targeting the underlying
- * input/select/textarea covers every Nuxt UI size variant in one rule.
- */
-@media (max-width: 767px) {
-  input:not([type='checkbox']):not([type='radio']),
-  select,
-  textarea {
-    font-size: 16px;
-  }
+html, body, #__nuxt {
+  height: 100%;
 }
 
-/*
- * Card actions are revealed on hover on pointer devices (opacity-0 +
- * group-hover:opacity-100). Touch devices can't hover, so those controls would
- * be permanently invisible. On any device without a real hover pointer, force
- * them visible. Apply `.reveal-on-hover` to the action group that uses the
- * group-hover opacity pattern.
- */
-@media (hover: none) {
-  .reveal-on-hover {
-    opacity: 1 !important;
-  }
-}
-
-/*
- * ──────────────────────────────────────────────────────────────────────────
- * Motion
- * App-wide page transitions and content-entrance animations. Kept here (rather
- * than scattered per-page) so every route shares one motion language: a quiet
- * fade with a few px of vertical drift, eased on the same "gentle overshoot"
- * curve the bento tiles use. Everything below collapses to no motion under
- * `prefers-reduced-motion` (see the guard at the end of this block).
- * ──────────────────────────────────────────────────────────────────────────
- */
-
-/* Route + layout transitions, wired up in nuxt.config (`app.pageTransition`).
-   The leaving page settles up and out while the next rises in from just below. */
-.page-enter-active,
-.page-leave-active {
-  transition:
-    opacity 0.26s ease,
-    transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
-}
-.page-enter-from {
-  opacity: 0;
-  transform: translateY(10px);
-}
-.page-leave-to {
-  opacity: 0;
-  transform: translateY(-6px);
-}
-
-/* Content entrance — elements rise + fade in once when they mount. Apply
-   `.animate-rise` to a hero/header block, or `.stagger` to a list/grid so its
-   direct children cascade in one after another. */
-@keyframes fade-rise {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-.animate-rise {
-  animation: fade-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-/* Staggered cascade: each direct child enters a beat after the previous one.
-   Capped at a dozen steps — past that the delay holds so long lists don't crawl
-   in. */
-.stagger > * {
-  animation: fade-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-.stagger > *:nth-child(1) { animation-delay: 0.02s; }
-.stagger > *:nth-child(2) { animation-delay: 0.06s; }
-.stagger > *:nth-child(3) { animation-delay: 0.1s; }
-.stagger > *:nth-child(4) { animation-delay: 0.14s; }
-.stagger > *:nth-child(5) { animation-delay: 0.18s; }
-.stagger > *:nth-child(6) { animation-delay: 0.22s; }
-.stagger > *:nth-child(7) { animation-delay: 0.26s; }
-.stagger > *:nth-child(8) { animation-delay: 0.3s; }
-.stagger > *:nth-child(9) { animation-delay: 0.34s; }
-.stagger > *:nth-child(10) { animation-delay: 0.38s; }
-.stagger > *:nth-child(11) { animation-delay: 0.42s; }
-.stagger > *:nth-child(n + 12) { animation-delay: 0.46s; }
-
-@media (prefers-reduced-motion: reduce) {
-  .page-enter-active,
-  .page-leave-active {
-    transition: none;
-  }
-  .page-enter-from,
-  .page-leave-to {
-    opacity: 1;
-    transform: none;
-  }
-  .animate-rise,
-  .stagger > * {
-    animation: none;
-  }
-}
-
-/*
- * ──────────────────────────────────────────────────────────────────────────
- * Bento boards
- * The home grid and the public /b/<slug> link-sharing page share a
- * bento.me-inspired tile: a generously-rounded surface that rests on a faint
- * shadow and gently lifts toward the pointer on hover. Built on Nuxt UI's
- * surface tokens so it tracks light/dark automatically.
- * ──────────────────────────────────────────────────────────────────────────
- */
-.bento-card {
-  @apply p-2 rounded-md;
-
-  transition:
-    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 0.28s ease,
-    border-color 0.28s ease;
-}
-
-/* Elevation is opt-in per tile (cardStyle === 'shadow'); outline/none tiles
-   stay flat and only pick up the hover lift below. */
-.bento-card.bento-elevated {
-  box-shadow:
-    0 1px 2px rgb(0 0 0 / 0.04),
-    0 10px 30px -18px rgb(0 0 0 / 0.22);
-}
-
-@media (hover: hover) {
-  .bento-card:hover {
-    transform: translateY(-4px);
-  }
-  .bento-card.bento-elevated:hover {
-    box-shadow:
-      0 2px 4px rgb(0 0 0 / 0.05),
-      0 22px 48px -22px rgb(0 0 0 / 0.4);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .bento-card,
-  .bento-card:hover {
-    transform: none;
-    transition: none;
-  }
-}
-
-/* Per-tile solid background fill (cardBg === 'solid'). The colours are set
-   inline as CSS variables (see bentoCardVars) so a tile can carry a different
-   colour per theme; we fall back to the default surface when none was picked.
-   The two-class selector outweighs Nuxt UI's `bg-default` utility on the card
-   root, so the custom fill wins. */
-.bento-card.bento-bg-solid {
-  background-color: var(--bento-bg-light, var(--ui-bg));
-}
-html.dark .bento-card.bento-bg-solid {
-  background-color: var(--bento-bg-dark, var(--bento-bg-light, var(--ui-bg)));
-}
-
-/*
- * Rich-text tiles render formatted HTML authored with the Nuxt UI editor
- * (UEditor). Tailwind's reset strips heading/list styling, so restore a
- * compact, theme-aware prose scale just inside note tiles and the editor.
- */
-.bento-richtext {
-  color: var(--ui-text-muted);
-  line-height: 1.55;
-  overflow-wrap: anywhere;
-}
-.bento-richtext :where(h1, h2, h3) {
-  color: var(--ui-text-highlighted);
-  font-weight: 600;
-  line-height: 1.25;
-  margin: 0.4em 0 0.3em;
-}
-.bento-richtext :where(h1) { font-size: 1.25rem; }
-.bento-richtext :where(h2) { font-size: 1.125rem; }
-.bento-richtext :where(h3) { font-size: 1rem; }
-.bento-richtext :where(p) { margin: 0.4em 0; }
-.bento-richtext :where(a) {
-  color: var(--ui-primary);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-.bento-richtext :where(strong) { color: var(--ui-text-highlighted); font-weight: 600; }
-.bento-richtext :where(ul, ol) { margin: 0.4em 0; padding-left: 1.25rem; }
-.bento-richtext :where(ul) { list-style: disc; }
-.bento-richtext :where(ol) { list-style: decimal; }
-.bento-richtext :where(li) { margin: 0.15em 0; }
-.bento-richtext :where(blockquote) {
-  margin: 0.5em 0;
-  padding-left: 0.75rem;
-  border-left: 2px solid var(--ui-border-accented);
-  color: var(--ui-text-dimmed);
-}
-.bento-richtext :where(code) {
-  font-family: var(--font-mono);
-  font-size: 0.85em;
-  padding: 0.1em 0.3em;
-  border-radius: 0.3rem;
-  background: var(--ui-bg-elevated);
-}
-.bento-richtext :where(pre) {
-  margin: 0.5em 0;
-  padding: 0.6rem 0.75rem;
-  border-radius: 0.6rem;
-  background: var(--ui-bg-elevated);
-  overflow: auto;
-}
-.bento-richtext :where(pre code) { padding: 0; background: none; }
-.bento-richtext :where(:first-child) { margin-top: 0; }
-.bento-richtext :where(:last-child) { margin-bottom: 0; }
-
-/*
- * Comark renders AI chat markdown in the email designer; its `highlight` plugin
- * emits Shiki dual-theme tokens (light + dark CSS vars). Swap to the dark vars
- * when the app is in dark mode so code blocks in the AI copilot are legible.
- */
-html.dark .shiki span {
-  color: var(--shiki-dark) !important;
-  background-color: var(--shiki-dark-bg) !important;
-  font-style: var(--shiki-dark-font-style) !important;
-  font-weight: var(--shiki-dark-font-weight) !important;
-  text-decoration: var(--shiki-dark-text-decoration) !important;
-}
-
-/*
- * ──────────────────────────────────────────────────────────────────────────
- * Themes
- * Each theme is a full visual identity selected by the `data-theme` attribute
- * on <html> (set reactively by useTheme / ThemePicker). Rules here override
- * Nuxt UI's design tokens — generated in its own @layer — so being *unlayered*
- * they win regardless of specificity. `default` deliberately has no block: it
- * falls back to the base :root tokens above.
- *
- * Shared helpers (applied per theme below):
- *  - `.theme-sharp`  → square every rounded surface (except pills/avatars).
- *  - `.theme-flat`   → strip shadows for paper-flat looks.
- * They're written as attribute selectors rather than utility classes because
- * the targets are Nuxt UI internals we don't author markup for.
- * ──────────────────────────────────────────────────────────────────────────
- */
-
-/* ── Paper: editorial, ink on warm stock, hairline rules, rectangular ───── */
-[data-theme='paper'] {
-  --ui-radius: 0rem;
-  --font-sans: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, Cambria, 'Times New Roman', serif;
-  --ui-bg: #faf8f2;
-  --ui-bg-muted: #f3eee2;
-  --ui-bg-elevated: #efe8d8;
-  --ui-bg-accented: #e6dcc6;
-  --ui-bg-inverted: #1c1a16;
-  --ui-text: #2b2722;
-  --ui-text-muted: #6b6358;
-  --ui-text-dimmed: #8a8073;
-  --ui-text-toned: #4a443b;
-  --ui-text-highlighted: #14110d;
-  --ui-text-inverted: #faf8f2;
-  --ui-border: #d8cfba;
-  --ui-border-muted: #e3dbc9;
-  --ui-border-accented: #c8bda3;
+body {
   font-family: var(--font-sans);
-  background-color: var(--ui-bg);
-  color: var(--ui-text);
-}
-[data-theme='paper'] :where([class*='rounded']):not([class*='rounded-full']) {
-  border-radius: 0 !important;
-}
-[data-theme='paper'] :where([class*='shadow']) {
-  box-shadow: none !important;
-}
-[data-theme='paper'] :where(h1, h2, h3, .text-highlighted) {
-  letter-spacing: -0.01em;
-}
-[data-theme='paper'] .bento-card {
-  border: 1px solid var(--ui-border-accented);
+  color: var(--pc-text);
+  background: var(--pc-bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-/* ── Skeuomorphic: brushed surfaces, gloss, bevels, drop shadows ────────── */
-[data-theme='skeuo'] {
-  --ui-radius: 0.75rem;
-  --ui-bg: #e8ebf0;
-  --ui-bg-muted: #dde2e9;
-  --ui-bg-elevated: #f5f7fb;
-  --ui-bg-accented: #ccd3de;
-  --ui-bg-inverted: #2a2f3a;
-  --ui-text: #2a2f3a;
-  --ui-text-muted: #5a6270;
-  --ui-text-dimmed: #79818f;
-  --ui-text-toned: #3a414d;
-  --ui-text-highlighted: #14171d;
-  --ui-text-inverted: #ffffff;
-  --ui-border: #b9c0cc;
-  --ui-border-muted: #c7cdd8;
-  --ui-border-accented: #a3abba;
-  background: linear-gradient(180deg, #f2f4f8, #dde2e9);
-  color: var(--ui-text);
+/* ── Materials ─────────────────────────────────────────────────────────── */
+.pc-material {
+  background: var(--pc-window);
+  backdrop-filter: saturate(180%) blur(30px);
+  -webkit-backdrop-filter: saturate(180%) blur(30px);
 }
-[data-theme='skeuo'] .bento-card {
-  background-image: linear-gradient(180deg, rgb(255 255 255 / 0.9), rgb(255 255 255 / 0.5));
-  border: 1px solid #c4ccd8;
-  box-shadow:
-    0 1px 0 rgb(255 255 255 / 0.8) inset,
-    0 1px 2px rgb(0 0 0 / 0.12),
-    0 10px 24px -12px rgb(0 0 0 / 0.3) !important;
+.pc-sidebar-material {
+  background: var(--pc-sidebar);
+  backdrop-filter: saturate(180%) blur(30px);
+  -webkit-backdrop-filter: saturate(180%) blur(30px);
 }
-[data-theme='skeuo'] button {
-  background-image: linear-gradient(180deg, rgb(255 255 255 / 0.4), rgb(0 0 0 / 0.06));
-  box-shadow:
-    0 1px 0 rgb(255 255 255 / 0.6) inset,
-    0 1px 1px rgb(0 0 0 / 0.18),
-    0 1px 3px rgb(0 0 0 / 0.12);
-  text-shadow: 0 1px 0 rgb(255 255 255 / 0.35);
+.pc-window {
+  background: var(--pc-window-solid);
+  border: 1px solid var(--pc-border);
+  border-radius: var(--radius-window);
+  box-shadow: var(--pc-shadow);
+  overflow: hidden;
 }
-[data-theme='skeuo'] button:active {
-  box-shadow:
-    0 1px 3px rgb(0 0 0 / 0.32) inset,
-    0 1px 0 rgb(255 255 255 / 0.5);
+.pc-card {
+  background: var(--pc-window-solid);
+  border: 1px solid var(--pc-border);
+  border-radius: var(--radius-card);
+}
+.pc-hairline { border-color: var(--pc-border); }
+.pc-dim { color: var(--pc-text-dim); }
+
+/* ── Traffic lights ────────────────────────────────────────────────────── */
+.pc-traffic { display: inline-flex; gap: 8px; align-items: center; }
+.pc-traffic span {
+  width: 12px; height: 12px; border-radius: 9999px;
+  display: inline-block; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.15);
+}
+.pc-traffic .red { background: #ff5f57; }
+.pc-traffic .amber { background: #febc2e; }
+.pc-traffic .green { background: #28c840; }
+
+/* ── Window titlebar ───────────────────────────────────────────────────── */
+.pc-titlebar {
+  height: 44px;
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--pc-border);
 }
 
-/* ── Onyx: true black, gold accent, hairline light borders, refined ─────── */
-[data-theme='onyx'] {
-  --ui-radius: 0.5rem;
-  --ui-bg: #000000;
-  --ui-bg-muted: #0a0a0a;
-  --ui-bg-elevated: #131313;
-  --ui-bg-accented: #1d1d1d;
-  --ui-bg-inverted: #ffffff;
-  --ui-text: #e7e4dd;
-  --ui-text-muted: #9b958b;
-  --ui-text-dimmed: #6f6a61;
-  --ui-text-toned: #c4bfb6;
-  --ui-text-highlighted: #ffffff;
-  --ui-text-inverted: #000000;
-  --ui-border: rgb(212 200 170 / 0.16);
-  --ui-border-muted: rgb(212 200 170 / 0.1);
-  --ui-border-accented: rgb(212 200 170 / 0.3);
-  background: #000000;
-  color: var(--ui-text);
+/* ── Refined scrollbars ────────────────────────────────────────────────── */
+.pc-scroll { scrollbar-width: thin; scrollbar-color: rgba(140,140,150,0.4) transparent; }
+.pc-scroll::-webkit-scrollbar { width: 9px; height: 9px; }
+.pc-scroll::-webkit-scrollbar-thumb {
+  background: rgba(140,140,150,0.35); border-radius: 9999px;
+  border: 2px solid transparent; background-clip: content-box;
 }
-[data-theme='onyx'] :where(h1, h2, h3) {
-  font-weight: 500;
-  letter-spacing: 0.005em;
+.pc-scroll::-webkit-scrollbar-thumb:hover { background: rgba(140,140,150,0.55); background-clip: content-box; }
+.pc-scroll::-webkit-scrollbar-track { background: transparent; }
+
+/* ── Subtle, confident motion ──────────────────────────────────────────── */
+@keyframes pc-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
-[data-theme='onyx'] :where([class*='shadow']) {
-  box-shadow: none !important;
+.pc-rise { animation: pc-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.pc-rise-2 { animation: pc-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.08s both; }
+.pc-rise-3 { animation: pc-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.16s both; }
+
+@keyframes pc-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
 }
-[data-theme='onyx'] .bento-card {
-  border: 1px solid var(--ui-border);
+.pc-float { animation: pc-float 7s ease-in-out infinite; }
+
+/* Marketing hero aurora */
+.pc-aurora {
+  background:
+    radial-gradient(40% 50% at 20% 20%, rgba(10,132,255,0.25), transparent 70%),
+    radial-gradient(40% 50% at 80% 10%, rgba(175,82,222,0.22), transparent 70%),
+    radial-gradient(50% 60% at 60% 80%, rgba(48,209,88,0.18), transparent 70%);
+  filter: blur(20px);
 }
 
-/* ── Futuristic: deep space, neon cyan, glass panels, mono labels ───────── */
-[data-theme='futuristic'] {
-  --ui-radius: 0.875rem;
-  --font-mono: ui-monospace, 'SFMono-Regular', 'JetBrains Mono', monospace;
-  --ui-bg: #05070f;
-  --ui-bg-muted: #0a0e1c;
-  --ui-bg-elevated: rgb(18 24 46 / 0.7);
-  --ui-bg-accented: #1b2342;
-  --ui-bg-inverted: #e6ecff;
-  --ui-text: #c3ccf0;
-  --ui-text-muted: #7e88b3;
-  --ui-text-dimmed: #5b648c;
-  --ui-text-toned: #aab4dd;
-  --ui-text-highlighted: #ffffff;
-  --ui-text-inverted: #05070f;
-  --ui-border: rgb(80 140 255 / 0.22);
-  --ui-border-muted: rgb(80 140 255 / 0.14);
-  --ui-border-accented: rgb(120 200 255 / 0.45);
-  background: radial-gradient(1200px 600px at 50% -10%, #11204a 0%, #05070f 60%) fixed;
-  color: var(--ui-text);
-}
-[data-theme='futuristic'] .bento-card {
-  border: 1px solid rgb(120 200 255 / 0.25);
-  backdrop-filter: blur(10px);
-  box-shadow:
-    0 0 0 1px rgb(120 200 255 / 0.05),
-    0 8px 30px -10px rgb(40 120 255 / 0.35) !important;
-}
-[data-theme='futuristic'] :where(label, th) {
-  font-family: var(--font-mono);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  font-size: 0.7rem;
-}
-[data-theme='futuristic'] .text-primary,
-[data-theme='futuristic'] .text-highlighted {
-  text-shadow: 0 0 18px rgb(80 200 255 / 0.35);
-}
-
-/* ── Carbon: IBM Carbon (White / Gray 10), IBM Plex, IBM Blue 60, sharp ─── */
-[data-theme='carbon'] {
-  --ui-radius: 0rem;
-  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', monospace;
-  --ui-bg: #ffffff;
-  --ui-bg-muted: #f4f4f4;
-  --ui-bg-elevated: #e0e0e0;
-  --ui-bg-accented: #c6c6c6;
-  --ui-bg-inverted: #161616;
-  --ui-text: #161616;
-  --ui-text-muted: #525252;
-  --ui-text-dimmed: #6f6f6f;
-  --ui-text-toned: #393939;
-  --ui-text-highlighted: #161616;
-  --ui-text-inverted: #ffffff;
-  --ui-border: #e0e0e0;
-  --ui-border-muted: #f4f4f4;
-  --ui-border-accented: #8d8d8d;
-  /* IBM Blue 60 + neighbours so primary actions match Carbon exactly. */
-  --ui-color-primary-400: #4589ff;
-  --ui-color-primary-500: #0f62fe;
-  --ui-color-primary-600: #0353e9;
-  font-family: var(--font-sans);
-  background-color: var(--ui-bg);
-  color: var(--ui-text);
-}
-[data-theme='carbon'] :where([class*='rounded']):not([class*='rounded-full']) {
-  border-radius: 0 !important;
-}
-[data-theme='carbon'] .bento-card {
-  border: 1px solid var(--ui-border-accented);
-}
+.pc-grip { cursor: default; }
+.pc-drag { cursor: grab; }
+.pc-drag:active { cursor: grabbing; }

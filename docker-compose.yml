@@ -1,29 +1,59 @@
 services:
   app:
     build: .
-    image: flow-hub
+    image: postcard
     restart: unless-stopped
-    # No host `ports:` mapping — Dokploy's Traefik proxy reaches the
-    # container internally on port 3000 via the shared Docker network and
-    # routes by domain. Exposing a host port only causes conflicts
-    # (e.g. another container already bound 0.0.0.0:3000).
+    depends_on:
+      db:
+        condition: service_healthy
     expose:
       - "3000"
     env_file:
       - .env
     environment:
-      # DB + migrations live in the image/volume; override-able via .env
-      NUXT_DB_FILE: /data/app.db
-      NUXT_MIGRATIONS_DIR: /app/migrations
-    volumes:
-      # persists the SQLite database (and WAL files) across deploys
-      - flow_hub_data:/data
+      # Inside the compose network the app reaches Postgres by service name.
+      NUXT_DATABASE_URL: postgres://postcard:${POSTGRES_PASSWORD:-postcard}@db:5432/postcard
+      # The assistant's upstream gateway (LiteLLM, OpenAI-compatible). The model
+      # id and provider are an implementation detail — users never see them.
+      NUXT_AI_BASE_URL: ${NUXT_AI_BASE_URL:-http://litellm:4000/v1}
+      NUXT_PUBLIC_APP_URL: ${NUXT_PUBLIC_APP_URL:-http://localhost:3000}
     healthcheck:
       test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:3000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 3
+      start_period: 20s
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postcard
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postcard}
+      POSTGRES_DB: postcard
+    volumes:
+      - postcard_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postcard -d postcard"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
       start_period: 10s
 
+  # LiteLLM gateway: the single OpenAI-compatible endpoint the app talks to.
+  # It maps the public-facing "mini-v2" model alias onto whatever real provider
+  # you configure in litellm.config.yaml — keeping the provider hidden from the
+  # product. Optional: point NUXT_AI_BASE_URL elsewhere to run without it.
+  litellm:
+    image: ghcr.io/berriai/litellm:main-stable
+    restart: unless-stopped
+    command: ["--config", "/app/litellm.config.yaml", "--port", "4000"]
+    expose:
+      - "4000"
+    env_file:
+      - .env
+    volumes:
+      - ./litellm.config.yaml:/app/litellm.config.yaml:ro
+
 volumes:
-  flow_hub_data:
+  postcard_db:

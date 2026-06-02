@@ -1,13 +1,16 @@
-import { flowTemplates } from '../engine/templates'
-import { registerAllIntegrations } from '../integrations'
+import { EMAIL_TEMPLATES } from '#shared/email/templates'
 
-/** Starter flow templates the builder can offer ("start from a template"). */
 export default defineEventHandler(() => {
-  registerAllIntegrations()
-  return flowTemplates.map(t => ({
-    id: t.id,
-    name: t.name,
-    description: t.description,
-    requires: t.requires
-  }))
+  // Send catalogue metadata only (not full documents) for the picker.
+  return {
+    templates: EMAIL_TEMPLATES.map(t => ({
+      id: t.id,
+      name: t.name,
+      type: t.type,
+      style: t.style,
+      icon: t.icon,
+      accent: t.accent,
+      description: t.description
+    }))
+  }
 })

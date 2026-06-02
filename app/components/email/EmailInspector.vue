@@ -14,7 +14,6 @@ import {
   isPaddingSides
 } from '#shared/email/blocks'
 import { removeBlock, updateBlock, updateSettings } from '#shared/email/ops'
-import type { UploadedAsset } from '~/composables/useEmailAssets'
 
 const props = defineProps<{
   document: EmailDocument
@@ -105,16 +104,6 @@ const paddingSummary = computed(() => {
 watch(() => props.selectedId, () => {
   paddingPopoverOpen.value = false
 })
-
-// Image upload: replace the selected image block's src (and alt, if empty) with
-// the uploaded asset.
-const uploadOpen = ref(false)
-function onImageUploaded(asset: UploadedAsset) {
-  if (!props.selectedId || !selected.value || selected.value.type !== 'image') return
-  const patchObj: Record<string, unknown> = { src: asset.url }
-  if (!selected.value.alt) patchObj.alt = asset.name.replace(/\.[a-z0-9]+$/i, '')
-  emit('update:document', updateBlock(props.document, props.selectedId, patchObj).doc)
-}
 </script>
 
 <template>
@@ -227,15 +216,7 @@ function onImageUploaded(asset: UploadedAsset) {
 
         <!-- Image -->
         <template v-else-if="selected.type === 'image'">
-          <UButton
-            label="Upload image"
-            icon="i-lucide-upload"
-            color="neutral"
-            variant="outline"
-            block
-            @click="uploadOpen = true"
-          />
-          <UFormField label="Image URL">
+          <UFormField label="Image URL" help="Paste a hosted image URL.">
             <UInput
               :model-value="selected.src"
               class="w-full"
@@ -465,12 +446,5 @@ function onImageUploaded(asset: UploadedAsset) {
         />
       </div>
     </template>
-
-    <EmailUploadModal
-      v-model:open="uploadOpen"
-      title="Upload an image"
-      accept="image/*"
-      @uploaded="onImageUploaded"
-    />
   </div>
 </template>

@@ -1,1 +1,0 @@
-ALTER TABLE `monitors` ADD `public_visible` integer DEFAULT false NOT NULL;

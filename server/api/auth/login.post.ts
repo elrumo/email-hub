@@ -3,37 +3,31 @@ import { getDb } from '../../db'
 import { users } from '../../db/schema'
 import {
   createSession,
-  logActivity,
   setSessionCookie,
   toPublicUser,
   verifyPassword
 } from '../../utils/auth'
 
 export default defineEventHandler(async (event) => {
-  const body = await readBody(event).catch(() => ({})) as {
-    username?: string
-    password?: string
-  }
-  const username = (body.username || '').trim()
-  const password = body.password || ''
-  if (!username || !password) {
-    throw createError({ statusCode: 400, statusMessage: 'username and password are required' })
-  }
+  const body = await readBody<{ email?: string, password?: string }>(event)
+  const email = (body.email ?? '').trim().toLowerCase()
+  const password = body.password ?? ''
 
   const db = getDb()
-  const row = (await db.select().from(users).where(eq(users.username, username)))[0]
-  // Verify even on a missing user to avoid leaking which usernames exist via timing.
-  const ok = row ? await verifyPassword(password, row.passwordHash) : false
-  if (!row || !ok) {
-    throw createError({ statusCode: 401, statusMessage: 'invalid username or password' })
+  const rows = await db.select().from(users).where(eq(users.email, email))
+  const user = rows[0]
+
+  // Constant-ish: always verify against a hash to avoid user enumeration timing.
+  const ok = user
+    ? await verifyPassword(password, user.passwordHash)
+    : await verifyPassword(password, '$argon2id$v=19$m=65536,t=2,p=1$AAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA').then(() => false)
+
+  if (!user || !ok) {
+    throw createError({ statusCode: 401, statusMessage: 'Incorrect email or password.' })
   }
 
-  const now = Date.now()
-  await db.update(users).set({ lastLoginAt: now }).where(eq(users.id, row.id))
-
-  const token = await createSession(row.id, getRequestHeader(event, 'user-agent'))
+  await db.update(users).set({ lastLoginAt: Date.now() }).where(eq(users.id, user.id))
+  const token = await createSession(user.id, getRequestHeader(event, 'user-agent'))
   setSessionCookie(event, token)
-  await logActivity(row.id, 'auth.login')
-
-  return { user: toPublicUser({ ...row, lastLoginAt: now }) }
+  return { user: toPublicUser(user) }
 })

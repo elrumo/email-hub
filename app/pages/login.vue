@@ -1,127 +1,57 @@
 <script setup lang="ts">
-const auth = useAuth()
-const toast = useToast()
-const router = useRouter()
+definePageMeta({ layout: 'default' })
+useHead({ title: 'Sign in — Postcard' })
 
-const mode = ref<'login' | 'signup'>('login')
-const username = ref('')
-const password = ref('')
+const { login } = useAuth()
+const route = useRoute()
 const email = ref('')
-const pending = ref(false)
+const password = ref('')
+const error = ref('')
+const loading = ref(false)
 
 async function submit() {
-  if (!username.value || !password.value) return
-  pending.value = true
+  error.value = ''
+  loading.value = true
   try {
-    if (mode.value === 'login') {
-      await auth.login(username.value, password.value)
-    } else {
-      await auth.signup(username.value, password.value, email.value || undefined)
-    }
-    await router.replace('/home')
-  } catch (e) {
-    const msg = (e as { data?: { statusMessage?: string }, statusMessage?: string })?.data?.statusMessage
-      ?? (e as { statusMessage?: string })?.statusMessage
-      ?? 'Something went wrong'
-    toast.add({ title: msg, color: 'error' })
+    await login(email.value, password.value)
+    await navigateTo((route.query.redirect as string) || '/app')
+  } catch (e: any) {
+    error.value = e?.data?.statusMessage || e?.statusMessage || 'Could not sign in.'
   } finally {
-    pending.value = false
+    loading.value = false
   }
 }
 </script>
 
 <template>
-  <div class="flex min-h-[80vh] items-center justify-center px-4">
-    <UCard class="w-full max-w-sm animate-rise">
-      <div class="mb-6 flex flex-col items-center gap-2 text-center">
-        <span class="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/20">
-          <UIcon
-            name="i-lucide-stethoscope"
-            class="size-5"
-          />
-        </span>
-        <h1 class="text-lg font-semibold tracking-tight text-highlighted">
-          {{ mode === 'login' ? 'Sign in' : 'Create your account' }}
-        </h1>
-        <p class="text-sm text-muted">
-          {{ mode === 'login' ? 'Welcome back to Flow Hub.' : 'Set a username and password to get started.' }}
-        </p>
+  <div class="mx-auto max-w-md px-5 py-20">
+    <div class="pc-window pc-rise">
+      <div class="pc-titlebar pc-material">
+        <TrafficLights />
+        <div class="flex-1 text-center text-[13px] pc-dim">Sign in</div>
       </div>
+      <form class="p-8 space-y-4" @submit.prevent="submit">
+        <div class="text-center mb-2">
+          <h1 class="text-2xl font-semibold tracking-tight">Welcome back</h1>
+          <p class="text-sm pc-dim mt-1">Sign in to your Postcard studio.</p>
+        </div>
 
-      <form
-        class="flex flex-col gap-4"
-        @submit.prevent="submit"
-      >
-        <UFormField
-          label="Username"
-          required
-        >
-          <UInput
-            v-model="username"
-            autocomplete="username"
-            placeholder="yourname"
-            class="w-full"
-          />
+        <UAlert v-if="error" color="error" variant="soft" :title="error" icon="i-lucide-triangle-alert" />
+
+        <UFormField label="Email">
+          <UInput v-model="email" type="email" placeholder="you@example.com" autocomplete="email" size="lg" class="w-full" required />
+        </UFormField>
+        <UFormField label="Password">
+          <UInput v-model="password" type="password" placeholder="••••••••" autocomplete="current-password" size="lg" class="w-full" required />
         </UFormField>
 
-        <UFormField
-          v-if="mode === 'signup'"
-          label="Email"
-          description="Optional."
-        >
-          <UInput
-            v-model="email"
-            type="email"
-            autocomplete="email"
-            placeholder="you@example.com"
-            class="w-full"
-          />
-        </UFormField>
+        <UButton type="submit" block size="lg" color="primary" :loading="loading">Sign in</UButton>
 
-        <UFormField
-          label="Password"
-          required
-          :description="mode === 'signup' ? 'At least 8 characters.' : undefined"
-        >
-          <UInput
-            v-model="password"
-            type="password"
-            :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"
-            placeholder="••••••••"
-            class="w-full"
-          />
-        </UFormField>
-
-        <UButton
-          type="submit"
-          block
-          :loading="pending"
-          :label="mode === 'login' ? 'Sign in' : 'Create account'"
-        />
-      </form>
-
-      <template #footer>
-        <p class="text-center text-sm text-muted">
-          <template v-if="mode === 'login'">
-            No account?
-            <UButton
-              variant="link"
-              :padded="false"
-              label="Sign up"
-              @click="mode = 'signup'"
-            />
-          </template>
-          <template v-else>
-            Already have an account?
-            <UButton
-              variant="link"
-              :padded="false"
-              label="Sign in"
-              @click="mode = 'login'"
-            />
-          </template>
+        <p class="text-center text-sm pc-dim">
+          New here?
+          <NuxtLink to="/signup" class="text-primary-500 hover:underline">Create an account</NuxtLink>
         </p>
-      </template>
-    </UCard>
+      </form>
+    </div>
   </div>
 </template>
