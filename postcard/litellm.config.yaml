@@ -1,0 +1,19 @@
+# LiteLLM gateway config.
+#
+# The app only ever asks for the model alias "mini-v2". This file maps that
+# alias onto a concrete upstream model + provider, so the real provider stays an
+# implementation detail the product never exposes. Swap the `litellm_params`
+# below to point "mini-v2" at any provider LiteLLM supports.
+model_list:
+  - model_name: mini-v2
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_key: os.environ/OPENAI_API_KEY
+
+litellm_settings:
+  drop_params: true
+  # Surface token usage in the streaming response so the app can meter it.
+  num_retries: 2
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
