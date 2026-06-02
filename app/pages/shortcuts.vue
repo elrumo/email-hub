@@ -141,7 +141,7 @@ async function confirmDelete() {
 
 <template>
   <UContainer class="py-10 sm:py-14">
-    <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between animate-rise">
       <div>
         <h1 class="text-xl font-semibold tracking-tight text-highlighted">
           Shortcuts
@@ -185,7 +185,7 @@ async function confirmDelete() {
 
     <div
       v-else
-      class="grid gap-3 sm:grid-cols-4"
+      class="grid gap-3 sm:grid-cols-4 stagger"
     >
       <ShortcutCard
         v-for="s in shortcuts"

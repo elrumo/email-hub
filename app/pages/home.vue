@@ -696,7 +696,7 @@ function spanFor(w: Widget) {
 <template>
   <UContainer class="md:pt-5 md:pb-8 pt-8">
 
-    <div class="w-full flex justify-between items-center">
+    <div class="w-full flex justify-between items-center animate-rise">
       <div class="mb-8 flex flex-col md:flex-row items-start gap-4">
         <!-- board name + selector -->
         <UPopover>

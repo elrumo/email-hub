@@ -64,7 +64,7 @@ const statCards = computed(() => {
 
 <template>
   <UContainer class="py-8">
-    <div class="mb-8 flex items-center gap-3">
+    <div class="mb-8 flex items-center gap-3 animate-rise">
       <UAvatar
         :alt="auth.user.value?.username"
         size="lg"
@@ -88,7 +88,7 @@ const statCards = computed(() => {
     </div>
 
     <!-- stats -->
-    <div class="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+    <div class="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 stagger">
       <UCard
         v-for="c in statCards"
         :key="c.label"

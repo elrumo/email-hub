@@ -495,7 +495,7 @@ async function saveConnectorEdit() {
 
 <template>
   <UContainer class="py-10 sm:py-14">
-    <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between animate-rise">
       <div>
         <h1 class="text-xl font-semibold tracking-tight text-highlighted">
           Connections
@@ -549,7 +549,7 @@ async function saveConnectorEdit() {
 
       <div
         v-else
-        class="grid gap-3 sm:grid-cols-3"
+        class="grid gap-3 sm:grid-cols-3 stagger"
       >
         <UCard
           v-for="c in connections"
@@ -639,7 +639,7 @@ async function saveConnectorEdit() {
           </div>
         </div>
 
-        <div class="grid gap-3 sm:grid-cols-2">
+        <div class="grid gap-3 sm:grid-cols-2 stagger">
           <UCard
             v-for="c in userConnectors"
             :key="c.id"

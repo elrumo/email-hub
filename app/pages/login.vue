@@ -32,7 +32,7 @@ async function submit() {
 
 <template>
   <div class="flex min-h-[80vh] items-center justify-center px-4">
-    <UCard class="w-full max-w-sm">
+    <UCard class="w-full max-w-sm animate-rise">
       <div class="mb-6 flex flex-col items-center gap-2 text-center">
         <span class="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/20">
           <UIcon

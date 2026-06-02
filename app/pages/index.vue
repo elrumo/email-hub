@@ -60,7 +60,7 @@
 
     <!-- ── hero ───────────────────────────────────────────────────────────── -->
     <section class="relative">
-      <div class="mx-auto max-w-6xl px-4 pt-20 pb-16 text-center sm:px-6 sm:pt-28 sm:pb-24">
+      <div class="mx-auto max-w-6xl px-4 pt-20 pb-16 text-center sm:px-6 sm:pt-28 sm:pb-24 stagger">
         <div class="mx-auto inline-flex items-center gap-2 rounded-full border border-default bg-elevated/50 px-3 py-1 text-xs font-medium text-muted">
           <span class="relative flex size-2">
             <span class="absolute inline-flex size-full animate-ping rounded-full bg-primary/60" />
@@ -107,7 +107,7 @@
               <span class="size-3 rounded-full bg-green-400/70" />
               <span class="ml-3 text-xs text-dimmed">flow-hub · home</span>
             </div>
-            <div class="grid grid-cols-2 gap-3 p-4 sm:grid-cols-4 sm:gap-4 sm:p-6">
+            <div class="grid grid-cols-2 gap-3 p-4 sm:grid-cols-4 sm:gap-4 sm:p-6 stagger">
               <div
                 v-for="tile in [
                   { icon: 'i-lucide-globe', label: 'DNS failover', sub: 'Healthy', tone: 'text-green-500' },

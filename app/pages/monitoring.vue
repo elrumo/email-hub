@@ -358,7 +358,7 @@ const connItems = computed(() => monitorableConns.value.map(c => ({
 
 <template>
   <UContainer class="py-10 sm:py-14">
-    <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between animate-rise">
       <div>
         <h1 class="text-xl font-semibold tracking-tight text-highlighted">
           Monitoring
@@ -412,7 +412,7 @@ const connItems = computed(() => monitorableConns.value.map(c => ({
         <h2 class="text-base font-semibold tracking-tight text-highlighted">
           Machines
         </h2>
-        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 stagger">
           <MonitorCard
             v-for="m in machineMonitors"
             :key="m.id"
@@ -433,7 +433,7 @@ const connItems = computed(() => monitorableConns.value.map(c => ({
         <h2 class="text-base font-semibold tracking-tight text-highlighted">
           Uptime Kuma
         </h2>
-        <div class="flex flex-col gap-2">
+        <div class="flex flex-col gap-2 stagger">
           <!-- <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"> -->
           <MonitorCard
             v-for="m in uptimeMonitors"
@@ -455,7 +455,7 @@ const connItems = computed(() => monitorableConns.value.map(c => ({
         <h2 class="text-base font-semibold tracking-tight text-highlighted">
           Analytics
         </h2>
-        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 stagger">
           <MonitorCard
             v-for="m in analyticsMonitors"
             :key="m.id"
@@ -476,7 +476,7 @@ const connItems = computed(() => monitorableConns.value.map(c => ({
         <h2 class="text-base font-semibold tracking-tight text-highlighted">
           Other
         </h2>
-        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 stagger">
           <MonitorCard
             v-for="m in otherMonitors"
             :key="m.id"

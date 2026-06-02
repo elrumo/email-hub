@@ -8,6 +8,16 @@ export default defineNuxtConfig({
     enabled: false
   },
 
+  app: {
+    // App-wide route + layout transitions. `out-in` lets the leaving page finish
+    // fading before the next one rises in, so navigations read as a single,
+    // deliberate motion rather than a cross-fade blur. The matching CSS lives in
+    // assets/css/main.css (`.page-*`), and is disabled under
+    // prefers-reduced-motion there.
+    pageTransition: { name: 'page', mode: 'out-in' },
+    layoutTransition: { name: 'page', mode: 'out-in' }
+  },
+
   css: ['~/assets/css/main.css'],
 
   runtimeConfig: {

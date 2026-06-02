@@ -134,7 +134,7 @@ async function onImported(flowId: string) {
     <!-- Header: just the title and the single primary action. The example
          flows now live inside the "Create new flow" popover, so the home
          screen stays focused on the user's own flows. -->
-    <div class="mb-8 flex items-center justify-between gap-4">
+    <div class="mb-8 flex items-center justify-between gap-4 animate-rise">
       <h1 class="text-3xl font-bold tracking-tight text-highlighted sm:text-4xl">
         Flows
       </h1>
@@ -233,7 +233,7 @@ async function onImported(flowId: string) {
     <!-- the colourful tile wall -->
     <div
       v-else
-      class="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5"
+      class="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5 stagger"
     >
       <FlowCard
         v-for="f in filteredFlows"

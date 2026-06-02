@@ -85,7 +85,7 @@ function menuItems(p: EmailProjectSummary) {
 
 <template>
   <UContainer class="py-10 sm:py-14">
-    <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between animate-rise">
       <div>
         <h1 class="text-xl font-semibold tracking-tight text-highlighted">
           Email designer
@@ -104,7 +104,7 @@ function menuItems(p: EmailProjectSummary) {
 
     <div
       v-if="projects.length"
-      class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
+      class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 stagger"
     >
       <UCard
         v-for="p in projects"
