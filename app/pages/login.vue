@@ -44,7 +44,7 @@ async function submit() {
           {{ mode === 'login' ? 'Sign in' : 'Create your account' }}
         </h1>
         <p class="text-sm text-muted">
-          {{ mode === 'login' ? 'Welcome back to Dokploy Doctor.' : 'Set a username and password to get started.' }}
+          {{ mode === 'login' ? 'Welcome back to Flow Hub.' : 'Set a username and password to get started.' }}
         </p>
       </div>
 

@@ -102,7 +102,7 @@ useSeoMeta({
                 class="size-4"
               />
             </span>
-            <span class="text-base font-semibold tracking-tight text-highlighted">Dokploy Doctor</span>
+            <span class="text-base font-semibold tracking-tight text-highlighted">Flow Hub</span>
           </span>
         </template>
 
@@ -181,7 +181,7 @@ useSeoMeta({
       <!-- <UFooter :ui="{ root: 'border-none' }">
         <template #left>
           <p class="text-sm text-muted">
-            Dokploy Doctor · © {{ new Date().getFullYear() }}
+            FlowHub · © {{ new Date().getFullYear() }}
           </p>
         </template>
 
