@@ -12,8 +12,6 @@ services:
         condition: service_healthy
     expose:
       - "3000"
-    env_file:
-      - .env
     environment:
       NUXT_DATABASE_URL: postgres://postcard:${POSTGRES_PASSWORD:-postcard}@db:5432/postcard
       NUXT_REDIS_URL: redis://redis:6379
@@ -88,8 +86,6 @@ services:
         condition: service_healthy
     expose:
       - "1337"
-    env_file:
-      - .env
     environment:
       PARSE_SERVER_APPLICATION_ID: ${PARSE_APP_ID:-email-hub}
       PARSE_SERVER_MASTER_KEY: ${PARSE_MASTER_KEY:?set PARSE_MASTER_KEY in .env}
@@ -121,8 +117,6 @@ services:
     command: ["--config", "/app/litellm.config.yaml", "--port", "4000"]
     expose:
       - "4000"
-    env_file:
-      - .env
     volumes:
       - ./litellm.config.yaml:/app/litellm.config.yaml:ro
 
