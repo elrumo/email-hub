@@ -281,10 +281,18 @@ export async function getProject(id: string): Promise<EmailProject | null> {
   return obj ? toPlain<EmailProject>(obj, PROJECT_FIELDS) : null
 }
 
+/**
+ * Fields selected for list views: everything except the (potentially large)
+ * block tree — `document` comes back as just `{ settings }`, which is all any
+ * list consumer reads (the subject). Fetch a single project for full blocks.
+ */
+const PROJECT_LIST_SELECT = [...PROJECT_FIELDS.filter(f => f !== 'document'), 'document.settings']
+
 export async function listProjects(ownerId: string): Promise<EmailProject[]> {
   const Query = new Parse.Query(classFor('EmailProject'))
   Query.equalTo('ownerId', ownerId)
   Query.descending('updatedAt')
+  Query.select(...PROJECT_LIST_SELECT)
   Query.limit(1000)
   const rows = await Query.find({ useMasterKey: true })
   return rows.map((obj: Parse.Object) => toPlain<EmailProject>(obj, PROJECT_FIELDS))
@@ -400,11 +408,12 @@ export async function findContainerByShareToken(token: string): Promise<ProjectC
   return obj ? toPlain<ProjectContainer>(obj, CONTAINER_FIELDS) : null
 }
 
-/** All emails inside one project container. */
+/** All emails inside one project container (list-light: document = settings only). */
 export async function listEmailsInContainer(projectId: string): Promise<EmailProject[]> {
   const Query = new Parse.Query(classFor('EmailProject'))
   Query.equalTo('projectId', projectId)
   Query.descending('updatedAt')
+  Query.select(...PROJECT_LIST_SELECT)
   Query.limit(1000)
   const rows = await Query.find({ useMasterKey: true })
   return rows.map((obj: Parse.Object) => toPlain<EmailProject>(obj, PROJECT_FIELDS))
@@ -513,10 +522,12 @@ export async function createUserTemplate(data: Omit<UserTemplate, 'id'>): Promis
   return toPlain<UserTemplate>(obj, USER_TEMPLATE_FIELDS)
 }
 
+/** List-light: skips each template's document (fetched individually on use). */
 export async function listUserTemplates(ownerId: string): Promise<UserTemplate[]> {
   const Query = new Parse.Query(classFor('UserTemplate'))
   Query.equalTo('ownerId', ownerId)
   Query.descending('updatedAt')
+  Query.select(...USER_TEMPLATE_FIELDS.filter(f => f !== 'document'))
   Query.limit(200)
   const rows = await Query.find({ useMasterKey: true })
   return rows.map((obj: Parse.Object) => toPlain<UserTemplate>(obj, USER_TEMPLATE_FIELDS))
@@ -715,6 +726,25 @@ export async function lastTriggerSendAt(userId: string, trigger: string): Promis
 export async function listUsersInactiveSince(cutoff: number): Promise<AppUser[]> {
   const users = await listAllUsers()
   return users.filter(u => (u.lastLoginAt ?? u.createdAt) < cutoff)
+}
+
+/**
+ * Store an uploaded file via Parse's file adapter (GridFS in Mongo by default,
+ * S3 when configured) and return its public URL. Parse prefixes the name with
+ * a unique id, so collisions are impossible.
+ */
+export async function saveParseFile(name: string, base64: string, contentType: string): Promise<{ url: string, name: string }> {
+  const P = initParse()
+  const file = new P.File(name, { base64 }, contentType)
+  await file.save({ useMasterKey: true })
+  let url = file.url()
+  // Files must be reachable by email clients / browsers: prefer the public URL.
+  const publicUrl = (process.env.PARSE_PUBLIC_URL || '').replace(/\/$/, '')
+  if (publicUrl && url) {
+    const serverUrl = getParseServerUrl().replace(/\/$/, '')
+    if (url.startsWith(serverUrl)) url = publicUrl + url.slice(serverUrl.length)
+  }
+  return { url, name: file.name() }
 }
 
 export async function pingParse(): Promise<boolean> {

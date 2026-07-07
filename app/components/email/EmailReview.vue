@@ -4,11 +4,11 @@
  * live against the current document. Click a finding to select the offending
  * block; "Fix with AI" hands the finding's fix instruction to Postcard AI.
  */
-import type { EmailDocument } from '#shared/email/blocks'
-import { lintEmailDocument, type LintIssue } from '#shared/email/lint'
+import type { LintIssue } from '#shared/email/lint'
 
 const props = defineProps<{
-  document: EmailDocument
+  /** lint findings, computed once by the editor page */
+  issues: LintIssue[]
   /** whether the AI chat is available (owner only) */
   canAi?: boolean
   /** disables Fix buttons while the AI is already working */
@@ -20,7 +20,7 @@ const emit = defineEmits<{
   (e: 'select' | 'fix', value: string): void
 }>()
 
-const issues = computed(() => lintEmailDocument(props.document))
+const issues = computed(() => props.issues)
 const errors = computed(() => issues.value.filter(i => i.severity === 'error'))
 const warnings = computed(() => issues.value.filter(i => i.severity === 'warning'))
 

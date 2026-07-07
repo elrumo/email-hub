@@ -69,8 +69,10 @@ const input = ref('')
 const templateOpen = ref(false)
 const rightTab = ref<'design' | 'variables' | 'review'>('design')
 
-// Live lint count for the Review tab badge.
-const reviewIssueCount = computed(() => lintEmailDocument(document.value).length)
+// Live lint findings — computed once, shared by the Review tab, its badge and
+// the "Fix issues" quick action.
+const reviewIssues = computed(() => lintEmailDocument(document.value))
+const reviewIssueCount = computed(() => reviewIssues.value.length)
 
 // Preview merges sample values so previews look real; the saved doc keeps {{ }}.
 const previewDocument = computed(() => {
@@ -524,6 +526,21 @@ function fixWithAi(prompt: string) {
   chat.sendMessage({ text: prompt })
 }
 
+const clearingChat = ref(false)
+async function clearChat() {
+  if (busyChat.value || clearingChat.value || !chat.messages.length) return
+  clearingChat.value = true
+  try {
+    await $fetch(`/api/emails/${id}/chat`, { method: 'DELETE' })
+    chat.messages = []
+    toast.add({ title: 'Conversation cleared', icon: 'i-lucide-eraser', color: 'success' })
+  } catch (e: any) {
+    toast.add({ title: e?.data?.statusMessage || 'Could not clear the conversation.', color: 'error' })
+  } finally {
+    clearingChat.value = false
+  }
+}
+
 function blockLabel(b: EmailBlock): string {
   if (b.type === 'heading') return b.text || 'Heading'
   if (b.type === 'text') return b.html.replace(/<[^>]+>/g, '').slice(0, 28) || 'Text'
@@ -625,6 +642,18 @@ useHead({ title: () => `${name.value} · Postcard` })
               <UIcon name="i-lucide-sparkles" class="size-3.5" />
             </span>
             <span class="text-sm font-semibold">Postcard AI</span>
+            <div class="flex-1" />
+            <UButton
+              v-if="chat.messages.length"
+              icon="i-lucide-eraser"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              aria-label="Clear conversation"
+              :loading="clearingChat"
+              :disabled="busyChat"
+              @click="clearChat"
+            />
           </div>
 
           <div v-if="!chat.messages.length" class="flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center">
@@ -789,7 +818,7 @@ useHead({ title: () => `${name.value} · Postcard` })
 
           <div v-show="rightTab === 'review'" class="flex-1 min-h-0">
             <EmailReview
-              :document="document"
+              :issues="reviewIssues"
               :can-ai="isOwner"
               :ai-busy="busyChat"
               @select="(bid) => { selectedId = bid; rightTab = 'design' }"

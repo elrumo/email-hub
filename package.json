@@ -10,6 +10,7 @@
     "start": "bun --bun .output/server/index.mjs",
     "postinstall": "nuxt prepare",
     "lint": "eslint .",
+    "test": "bun test tests",
     "typecheck": "nuxt typecheck"
   },
   "dependencies": {

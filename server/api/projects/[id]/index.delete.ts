@@ -1,6 +1,7 @@
 import {
   deleteChatMessages,
   deleteContainer,
+  deleteEmailVersions,
   deleteFolder,
   deleteProject,
   listEmailsInContainer,
@@ -18,6 +19,7 @@ export default defineEventHandler(async (event) => {
   const [folders, emails] = await Promise.all([listFolders(id), listEmailsInContainer(id)])
   for (const email of emails) {
     await deleteChatMessages(email.id)
+    await deleteEmailVersions(email.id)
     await deleteProject(email.id)
   }
   for (const folder of folders) {

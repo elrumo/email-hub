@@ -48,6 +48,11 @@ export default defineNuxtConfig({
   },
 
   future: { compatibilityVersion: 4 },
+  // The bun-test suite (tests/) is typechecked by bun, not vue-tsc — the
+  // `bun:test` module types aren't part of the Nuxt tsconfig.
+  typescript: {
+    tsConfig: { exclude: ['../tests'] }
+  },
   nitro: {
     externals: { inline: ['stripe', 'parse'] }
   }

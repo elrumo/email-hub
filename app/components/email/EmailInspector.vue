@@ -13,7 +13,7 @@ import {
   getUniformPaddingValue,
   isPaddingSides
 } from '#shared/email/blocks'
-import { removeBlock, updateBlock, updateSettings } from '#shared/email/ops'
+import { duplicateBlock, removeBlock, updateBlock, updateSettings } from '#shared/email/ops'
 import { applyThemeToDocument, currentTheme, FONT_STACKS, THEME_PRESETS } from '#shared/email/theme'
 
 const props = defineProps<{
@@ -85,6 +85,48 @@ function removeSelected() {
   if (!props.selectedId) return
   emit('update:document', removeBlock(props.document, props.selectedId).doc)
   emit('select', null)
+}
+
+function duplicateSelected() {
+  if (!props.selectedId) return
+  const res = duplicateBlock(props.document, props.selectedId)
+  if (!res.ok) return
+  emit('update:document', res.doc)
+  if (res.id) emit('select', res.id)
+}
+
+// ---- image upload -----------------------------------------------------------
+const uploadInput = ref<HTMLInputElement | null>(null)
+const uploading = ref(false)
+
+async function onUploadPicked(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (uploadInput.value) uploadInput.value.value = ''
+  if (!file || !props.selectedId) return
+  if (file.size > 5 * 1024 * 1024) {
+    toast.add({ title: 'Images are limited to 5 MB.', color: 'error' })
+    return
+  }
+  uploading.value = true
+  try {
+    const data = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(String(reader.result))
+      reader.onerror = () => reject(reader.error)
+      reader.readAsDataURL(file)
+    })
+    const res = await $fetch<{ url: string }>('/api/uploads', {
+      method: 'POST',
+      body: { name: file.name, contentType: file.type, data }
+    })
+    patch('src', res.url)
+    toast.add({ title: 'Image uploaded', icon: 'i-lucide-image-up', color: 'success' })
+  } catch (err: unknown) {
+    const e2 = err as { data?: { statusMessage?: string } }
+    toast.add({ title: e2?.data?.statusMessage || 'Upload failed.', color: 'error' })
+  } finally {
+    uploading.value = false
+  }
 }
 
 const typeLabel: Record<string, string> = {
@@ -173,14 +215,24 @@ watch(() => props.selectedId, () => {
           />
           <span class="text-sm font-semibold text-highlighted">{{ typeLabel[selected.type] }}</span>
         </div>
-        <UButton
-          icon="i-lucide-trash-2"
-          color="error"
-          variant="ghost"
-          size="xs"
-          aria-label="Delete block"
-          @click="removeSelected"
-        />
+        <div class="flex items-center gap-0.5">
+          <UButton
+            icon="i-lucide-copy"
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            aria-label="Duplicate block"
+            @click="duplicateSelected"
+          />
+          <UButton
+            icon="i-lucide-trash-2"
+            color="error"
+            variant="ghost"
+            size="xs"
+            aria-label="Delete block"
+            @click="removeSelected"
+          />
+        </div>
       </div>
 
       <div class="flex-1 space-y-4 overflow-y-auto p-4">
@@ -271,12 +323,30 @@ watch(() => props.selectedId, () => {
 
         <!-- Image -->
         <template v-else-if="selected.type === 'image'">
-          <UFormField label="Image URL" help="Paste a hosted image URL.">
-            <UInput
-              :model-value="selected.src"
-              class="w-full"
-              @update:model-value="patch('src', $event)"
-            />
+          <UFormField label="Image URL" help="Paste a hosted image URL, or upload one.">
+            <div class="space-y-2">
+              <UInput
+                :model-value="selected.src"
+                class="w-full"
+                @update:model-value="patch('src', $event)"
+              />
+              <input
+                ref="uploadInput"
+                type="file"
+                accept="image/png,image/jpeg,image/gif,image/webp"
+                class="hidden"
+                @change="onUploadPicked"
+              >
+              <UButton
+                label="Upload image"
+                icon="i-lucide-image-up"
+                size="xs"
+                color="neutral"
+                variant="subtle"
+                :loading="uploading"
+                @click="uploadInput?.click()"
+              />
+            </div>
           </UFormField>
           <UFormField label="Alt text">
             <UInput

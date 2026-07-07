@@ -274,7 +274,9 @@ export function defaultBlock(type: EmailBlockType, id: string): EmailBlock {
     case 'button':
       return { id, type, label: 'Click me', href: 'https://example.com', align: 'center', backgroundColor: '#2563eb', color: '#ffffff', radius: 6, padding: 16 }
     case 'image':
-      return { id, type, src: 'https://via.placeholder.com/600x200', alt: '', align: 'center', padding: 16 }
+      // via.placeholder.com is defunct; dummyimage.com is the placeholder host
+      // the AI is instructed to use as well.
+      return { id, type, src: 'https://dummyimage.com/600x200/e4e4e7/71717a&text=Image', alt: '', align: 'center', padding: 16 }
     case 'divider':
       return { id, type, color: '#e4e4e7', thickness: 1, padding: 8 }
     case 'spacer':
