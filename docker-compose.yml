@@ -6,15 +6,21 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
+      parse-server:
+        condition: service_healthy
     expose:
       - "3000"
     env_file:
       - .env
     environment:
-      # Inside the compose network the app reaches Postgres by service name.
       NUXT_DATABASE_URL: postgres://postcard:${POSTGRES_PASSWORD:-postcard}@db:5432/postcard
-      # The assistant's upstream gateway (LiteLLM, OpenAI-compatible). The model
-      # id and provider are an implementation detail — users never see them.
+      NUXT_REDIS_URL: redis://redis:6379
+      PARSE_SERVER_URL: http://parse-server:1337${PARSE_MOUNT_PATH:-/parse}
+      PARSE_PUBLIC_SERVER_URL: ${PARSE_PUBLIC_URL:-http://localhost:1337/parse}
+      PARSE_SERVER_APPLICATION_ID: ${PARSE_APP_ID:-email-hub}
+      PARSE_SERVER_MASTER_KEY: ${PARSE_MASTER_KEY:-}
       NUXT_AI_BASE_URL: ${NUXT_AI_BASE_URL:-http://litellm:4000/v1}
       NUXT_PUBLIC_APP_URL: ${NUXT_PUBLIC_APP_URL:-http://localhost:3000}
     healthcheck:
@@ -40,10 +46,76 @@ services:
       retries: 5
       start_period: 10s
 
-  # LiteLLM gateway: the single OpenAI-compatible endpoint the app talks to.
-  # It maps the public-facing "mini-v2" model alias onto whatever real provider
-  # you configure in litellm.config.yaml — keeping the provider hidden from the
-  # product. Optional: point NUXT_AI_BASE_URL elsewhere to run without it.
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - postcard_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  mongo:
+    image: mongo:8
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-emailhub}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-emailhub}
+      MONGO_INITDB_DATABASE: ${MONGO_DB:-parse}
+    ports:
+      - "${MONGO_BIND_ADDR:-127.0.0.1}:${MONGO_PORT:-27017}:27017"
+    volumes:
+      - postcard_mongo:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  parse-server:
+    build:
+      context: ./parse
+      dockerfile: Dockerfile
+    image: email-hub-parse
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    expose:
+      - "1337"
+    env_file:
+      - .env
+    environment:
+      PARSE_SERVER_APPLICATION_ID: ${PARSE_APP_ID:-email-hub}
+      PARSE_SERVER_MASTER_KEY: ${PARSE_MASTER_KEY:?set PARSE_MASTER_KEY in .env}
+      PARSE_SERVER_DATABASE_URI: mongodb://${MONGO_USER:-emailhub}:${MONGO_PASSWORD:-emailhub}@mongo:27017/${MONGO_DB:-parse}?authSource=admin
+      PARSE_SERVER_MOUNT_PATH: ${PARSE_MOUNT_PATH:-/parse}
+      PARSE_SERVER_URL: http://parse-server:1337${PARSE_MOUNT_PATH:-/parse}
+      PARSE_PUBLIC_SERVER_URL: ${PARSE_PUBLIC_URL:-http://localhost:1337/parse}
+      PARSE_SERVER_ALLOW_CLIENT_CLASS_CREATION: ${PARSE_ALLOW_CLIENT_CLASS_CREATION:-false}
+      PARSE_SERVER_FILES_ADAPTER: ${PARSE_SERVER_FILES_ADAPTER-@parse/s3-files-adapter}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
+      S3_DIRECT_ACCESS: ${S3_DIRECT_ACCESS:-false}
+      S3_BASE_URL: ${S3_BASE_URL:-}
+      S3_BUCKET_PREFIX: ${S3_BUCKET_PREFIX:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:1337'+(process.env.PARSE_SERVER_MOUNT_PATH||'/parse')+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # LiteLLM gateway: OpenAI-compatible endpoint the app talks to.
   litellm:
     image: ghcr.io/berriai/litellm:main-stable
     restart: unless-stopped
@@ -57,3 +129,5 @@ services:
 
 volumes:
   postcard_db:
+  postcard_redis:
+  postcard_mongo:

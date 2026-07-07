@@ -38,9 +38,9 @@ demand.
 ## Quick start (Docker Compose)
 
 ```bash
-cp .env.example .env       # fill in OPENAI_API_KEY (for the LiteLLM gateway), Stripe keys
+cp .env.example .env       # fill in Parse, Stripe and upstream AI credentials
 docker compose up --build
-# → app on http://localhost:3000, Postgres + LiteLLM run alongside it
+# → app on http://localhost:3000, with Postgres, Redis, Mongo, Parse Server and LiteLLM alongside it
 ```
 
 The schema is created automatically on first boot. The first account you create
@@ -66,7 +66,10 @@ Notable groups:
 
 | Group | Vars |
 | --- | --- |
-| Database | `NUXT_DATABASE_URL` |
+| Database | `NUXT_DATABASE_URL`, `POSTGRES_PASSWORD` |
+| Redis | `NUXT_REDIS_URL` |
+| Parse + Mongo | `PARSE_APP_ID`, `PARSE_MASTER_KEY`, `PARSE_PUBLIC_URL`, `MONGO_USER`, `MONGO_PASSWORD`, `MONGO_DB` |
+| S3 file storage | `S3_BUCKET`, `S3_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` |
 | AI (hidden from users) | `NUXT_AI_BASE_URL`, `NUXT_AI_API_KEY`, `NUXT_AI_MODEL` |
 | Billing | `NUXT_STRIPE_SECRET_KEY`, `NUXT_STRIPE_WEBHOOK_SECRET`, `NUXT_STRIPE_PRICE_STARTER`, `NUXT_STRIPE_PRICE_PRO` |
 | App | `NUXT_PUBLIC_APP_URL` |
