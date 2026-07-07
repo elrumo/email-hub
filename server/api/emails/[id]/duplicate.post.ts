@@ -18,7 +18,12 @@ export default defineEventHandler(async (event) => {
     ownerId: user.id,
     name: `${source.name} copy`,
     document: source.document,
-    variables: source.variables ?? []
+    variables: source.variables ?? [],
+    projectId: source.projectId ?? null,
+    folderId: source.folderId ?? null,
+    shareToken: null,
+    shareMode: null,
+    lastActorId: null
   })
 
   return { project: projectSummary(row) }

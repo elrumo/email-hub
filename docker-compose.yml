@@ -13,9 +13,10 @@ services:
     environment:
       NUXT_REDIS_URL: redis://redis:6379
       PARSE_SERVER_URL: http://parse-server:1337${PARSE_MOUNT_PATH:-/parse}
+      PARSE_LIVEQUERY_URL: ws://parse-server:1337${PARSE_MOUNT_PATH:-/parse}
       PARSE_PUBLIC_SERVER_URL: ${PARSE_PUBLIC_URL:-http://localhost:1337/parse}
       PARSE_SERVER_APPLICATION_ID: ${PARSE_APP_ID:-email-hub}
-      PARSE_SERVER_MASTER_KEY: ${PARS…Y:-}
+      PARSE_SERVER_MASTER_KEY: ${PARSE_MASTER_KEY:-}
       NUXT_AI_BASE_URL: ${NUXT_AI_BASE_URL:-http://litellm:4000/v1}
       NUXT_PUBLIC_APP_URL: ${NUXT_PUBLIC_APP_URL:-http://localhost:3000}
     healthcheck:
@@ -41,15 +42,24 @@ services:
   mongo:
     image: mongo:8
     restart: unless-stopped
+    # Reconciles the root user with MONGO_PASSWORD on every boot — the stock
+    # image only applies MONGO_INITDB_* on an empty volume, so a password
+    # change (or a volume created before creds existed) would otherwise leave
+    # parse-server failing with "Authentication failed".
+    entrypoint: ["/usr/local/bin/mongo-entrypoint.sh"]
+    command: ["mongod"]
     environment:
       MONGO_INITDB_ROOT_USERNAME: emailhub
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-A8kQ3x…parse
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-68aa30aaa9402a7a4a5dd5c5d5280057}
     ports:
       - "127.0.0.1:27017:27017"
     volumes:
       - postcard_mongo:/data/db
+      - ./mongo/mongo-entrypoint.sh:/usr/local/bin/mongo-entrypoint.sh:ro
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      # Authenticated ping: a credentials mismatch keeps mongo "unhealthy" so
+      # parse-server (depends_on: service_healthy) never crash-loops on it.
+      test: ["CMD-SHELL", "mongosh --quiet -u \"$$MONGO_INITDB_ROOT_USERNAME\" -p \"$$MONGO_INITDB_ROOT_PASSWORD\" --authenticationDatabase admin --eval \"db.adminCommand('ping')\""]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -68,12 +78,15 @@ services:
       - "1337"
     environment:
       PARSE_SERVER_APPLICATION_ID: ${PARSE_APP_ID:-email-hub}
-      PARSE_SERVER_MASTER_KEY: ${PARS…?set PARSE_MASTER_KEY in Dokploy}
-      PARSE_SERVER_DATABASE_URI: mongodb://emailhub:${MONGO_PASSWORD:-A8kQ3x…27017/parse?authSource=admin
+      PARSE_SERVER_MASTER_KEY: ${PARSE_MASTER_KEY:?set PARSE_MASTER_KEY in Dokploy}
+      PARSE_SERVER_DATABASE_URI: mongodb://emailhub:${MONGO_PASSWORD:-68aa30aaa9402a7a4a5dd5c5d5280057}@mongo:27017/parse?authSource=admin
       PARSE_SERVER_MOUNT_PATH: ${PARSE_MOUNT_PATH:-/parse}
       PARSE_SERVER_URL: http://parse-server:1337${PARSE_MOUNT_PATH:-/parse}
       PARSE_PUBLIC_SERVER_URL: ${PARSE_PUBLIC_URL:-http://localhost:1337/parse}
       PARSE_SERVER_ALLOW_CLIENT_CLASS_CREATION: ${PARSE_ALLOW_CLIENT_CLASS_CREATION:-false}
+      # Live Query powers multiplayer document sync (EmailProject updates)
+      PARSE_SERVER_START_LIVE_QUERY_SERVER: "true"
+      PARSE_SERVER_LIVE_QUERY: '{"classNames":["EmailProject"]}'
       PARSE_SERVER_FILES_ADAPTER: ${PARSE_SERVER_FILES_ADAPTER:-}
       S3_BUCKET: ${S3_BUCKET:-}
       S3_REGION: ${S3_REGION:-us-east-1}

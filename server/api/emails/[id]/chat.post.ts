@@ -12,7 +12,8 @@ import {
   tool,
   type UIMessage
 } from 'ai'
-import { emptyDocument, findBlock, type EmailDocument } from '#shared/email/blocks'
+import { emptyDocument, findBlock, type EmailDocument, type EmailTheme } from '#shared/email/blocks'
+import { applyThemeToDocument, THEME_PRESETS } from '#shared/email/theme'
 import {
   addBlock,
   moveBlock,
@@ -32,6 +33,12 @@ import { messagesThisMonth, recordUsageForUser } from '../../../utils/usage'
 import { reconcileVariables, requireOwnedProject } from '../../../utils/projects'
 
 const BLOCK_TYPES = ['heading', 'text', 'button', 'image', 'divider', 'spacer', 'columns', 'html'] as const
+
+/** The full document, bounded so a giant email can't blow the context. */
+function documentForPrompt(doc: EmailDocument): string {
+  const json = JSON.stringify(doc)
+  return json.length > 14000 ? `${json.slice(0, 14000)}…(truncated — use block ids above to target edits)` : json
+}
 
 function systemPrompt(doc: EmailDocument, selectedId?: string): string {
   const selected = selectedId ? findBlock(doc.blocks, selectedId) : null
@@ -54,15 +61,20 @@ function systemPrompt(doc: EmailDocument, selectedId?: string): string {
     '',
     'Template variables: the user can insert {{ mustache }} placeholders anywhere text is allowed (e.g. "Hi {{ firstName }}"). When the user asks for personalization, use {{ key }} placeholders with clear, snake/camelCase keys and tell them which variables you added — they will be substituted later via the API.',
     '',
+    'Theming: when the user asks to change the look/feel/colors/vibe WITHOUT changing content or layout ("make it dark", "more playful", "match my brand green"), use set_theme — it restyles every block from design tokens. Available presets: ' + THEME_PRESETS.map(p => p.id).join(', ') + '. You can pass a preset, individual tokens, or both (tokens override the preset).',
+    '',
     'Guidance:',
     '- When the user asks for a whole new email or a big redesign, prefer set_document with the full block list.',
     '- For targeted tweaks, use update_block / update_settings / add_block / remove_block / move_block.',
     '- Keep content width-friendly (~600px), use real, sensible copy, and accessible color contrast.',
+    '- Structure quality: lead with a clear hero (heading + supporting text), one primary CTA button, generous spacer rhythm, and a muted footer (small text block) with the sender address and an unsubscribe line.',
+    '- Copy quality: concrete and concise; subject (settings.title) under ~50 chars; always set a preheader that complements the subject.',
     '- IMAGES: never invent or hotlink random image URLs. Use clearly-labelled placeholder URLs (e.g. dummyimage.com) for layout and tell the user to swap them for their own.',
+    '- If a request is ambiguous, make the most reasonable choice and note the assumption in one short sentence — do not stall by asking questions for simple edits.',
     '- After editing, briefly tell the user what you changed. Do not dump the JSON or HTML.',
     '',
-    `Current document settings: ${JSON.stringify(doc.settings)}.`,
     `Current top-level blocks (id:type): ${doc.blocks.map(b => `${b.id}:${b.type}`).join(', ') || '(none)'}.`,
+    `Current document JSON: ${documentForPrompt(doc)}`,
     selected
       ? `The user has SELECTED this block — assume edits target it unless they say otherwise:\n${JSON.stringify(selected)}`
       : 'No block is currently selected.'
@@ -91,7 +103,12 @@ export default defineEventHandler(async (event) => {
 
   let doc: EmailDocument = body.document ?? project.document ?? emptyDocument()
   const selectedId = body.selectedId
-  const incoming = body.messages ?? []
+  // Cap the history sent upstream — old turns matter less than the current
+  // document state (which is always included in the system prompt).
+  const incoming = (body.messages ?? []).slice(-30)
+  if (!incoming.length) {
+    throw createError({ statusCode: 422, statusMessage: 'No messages provided.' })
+  }
   const lastUser = [...incoming].reverse().find(m => m.role === 'user')
   if (lastUser) {
     await createChatMessage({
@@ -163,6 +180,35 @@ export default defineEventHandler(async (event) => {
           inputSchema: jsonSchema<{ id: string }>({ type: 'object', required: ['id'], properties: { id: { type: 'string' } } }),
           execute: async ({ id }) => apply(removeBlock(doc, id))
         }),
+        set_theme: tool({
+          description: 'Restyle the whole email via design tokens (colors, font, button radius) without touching layout or copy. Pass a preset id and/or individual tokens; tokens override the preset.',
+          inputSchema: jsonSchema<{ preset?: string, tokens?: Partial<EmailTheme> }>({
+            type: 'object',
+            properties: {
+              preset: { type: 'string', enum: THEME_PRESETS.map(p => p.id) },
+              tokens: {
+                type: 'object',
+                properties: {
+                  brand: { type: 'string' },
+                  onBrand: { type: 'string' },
+                  background: { type: 'string' },
+                  surface: { type: 'string' },
+                  heading: { type: 'string' },
+                  text: { type: 'string' },
+                  muted: { type: 'string' },
+                  fontFamily: { type: 'string' },
+                  radius: { type: 'number' }
+                }
+              }
+            }
+          }),
+          execute: async ({ preset, tokens }) => {
+            const base = preset ? THEME_PRESETS.find(p => p.id === preset)?.theme : undefined
+            const patch = { ...(base ?? {}), ...(tokens ?? {}) }
+            if (!Object.keys(patch).length) return 'No theme tokens provided.'
+            return apply({ ok: true, message: 'Theme applied.', doc: applyThemeToDocument(doc, patch) })
+          }
+        }),
         move_block: tool({
           description: 'Move a top-level block to a new index.',
           inputSchema: jsonSchema<{ id: string, to: number }>({
@@ -177,7 +223,8 @@ export default defineEventHandler(async (event) => {
         system: systemPrompt(doc, selectedId),
         messages: await convertToModelMessages(incoming),
         tools,
-        stopWhen: stepCountIs(8),
+        maxRetries: 3,
+        stopWhen: stepCountIs(12),
         onFinish: ({ usage, totalUsage }) => {
           const u = (totalUsage ?? usage) as unknown as Record<string, number> | undefined
           if (u) {
@@ -192,19 +239,30 @@ export default defineEventHandler(async (event) => {
 
       writer.merge(result.toUIMessageStream())
     },
+    // Surface a readable message in the chat instead of a dead stream.
+    onError: (e) => {
+      console.error('[chat] stream error:', e instanceof Error ? e.message : e)
+      return 'Postcard AI hit a temporary problem talking to the model. Your email is unchanged — try sending that again.'
+    },
     onFinish: async ({ responseMessage }) => {
-      if (responseMessage) {
-        await createChatMessage({
-          clientId: responseMessage.id || randomUUID(),
-          projectId,
-          role: 'assistant',
-          parts: responseMessage.parts as unknown[]
+      try {
+        if (responseMessage) {
+          await createChatMessage({
+            clientId: responseMessage.id || randomUUID(),
+            projectId,
+            role: 'assistant',
+            parts: responseMessage.parts as unknown[]
+          })
+        }
+        await updateProject(projectId, {
+          document: doc,
+          variables: reconcileVariables(doc, project.variables ?? [])
         })
+      } catch (e) {
+        // Persistence must not kill the stream; the client still holds the doc
+        // and its autosave will retry.
+        console.error('[chat] persist failed:', e instanceof Error ? e.message : e)
       }
-      await updateProject(projectId, {
-        document: doc,
-        variables: reconcileVariables(doc, project.variables ?? [])
-      })
       await recordUsageForUser(user.id, projectId, modelId, captured)
     }
   })

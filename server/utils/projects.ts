@@ -1,7 +1,15 @@
 import { createError } from 'h3'
 import { extractTemplateVariables } from '#shared/email/placeholders'
 import type { EmailDocument } from '#shared/email/blocks'
-import { getProject, type EmailProject, type TemplateVariable } from './parse'
+import {
+  getContainer,
+  getFolder,
+  getProject,
+  type EmailProject,
+  type ProjectContainer,
+  type ProjectFolder,
+  type TemplateVariable
+} from './parse'
 
 export async function requireOwnedProject(id: string, ownerId: string): Promise<EmailProject> {
   const project = await getProject(id)
@@ -9,6 +17,22 @@ export async function requireOwnedProject(id: string, ownerId: string): Promise<
     throw createError({ statusCode: 404, statusMessage: 'Email project not found' })
   }
   return project
+}
+
+export async function requireOwnedContainer(id: string, ownerId: string): Promise<ProjectContainer> {
+  const container = await getContainer(id)
+  if (!container || container.ownerId !== ownerId) {
+    throw createError({ statusCode: 404, statusMessage: 'Project not found' })
+  }
+  return container
+}
+
+export async function requireOwnedFolder(id: string, ownerId: string): Promise<ProjectFolder> {
+  const folder = await getFolder(id)
+  if (!folder || folder.ownerId !== ownerId) {
+    throw createError({ statusCode: 404, statusMessage: 'Folder not found' })
+  }
+  return folder
 }
 
 export function reconcileVariables(
@@ -29,6 +53,8 @@ export function projectSummary(p: EmailProject) {
     name: p.name,
     subject: doc?.settings?.title ?? '',
     variables: p.variables ?? [],
+    projectId: p.projectId ?? null,
+    folderId: p.folderId ?? null,
     updatedAt: p.updatedAt,
     createdAt: p.createdAt
   }

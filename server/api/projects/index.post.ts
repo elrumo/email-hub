@@ -1,30 +1,13 @@
-import { cloneBlankEmailDocument, cloneEmailTemplateDocument } from '#shared/email/templates'
-import type { EmailDocument } from '#shared/email/blocks'
-import { countProjectsForOwner, createProject } from '../../utils/parse'
+import { createContainer } from '../../utils/parse'
 import { requireUser } from '../../utils/auth'
-import { planFor } from '../../utils/plans'
-import { projectSummary, reconcileVariables } from '../../utils/projects'
 
 export default defineEventHandler(async (event) => {
   const user = await requireUser(event)
-  const body = await readBody<{ name?: string, templateId?: string }>(event)
+  const body = await readBody<{ name?: string }>(event)
+  const name = (body.name ?? '').trim()
+  if (!name) throw createError({ statusCode: 422, statusMessage: 'Give the project a name.' })
 
-  const n = await countProjectsForOwner(user.id)
-  const limit = planFor(user.plan).limits.projects
-  if (n >= limit) {
-    throw createError({
-      statusCode: 402,
-      statusMessage: `You've reached your plan's limit of ${limit} projects. Upgrade to create more.`
-    })
-  }
-
-  const doc: EmailDocument = (body.templateId && cloneEmailTemplateDocument(body.templateId)) || cloneBlankEmailDocument()
-  const row = await createProject({
-    ownerId: user.id,
-    name: (body.name ?? '').trim() || doc.settings.title || 'Untitled email',
-    document: doc,
-    variables: reconcileVariables(doc, [])
-  })
-
-  return { project: projectSummary(row) }
+  const now = Date.now()
+  const project = await createContainer({ ownerId: user.id, name, memberIds: [], shareToken: null, shareMode: null, createdAt: now, updatedAt: now })
+  return { project }
 })

@@ -5,7 +5,7 @@
  * immutably via the doc-ops helpers and bubbled up through the `update:*`
  * events; the parent owns the document state and autosave.
  */
-import type { Align, EmailBlock, EmailDocument, PaddingSide } from '#shared/email/blocks'
+import type { Align, EmailBlock, EmailDocument, EmailTheme, PaddingSide } from '#shared/email/blocks'
 import {
   coerceNumberLike,
   findBlock,
@@ -14,6 +14,7 @@ import {
   isPaddingSides
 } from '#shared/email/blocks'
 import { removeBlock, updateBlock, updateSettings } from '#shared/email/ops'
+import { applyThemeToDocument, currentTheme, FONT_STACKS, THEME_PRESETS } from '#shared/email/theme'
 
 const props = defineProps<{
   document: EmailDocument
@@ -86,6 +87,30 @@ const typeLabel: Record<string, string> = {
   heading: 'Heading', text: 'Text', button: 'Button', image: 'Image',
   divider: 'Divider', spacer: 'Spacer', columns: 'Columns', html: 'Custom HTML'
 }
+
+// ---- theme designer ---------------------------------------------------------
+const theme = computed<EmailTheme>(() => currentTheme(props.document))
+
+const themeTokens = [
+  { key: 'brand', label: 'Brand' },
+  { key: 'onBrand', label: 'On brand' },
+  { key: 'background', label: 'Page' },
+  { key: 'surface', label: 'Card' },
+  { key: 'heading', label: 'Headings' },
+  { key: 'text', label: 'Text' },
+  { key: 'muted', label: 'Muted' }
+] satisfies Array<{ key: keyof EmailTheme, label: string }>
+
+function patchTheme(patch: Partial<EmailTheme>) {
+  emit('update:document', applyThemeToDocument(props.document, patch))
+}
+
+function applyPreset(presetId: string) {
+  const preset = THEME_PRESETS.find(p => p.id === presetId)
+  if (preset) patchTheme({ ...preset.theme })
+}
+
+const fontItems = FONT_STACKS.map(f => ({ label: f.label, value: f.value }))
 
 const paddingPopoverOpen = ref(false)
 
@@ -404,32 +429,58 @@ watch(() => props.selectedId, () => {
             @update:model-value="patchSettings('preheader', $event)"
           />
         </UFormField>
-        <div class="grid grid-cols-2 gap-3">
-          <UFormField label="Page background">
-            <UInput
-              type="color"
-              :model-value="document.settings.backgroundColor"
+        <!-- Theme designer -->
+        <div class="border-t border-default pt-4">
+          <div class="flex items-center gap-2 mb-1">
+            <UIcon name="i-lucide-palette" class="size-4 text-primary" />
+            <span class="text-sm font-semibold text-highlighted">Theme</span>
+          </div>
+          <p class="text-xs text-muted mb-3">Restyles colors, font and corners across the whole email — the layout stays put. You can also just ask the AI ("make it feel like autumn").</p>
+
+          <div class="grid grid-cols-2 gap-2 mb-4">
+            <button
+              v-for="p in THEME_PRESETS"
+              :key="p.id"
+              type="button"
+              class="rounded-lg border border-default p-2 text-left hover:border-primary transition"
+              @click="applyPreset(p.id)"
+            >
+              <div class="flex items-center gap-1 mb-1.5">
+                <span class="w-4 h-4 rounded-full border border-black/10" :style="{ backgroundColor: p.theme.brand }" />
+                <span class="w-4 h-4 rounded-full border border-black/10" :style="{ backgroundColor: p.theme.background }" />
+                <span class="w-4 h-4 rounded-full border border-black/10" :style="{ backgroundColor: p.theme.heading }" />
+              </div>
+              <div class="text-xs font-medium">{{ p.name }}</div>
+            </button>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <UFormField v-for="t in themeTokens" :key="t.key" :label="t.label">
+              <UInput
+                type="color"
+                :model-value="String(theme[t.key])"
+                class="w-full"
+                @update:model-value="patchTheme({ [t.key]: $event })"
+              />
+            </UFormField>
+          </div>
+          <UFormField label="Font" class="mt-3">
+            <USelect
+              :model-value="theme.fontFamily"
+              :items="fontItems"
               class="w-full"
-              @update:model-value="patchSettings('backgroundColor', $event)"
+              @update:model-value="patchTheme({ fontFamily: String($event) })"
             />
           </UFormField>
-          <UFormField label="Card background">
-            <UInput
-              type="color"
-              :model-value="document.settings.contentBackground"
+          <UFormField label="Button corner radius (px)" class="mt-3">
+            <UInputNumber
+              :model-value="theme.radius"
               class="w-full"
-              @update:model-value="patchSettings('contentBackground', $event)"
+              @update:model-value="patchTheme({ radius: coerceNumberLike($event, theme.radius) })"
             />
           </UFormField>
         </div>
-        <UFormField label="Text color">
-          <UInput
-            type="color"
-            :model-value="document.settings.textColor"
-            class="w-full"
-            @update:model-value="patchSettings('textColor', $event)"
-          />
-        </UFormField>
+
         <UFormField label="Content width (px)">
           <UInputNumber
             :model-value="document.settings.contentWidth"

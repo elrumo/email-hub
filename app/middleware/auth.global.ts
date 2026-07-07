@@ -11,4 +11,8 @@ export default defineNuxtRouteMiddleware(async (to) => {
   if (!user.value) {
     return navigateTo(`/login?redirect=${encodeURIComponent(to.fullPath)}`)
   }
+
+  if (to.path.startsWith('/app/admin') && user.value.role !== 'admin') {
+    return navigateTo('/app')
+  }
 })

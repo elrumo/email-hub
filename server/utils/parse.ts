@@ -70,6 +70,42 @@ export interface EmailProject {
   name: string
   document: EmailDocument
   variables: TemplateVariable[]
+  /** containing Project (null on legacy rows until adopted) */
+  projectId: string | null
+  /** containing Folder within the project (null = project root) */
+  folderId: string | null
+  /** public share link token (null = not shared) */
+  shareToken: string | null
+  /** 'view' = anyone with the link; 'edit' = signed-in users with the link */
+  shareMode: string | null
+  /** last editor (client tab id) — used to suppress echo in live sync */
+  lastActorId: string | null
+  createdAt: number
+  updatedAt: number
+}
+
+/** A project: the top-level container users organise their emails into. */
+export interface ProjectContainer {
+  id: string
+  ownerId: string
+  name: string
+  /** user ids with full view/edit access to everything in the project */
+  memberIds: string[]
+  /** public share link token (null = not shared) */
+  shareToken: string | null
+  /** 'view' | 'edit' — link access level for the whole project */
+  shareMode: string | null
+  createdAt: number
+  updatedAt: number
+}
+
+/** A folder inside a project; folders can nest via parentId. */
+export interface ProjectFolder {
+  id: string
+  ownerId: string
+  projectId: string
+  parentId: string | null
+  name: string
   createdAt: number
   updatedAt: number
 }
@@ -136,7 +172,9 @@ function setFields(obj: Parse.Object, data: Record<string, unknown>): void {
 
 const USER_FIELDS = ['email', 'name', 'passwordHash', 'role', 'plan', 'planStatus', 'stripeCustomerId', 'stripeSubscriptionId', 'lastLoginAt', 'createdAt', 'updatedAt']
 const SESSION_FIELDS = ['token', 'userId', 'expiresAt', 'userAgent', 'createdAt']
-const PROJECT_FIELDS = ['ownerId', 'name', 'document', 'variables', 'createdAt', 'updatedAt']
+const PROJECT_FIELDS = ['ownerId', 'name', 'document', 'variables', 'projectId', 'folderId', 'shareToken', 'shareMode', 'lastActorId', 'createdAt', 'updatedAt']
+const CONTAINER_FIELDS = ['ownerId', 'name', 'memberIds', 'shareToken', 'shareMode', 'createdAt', 'updatedAt']
+const FOLDER_FIELDS = ['ownerId', 'projectId', 'parentId', 'name', 'createdAt', 'updatedAt']
 const MESSAGE_FIELDS = ['clientId', 'projectId', 'role', 'parts', 'createdAt']
 const API_KEY_FIELDS = ['ownerId', 'name', 'prefix', 'hash', 'lastUsedAt', 'revokedAt', 'createdAt']
 
@@ -261,6 +299,108 @@ export async function deleteProject(id: string): Promise<void> {
   await Obj.createWithoutData(id).destroy({ useMasterKey: true })
 }
 
+// --- Project containers & folders -------------------------------------------
+
+export async function listContainers(ownerId: string): Promise<ProjectContainer[]> {
+  const Query = new Parse.Query(classFor('ProjectContainer'))
+  Query.equalTo('ownerId', ownerId)
+  Query.descending('updatedAt')
+  Query.limit(1000)
+  const rows = await Query.find({ useMasterKey: true })
+  return rows.map((obj: Parse.Object) => toPlain<ProjectContainer>(obj, CONTAINER_FIELDS))
+}
+
+export async function getContainer(id: string): Promise<ProjectContainer | null> {
+  const Query = new Parse.Query(classFor('ProjectContainer'))
+  const obj = await Query.get(id, { useMasterKey: true }).catch(() => null)
+  return obj ? toPlain<ProjectContainer>(obj, CONTAINER_FIELDS) : null
+}
+
+export async function createContainer(data: Omit<ProjectContainer, 'id'>): Promise<ProjectContainer> {
+  const Obj = classFor('ProjectContainer')
+  const obj = new Obj()
+  setFields(obj, data)
+  await obj.save(null, { useMasterKey: true })
+  return toPlain<ProjectContainer>(obj, CONTAINER_FIELDS)
+}
+
+export async function updateContainer(id: string, patch: Partial<Omit<ProjectContainer, 'id' | 'ownerId' | 'createdAt'>>): Promise<ProjectContainer> {
+  const Obj = classFor('ProjectContainer')
+  const obj = Obj.createWithoutData(id)
+  setFields(obj, patch)
+  await obj.save(null, { useMasterKey: true })
+  const fresh = await getContainer(id)
+  if (!fresh) throw new Error('Project not found after update')
+  return fresh
+}
+
+export async function deleteContainer(id: string): Promise<void> {
+  const Obj = classFor('ProjectContainer')
+  await Obj.createWithoutData(id).destroy({ useMasterKey: true })
+}
+
+export async function listFolders(projectId: string): Promise<ProjectFolder[]> {
+  const Query = new Parse.Query(classFor('ProjectFolder'))
+  Query.equalTo('projectId', projectId)
+  Query.ascending('name')
+  Query.limit(1000)
+  const rows = await Query.find({ useMasterKey: true })
+  return rows.map((obj: Parse.Object) => toPlain<ProjectFolder>(obj, FOLDER_FIELDS))
+}
+
+export async function getFolder(id: string): Promise<ProjectFolder | null> {
+  const Query = new Parse.Query(classFor('ProjectFolder'))
+  const obj = await Query.get(id, { useMasterKey: true }).catch(() => null)
+  return obj ? toPlain<ProjectFolder>(obj, FOLDER_FIELDS) : null
+}
+
+export async function createFolder(data: Omit<ProjectFolder, 'id'>): Promise<ProjectFolder> {
+  const Obj = classFor('ProjectFolder')
+  const obj = new Obj()
+  setFields(obj, data)
+  await obj.save(null, { useMasterKey: true })
+  return toPlain<ProjectFolder>(obj, FOLDER_FIELDS)
+}
+
+export async function updateFolder(id: string, patch: Partial<Omit<ProjectFolder, 'id' | 'ownerId' | 'projectId' | 'createdAt'>>): Promise<ProjectFolder> {
+  const Obj = classFor('ProjectFolder')
+  const obj = Obj.createWithoutData(id)
+  setFields(obj, patch)
+  await obj.save(null, { useMasterKey: true })
+  const fresh = await getFolder(id)
+  if (!fresh) throw new Error('Folder not found after update')
+  return fresh
+}
+
+export async function deleteFolder(id: string): Promise<void> {
+  const Obj = classFor('ProjectFolder')
+  await Obj.createWithoutData(id).destroy({ useMasterKey: true })
+}
+
+export async function findEmailByShareToken(token: string): Promise<EmailProject | null> {
+  const Query = new Parse.Query(classFor('EmailProject'))
+  Query.equalTo('shareToken', token)
+  const obj = await Query.first({ useMasterKey: true })
+  return obj ? toPlain<EmailProject>(obj, PROJECT_FIELDS) : null
+}
+
+export async function findContainerByShareToken(token: string): Promise<ProjectContainer | null> {
+  const Query = new Parse.Query(classFor('ProjectContainer'))
+  Query.equalTo('shareToken', token)
+  const obj = await Query.first({ useMasterKey: true })
+  return obj ? toPlain<ProjectContainer>(obj, CONTAINER_FIELDS) : null
+}
+
+/** All emails inside one project container. */
+export async function listEmailsInContainer(projectId: string): Promise<EmailProject[]> {
+  const Query = new Parse.Query(classFor('EmailProject'))
+  Query.equalTo('projectId', projectId)
+  Query.descending('updatedAt')
+  Query.limit(1000)
+  const rows = await Query.find({ useMasterKey: true })
+  return rows.map((obj: Parse.Object) => toPlain<EmailProject>(obj, PROJECT_FIELDS))
+}
+
 export async function createChatMessage(data: Omit<EmailChatMessage, 'id' | 'createdAt'>): Promise<EmailChatMessage> {
   const Obj = classFor('EmailChatMessage')
   const obj = new Obj()
@@ -349,6 +489,132 @@ export async function recordAiUsage(data: Omit<AiUsageRecord, 'id' | 'createdAt'
   const obj = new Obj()
   setFields(obj, data)
   await obj.save(null, { useMasterKey: true })
+}
+
+export async function listAllUsers(): Promise<AppUser[]> {
+  const out: AppUser[] = []
+  let skip = 0
+  for (;;) {
+    const Query = new Parse.Query(classFor('AppUser'))
+    Query.ascending('createdAt')
+    Query.skip(skip)
+    Query.limit(1000)
+    const rows = await Query.find({ useMasterKey: true })
+    out.push(...rows.map((obj: Parse.Object) => toPlain<AppUser>(obj, USER_FIELDS)))
+    if (rows.length < 1000) break
+    skip += rows.length
+  }
+  return out
+}
+
+/** Owner id of every project, used for per-user counts in the admin view. */
+export async function listProjectOwnerIds(): Promise<string[]> {
+  const out: string[] = []
+  let skip = 0
+  for (;;) {
+    const Query = new Parse.Query(classFor('EmailProject'))
+    Query.select('ownerId')
+    Query.skip(skip)
+    Query.limit(1000)
+    const rows = await Query.find({ useMasterKey: true })
+    out.push(...rows.map((obj: Parse.Object) => String(obj.get('ownerId'))))
+    if (rows.length < 1000) break
+    skip += rows.length
+  }
+  return out
+}
+
+/** All AI usage rows since a timestamp (userId + tokens), for admin stats. */
+export async function listAiUsageSince(since: number): Promise<Array<{ userId: string, totalTokens: number }>> {
+  const out: Array<{ userId: string, totalTokens: number }> = []
+  let skip = 0
+  for (;;) {
+    const Query = new Parse.Query(classFor('AiUsage'))
+    // createdAt is Parse's built-in Date field — compare with a Date, not epoch ms
+    Query.greaterThanOrEqualTo('createdAt', new Date(since))
+    Query.select('userId', 'totalTokens')
+    Query.ascending('objectId')
+    Query.skip(skip)
+    Query.limit(1000)
+    const rows = await Query.find({ useMasterKey: true })
+    out.push(...rows.map((obj: Parse.Object) => ({
+      userId: String(obj.get('userId')),
+      totalTokens: Number(obj.get('totalTokens') || 0)
+    })))
+    if (rows.length < 1000) break
+    skip += rows.length
+  }
+  return out
+}
+
+export interface TriggerSetting {
+  id: string
+  /** trigger key: welcome | purchase | inactive */
+  trigger: string
+  /** EmailProject id used as the template, or null when unset */
+  projectId: string | null
+  enabled: boolean
+  /** months of no logins before the inactivity trigger fires */
+  inactiveAfterMonths: number | null
+  updatedAt: number
+}
+
+const TRIGGER_SETTING_FIELDS = ['trigger', 'projectId', 'enabled', 'inactiveAfterMonths', 'updatedAt']
+
+export async function listTriggerSettings(): Promise<TriggerSetting[]> {
+  const Query = new Parse.Query(classFor('TriggerSetting'))
+  Query.limit(100)
+  const rows = await Query.find({ useMasterKey: true })
+  return rows.map((obj: Parse.Object) => toPlain<TriggerSetting>(obj, TRIGGER_SETTING_FIELDS))
+}
+
+export async function getTriggerSetting(trigger: string): Promise<TriggerSetting | null> {
+  const Query = new Parse.Query(classFor('TriggerSetting'))
+  Query.equalTo('trigger', trigger)
+  const obj = await Query.first({ useMasterKey: true })
+  return obj ? toPlain<TriggerSetting>(obj, TRIGGER_SETTING_FIELDS) : null
+}
+
+export async function upsertTriggerSetting(data: Omit<TriggerSetting, 'id' | 'updatedAt'>): Promise<TriggerSetting> {
+  const Query = new Parse.Query(classFor('TriggerSetting'))
+  Query.equalTo('trigger', data.trigger)
+  const existing = await Query.first({ useMasterKey: true })
+  const Obj = classFor('TriggerSetting')
+  const obj = existing ?? new Obj()
+  setFields(obj, data)
+  await obj.save(null, { useMasterKey: true })
+  return toPlain<TriggerSetting>(obj, TRIGGER_SETTING_FIELDS)
+}
+
+export interface TriggerSendLog {
+  id: string
+  userId: string
+  trigger: string
+  projectId: string | null
+  sentAt: number
+}
+
+export async function recordTriggerSend(data: Omit<TriggerSendLog, 'id'>): Promise<void> {
+  const Obj = classFor('TriggerSendLog')
+  const obj = new Obj()
+  setFields(obj, data)
+  await obj.save(null, { useMasterKey: true })
+}
+
+/** Most recent time this trigger was sent to this user (0 = never). */
+export async function lastTriggerSendAt(userId: string, trigger: string): Promise<number> {
+  const Query = new Parse.Query(classFor('TriggerSendLog'))
+  Query.equalTo('userId', userId)
+  Query.equalTo('trigger', trigger)
+  Query.descending('sentAt')
+  const obj = await Query.first({ useMasterKey: true })
+  return obj ? Number(obj.get('sentAt') || 0) : 0
+}
+
+/** Users whose last login (or signup) is older than the cutoff. */
+export async function listUsersInactiveSince(cutoff: number): Promise<AppUser[]> {
+  const users = await listAllUsers()
+  return users.filter(u => (u.lastLoginAt ?? u.createdAt) < cutoff)
 }
 
 export async function pingParse(): Promise<boolean> {
