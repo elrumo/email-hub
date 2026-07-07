@@ -15,7 +15,7 @@ services:
       PARSE_SERVER_URL: http://parse-server:1337${PARSE_MOUNT_PATH:-/parse}
       PARSE_PUBLIC_SERVER_URL: ${PARSE_PUBLIC_URL:-http://localhost:1337/parse}
       PARSE_SERVER_APPLICATION_ID: ${PARSE_APP_ID:-email-hub}
-      PARSE_SERVER_MASTER_KEY: ${PARS…Y:-}
+      PARSE_SERVER_MASTER_KEY: ${PARSE_MASTER_KEY:-}
       NUXT_AI_BASE_URL: ${NUXT_AI_BASE_URL:-http://litellm:4000/v1}
       NUXT_PUBLIC_APP_URL: ${NUXT_PUBLIC_APP_URL:-http://localhost:3000}
     healthcheck:
@@ -43,7 +43,7 @@ services:
     restart: unless-stopped
     environment:
       MONGO_INITDB_ROOT_USERNAME: emailhub
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-A8kQ3x…parse
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-68aa30aaa9402a7a4a5dd5c5d5280057}
     ports:
       - "127.0.0.1:27017:27017"
     volumes:
@@ -68,8 +68,8 @@ services:
       - "1337"
     environment:
       PARSE_SERVER_APPLICATION_ID: ${PARSE_APP_ID:-email-hub}
-      PARSE_SERVER_MASTER_KEY: ${PARS…?set PARSE_MASTER_KEY in Dokploy}
-      PARSE_SERVER_DATABASE_URI: mongodb://emailhub:${MONGO_PASSWORD:-A8kQ3x…27017/parse?authSource=admin
+      PARSE_SERVER_MASTER_KEY: ${PARSE_MASTER_KEY:?set PARSE_MASTER_KEY in Dokploy}
+      PARSE_SERVER_DATABASE_URI: mongodb://emailhub:${MONGO_PASSWORD:-68aa30aaa9402a7a4a5dd5c5d5280057}@mongo:27017/parse?authSource=admin
       PARSE_SERVER_MOUNT_PATH: ${PARSE_MOUNT_PATH:-/parse}
       PARSE_SERVER_URL: http://parse-server:1337${PARSE_MOUNT_PATH:-/parse}
       PARSE_PUBLIC_SERVER_URL: ${PARSE_PUBLIC_URL:-http://localhost:1337/parse}
