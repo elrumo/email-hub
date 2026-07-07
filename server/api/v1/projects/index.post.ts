@@ -37,6 +37,8 @@ export default defineEventHandler(async (event) => {
     name: (body.name ?? '').trim() || doc.settings.title || 'Untitled email',
     document: doc,
     variables: reconcileVariables(doc, []),
+    projectId: null,
+    folderId: null,
     createdAt: now,
     updatedAt: now
   })

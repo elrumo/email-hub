@@ -68,6 +68,30 @@ export interface EmailProject {
   name: string
   document: EmailDocument
   variables: TemplateVariable[]
+  /** containing Project (null on legacy rows until adopted) */
+  projectId: string | null
+  /** containing Folder within the project (null = project root) */
+  folderId: string | null
+  createdAt: number
+  updatedAt: number
+}
+
+/** A project: the top-level container users organise their emails into. */
+export interface ProjectContainer {
+  id: string
+  ownerId: string
+  name: string
+  createdAt: number
+  updatedAt: number
+}
+
+/** A folder inside a project; folders can nest via parentId. */
+export interface ProjectFolder {
+  id: string
+  ownerId: string
+  projectId: string
+  parentId: string | null
+  name: string
   createdAt: number
   updatedAt: number
 }
@@ -114,7 +138,9 @@ function toPlain<T>(obj: Parse.Object, fields: string[]): T & { id: string } {
 
 const USER_FIELDS = ['email', 'name', 'passwordHash', 'role', 'plan', 'planStatus', 'stripeCustomerId', 'stripeSubscriptionId', 'lastLoginAt', 'createdAt', 'updatedAt']
 const SESSION_FIELDS = ['userId', 'expiresAt', 'userAgent', 'createdAt']
-const PROJECT_FIELDS = ['ownerId', 'name', 'document', 'variables', 'createdAt', 'updatedAt']
+const PROJECT_FIELDS = ['ownerId', 'name', 'document', 'variables', 'projectId', 'folderId', 'createdAt', 'updatedAt']
+const CONTAINER_FIELDS = ['ownerId', 'name', 'createdAt', 'updatedAt']
+const FOLDER_FIELDS = ['ownerId', 'projectId', 'parentId', 'name', 'createdAt', 'updatedAt']
 const MESSAGE_FIELDS = ['projectId', 'role', 'parts', 'createdAt']
 const API_KEY_FIELDS = ['ownerId', 'name', 'prefix', 'hash', 'lastUsedAt', 'revokedAt', 'createdAt']
 
@@ -239,6 +265,96 @@ export async function updateProject(id: string, patch: Partial<Omit<EmailProject
 export async function deleteProject(id: string): Promise<void> {
   const Obj = classFor('EmailProject')
   await Obj.createWithoutData(id).destroy({ useMasterKey: true })
+}
+
+// --- Project containers & folders -------------------------------------------
+
+export async function listContainers(ownerId: string): Promise<ProjectContainer[]> {
+  const Query = new Parse.Query(classFor('ProjectContainer'))
+  Query.equalTo('ownerId', ownerId)
+  Query.descending('updatedAt')
+  Query.limit(1000)
+  const rows = await Query.find({ useMasterKey: true })
+  return rows.map((obj: Parse.Object) => toPlain<ProjectContainer>(obj, CONTAINER_FIELDS))
+}
+
+export async function getContainer(id: string): Promise<ProjectContainer | null> {
+  const Query = new Parse.Query(classFor('ProjectContainer'))
+  const obj = await Query.get(id, { useMasterKey: true }).catch(() => null)
+  return obj ? toPlain<ProjectContainer>(obj, CONTAINER_FIELDS) : null
+}
+
+export async function createContainer(data: Omit<ProjectContainer, 'id'>): Promise<ProjectContainer> {
+  const Obj = classFor('ProjectContainer')
+  const obj = new Obj()
+  Object.entries(data).forEach(([k, v]) => obj.set(k, v))
+  await obj.save(null, { useMasterKey: true })
+  return toPlain<ProjectContainer>(obj, CONTAINER_FIELDS)
+}
+
+export async function updateContainer(id: string, patch: Partial<Omit<ProjectContainer, 'id' | 'ownerId' | 'createdAt'>>): Promise<ProjectContainer> {
+  const Obj = classFor('ProjectContainer')
+  const obj = Obj.createWithoutData(id)
+  Object.entries(patch).forEach(([k, v]) => obj.set(k, v))
+  obj.set('updatedAt', Date.now())
+  await obj.save(null, { useMasterKey: true })
+  const fresh = await getContainer(id)
+  if (!fresh) throw new Error('Project not found after update')
+  return fresh
+}
+
+export async function deleteContainer(id: string): Promise<void> {
+  const Obj = classFor('ProjectContainer')
+  await Obj.createWithoutData(id).destroy({ useMasterKey: true })
+}
+
+export async function listFolders(projectId: string): Promise<ProjectFolder[]> {
+  const Query = new Parse.Query(classFor('ProjectFolder'))
+  Query.equalTo('projectId', projectId)
+  Query.ascending('name')
+  Query.limit(1000)
+  const rows = await Query.find({ useMasterKey: true })
+  return rows.map((obj: Parse.Object) => toPlain<ProjectFolder>(obj, FOLDER_FIELDS))
+}
+
+export async function getFolder(id: string): Promise<ProjectFolder | null> {
+  const Query = new Parse.Query(classFor('ProjectFolder'))
+  const obj = await Query.get(id, { useMasterKey: true }).catch(() => null)
+  return obj ? toPlain<ProjectFolder>(obj, FOLDER_FIELDS) : null
+}
+
+export async function createFolder(data: Omit<ProjectFolder, 'id'>): Promise<ProjectFolder> {
+  const Obj = classFor('ProjectFolder')
+  const obj = new Obj()
+  Object.entries(data).forEach(([k, v]) => obj.set(k, v))
+  await obj.save(null, { useMasterKey: true })
+  return toPlain<ProjectFolder>(obj, FOLDER_FIELDS)
+}
+
+export async function updateFolder(id: string, patch: Partial<Omit<ProjectFolder, 'id' | 'ownerId' | 'projectId' | 'createdAt'>>): Promise<ProjectFolder> {
+  const Obj = classFor('ProjectFolder')
+  const obj = Obj.createWithoutData(id)
+  Object.entries(patch).forEach(([k, v]) => obj.set(k, v))
+  obj.set('updatedAt', Date.now())
+  await obj.save(null, { useMasterKey: true })
+  const fresh = await getFolder(id)
+  if (!fresh) throw new Error('Folder not found after update')
+  return fresh
+}
+
+export async function deleteFolder(id: string): Promise<void> {
+  const Obj = classFor('ProjectFolder')
+  await Obj.createWithoutData(id).destroy({ useMasterKey: true })
+}
+
+/** All emails inside one project container. */
+export async function listEmailsInContainer(projectId: string): Promise<EmailProject[]> {
+  const Query = new Parse.Query(classFor('EmailProject'))
+  Query.equalTo('projectId', projectId)
+  Query.descending('updatedAt')
+  Query.limit(1000)
+  const rows = await Query.find({ useMasterKey: true })
+  return rows.map((obj: Parse.Object) => toPlain<EmailProject>(obj, PROJECT_FIELDS))
 }
 
 export async function createChatMessage(data: Omit<EmailChatMessage, 'id'> & { id?: string }): Promise<EmailChatMessage> {

@@ -4,7 +4,7 @@ const route = useRoute()
 const colorMode = useColorMode()
 
 const nav = computed(() => [
-  { label: 'Emails', icon: 'i-lucide-layout-grid', to: '/app' },
+  { label: 'Projects', icon: 'i-lucide-layout-grid', to: '/app' },
   { label: 'API & keys', icon: 'i-lucide-key-round', to: '/app/keys' },
   { label: 'Account', icon: 'i-lucide-user-round', to: '/app/account' },
   ...(user.value?.role === 'admin'
@@ -13,11 +13,12 @@ const nav = computed(() => [
 ])
 
 const sectionTitle = computed(() => {
-  if (route.path.startsWith('/app/projects/')) return 'Editor'
+  if (route.path.startsWith('/app/emails/')) return 'Editor'
+  if (route.path.startsWith('/app/projects/')) return 'Project'
   if (route.path.startsWith('/app/keys')) return 'API & keys'
   if (route.path.startsWith('/app/account')) return 'Account'
   if (route.path.startsWith('/app/admin')) return 'Admin'
-  return 'Emails'
+  return 'Projects'
 })
 
 const initials = computed(() => {
@@ -59,7 +60,7 @@ const initials = computed(() => {
               :key="item.to"
               :to="item.to"
               class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition"
-              :class="route.path === item.to || (item.to === '/app' && route.path.startsWith('/app/projects'))
+              :class="route.path === item.to || (item.to === '/app' && (route.path.startsWith('/app/projects') || route.path.startsWith('/app/emails')))
                 ? 'bg-primary-500 text-white shadow-sm'
                 : 'pc-dim hover:bg-black/5 dark:hover:bg-white/5 hover:text-(--pc-text)'"
             >
