@@ -2,6 +2,7 @@ import type Stripe from 'stripe'
 import { findUserById, findUserByStripeCustomerId, updateUser } from '../../utils/parse'
 import { planForPriceId } from '../../utils/plans'
 import { getStripe } from '../../utils/stripe'
+import { fireTrigger } from '../../utils/triggers'
 
 async function applySubscription(sub: Stripe.Subscription): Promise<void> {
   const priceId = sub.items.data[0]?.price?.id
@@ -15,12 +16,17 @@ async function applySubscription(sub: Stripe.Subscription): Promise<void> {
     : await findUserByStripeCustomerId(customerId)
   if (!user) return
 
-  await updateUser(user.id, {
+  const updated = await updateUser(user.id, {
     plan,
     planStatus: sub.status,
     stripeCustomerId: user.stripeCustomerId ?? customerId,
     stripeSubscriptionId: sub.id
   })
+
+  // Thank-you email on the free → paid transition only (not renewals/updates).
+  if (user.plan === 'free' && plan !== 'free') {
+    void fireTrigger('purchase', updated)
+  }
 }
 
 export default defineEventHandler(async (event) => {

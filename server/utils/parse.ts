@@ -385,6 +385,77 @@ export async function listAiUsageSince(since: number): Promise<Array<{ userId: s
   return out
 }
 
+export interface TriggerSetting {
+  id: string
+  /** trigger key: welcome | purchase | inactive */
+  trigger: string
+  /** EmailProject id used as the template, or null when unset */
+  projectId: string | null
+  enabled: boolean
+  /** months of no logins before the inactivity trigger fires */
+  inactiveAfterMonths: number | null
+  updatedAt: number
+}
+
+const TRIGGER_SETTING_FIELDS = ['trigger', 'projectId', 'enabled', 'inactiveAfterMonths', 'updatedAt']
+
+export async function listTriggerSettings(): Promise<TriggerSetting[]> {
+  const Query = new Parse.Query(classFor('TriggerSetting'))
+  Query.limit(100)
+  const rows = await Query.find({ useMasterKey: true })
+  return rows.map((obj: Parse.Object) => toPlain<TriggerSetting>(obj, TRIGGER_SETTING_FIELDS))
+}
+
+export async function getTriggerSetting(trigger: string): Promise<TriggerSetting | null> {
+  const Query = new Parse.Query(classFor('TriggerSetting'))
+  Query.equalTo('trigger', trigger)
+  const obj = await Query.first({ useMasterKey: true })
+  return obj ? toPlain<TriggerSetting>(obj, TRIGGER_SETTING_FIELDS) : null
+}
+
+export async function upsertTriggerSetting(data: Omit<TriggerSetting, 'id' | 'updatedAt'>): Promise<TriggerSetting> {
+  const Query = new Parse.Query(classFor('TriggerSetting'))
+  Query.equalTo('trigger', data.trigger)
+  const existing = await Query.first({ useMasterKey: true })
+  const Obj = classFor('TriggerSetting')
+  const obj = existing ?? new Obj()
+  Object.entries(data).forEach(([k, v]) => obj.set(k, v))
+  obj.set('updatedAt', Date.now())
+  await obj.save(null, { useMasterKey: true })
+  return toPlain<TriggerSetting>(obj, TRIGGER_SETTING_FIELDS)
+}
+
+export interface TriggerSendLog {
+  id: string
+  userId: string
+  trigger: string
+  projectId: string | null
+  sentAt: number
+}
+
+export async function recordTriggerSend(data: Omit<TriggerSendLog, 'id'>): Promise<void> {
+  const Obj = classFor('TriggerSendLog')
+  const obj = new Obj()
+  Object.entries(data).forEach(([k, v]) => obj.set(k, v))
+  await obj.save(null, { useMasterKey: true })
+}
+
+/** Most recent time this trigger was sent to this user (0 = never). */
+export async function lastTriggerSendAt(userId: string, trigger: string): Promise<number> {
+  const Query = new Parse.Query(classFor('TriggerSendLog'))
+  Query.equalTo('userId', userId)
+  Query.equalTo('trigger', trigger)
+  Query.descending('sentAt')
+  const obj = await Query.first({ useMasterKey: true })
+  return obj ? Number(obj.get('sentAt') || 0) : 0
+}
+
+/** Users whose last login (or signup) is older than the cutoff. */
+export async function listUsersInactiveSince(cutoff: number): Promise<AppUser[]> {
+  const users = await listAllUsers()
+  return users.filter(u => (u.lastLoginAt ?? u.createdAt) < cutoff)
+}
+
 export async function pingParse(): Promise<boolean> {
   const Query = new Parse.Query(classFor('AppUser'))
   Query.limit(1)

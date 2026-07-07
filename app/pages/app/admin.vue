@@ -33,6 +33,49 @@ interface Overview {
 
 const { data, error } = await useFetch<Overview>('/api/admin/overview')
 
+interface TriggerRow {
+  key: string
+  label: string
+  description: string
+  projectId: string | null
+  enabled: boolean
+  inactiveAfterMonths: number | null
+}
+
+interface TriggersPayload {
+  mailerConfigured: boolean
+  templates: Array<{ id: string, name: string }>
+  triggers: TriggerRow[]
+}
+
+const { data: triggerData } = await useFetch<TriggersPayload>('/api/admin/triggers')
+const savingTrigger = ref<string | null>(null)
+const triggerError = ref('')
+
+const templateItems = computed(() =>
+  (triggerData.value?.templates ?? []).map(t => ({ label: t.name, value: t.id }))
+)
+
+async function saveTrigger(row: TriggerRow) {
+  triggerError.value = ''
+  savingTrigger.value = row.key
+  try {
+    await $fetch('/api/admin/triggers', {
+      method: 'PUT',
+      body: {
+        trigger: row.key,
+        projectId: row.projectId,
+        enabled: row.enabled,
+        inactiveAfterMonths: row.inactiveAfterMonths
+      }
+    })
+  } catch (e: any) {
+    triggerError.value = e?.data?.statusMessage || 'Could not save the trigger.'
+  } finally {
+    savingTrigger.value = null
+  }
+}
+
 const search = ref('')
 const filteredUsers = computed(() => {
   const q = search.value.trim().toLowerCase()
@@ -87,6 +130,61 @@ const planColor: Record<string, string> = {
           </div>
           <div class="text-2xl font-semibold mt-2">{{ c.value.toLocaleString() }}</div>
           <div class="text-[11px] pc-dim mt-1">{{ c.hint }}</div>
+        </div>
+      </div>
+
+      <!-- Trigger emails -->
+      <div class="pc-card overflow-hidden">
+        <div class="px-5 py-4 border-b pc-hairline">
+          <div class="font-medium">Trigger emails</div>
+          <p class="text-xs pc-dim mt-0.5">Pick which of your email templates is sent for each lifecycle event. Variables like <code v-pre>{{ firstName }}</code>, <code v-pre>{{ name }}</code>, <code v-pre>{{ email }}</code> and <code v-pre>{{ plan }}</code> are filled from the recipient.</p>
+        </div>
+
+        <UAlert
+          v-if="triggerData && !triggerData.mailerConfigured"
+          color="warning"
+          variant="soft"
+          class="m-4"
+          icon="i-lucide-mail-warning"
+          title="SMTP is not configured"
+          description="Set the NUXT_MAIL_* environment variables to actually deliver these emails. Until then, sends are only logged on the server."
+        />
+        <UAlert v-if="triggerError" color="error" variant="soft" class="mx-4 mb-2" :title="triggerError" />
+
+        <div class="divide-y divide-(--pc-border)">
+          <div v-for="row in triggerData?.triggers ?? []" :key="row.key" class="px-5 py-4 flex flex-wrap items-center gap-4">
+            <div class="min-w-0 flex-1 basis-56">
+              <div class="font-medium text-sm">{{ row.label }}</div>
+              <div class="text-xs pc-dim mt-0.5">{{ row.description }}</div>
+            </div>
+            <div v-if="row.key === 'inactive'" class="flex items-center gap-2 text-sm">
+              <span class="pc-dim text-xs">after</span>
+              <UInput
+                v-model.number="row.inactiveAfterMonths"
+                type="number"
+                min="1"
+                max="24"
+                class="w-20"
+                size="sm"
+                @change="saveTrigger(row)"
+              />
+              <span class="pc-dim text-xs">months</span>
+            </div>
+            <USelect
+              :model-value="row.projectId ?? undefined"
+              :items="templateItems"
+              placeholder="Choose a template…"
+              class="w-56"
+              size="sm"
+              @update:model-value="(v: any) => { row.projectId = v || null; saveTrigger(row) }"
+            />
+            <USwitch
+              v-model="row.enabled"
+              :disabled="!row.projectId"
+              :loading="savingTrigger === row.key"
+              @update:model-value="saveTrigger(row)"
+            />
+          </div>
         </div>
       </div>
 
