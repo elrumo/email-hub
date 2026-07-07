@@ -12,7 +12,8 @@ import {
   tool,
   type UIMessage
 } from 'ai'
-import { emptyDocument, findBlock, type EmailDocument } from '#shared/email/blocks'
+import { emptyDocument, findBlock, type EmailDocument, type EmailTheme } from '#shared/email/blocks'
+import { applyThemeToDocument, THEME_PRESETS } from '#shared/email/theme'
 import {
   addBlock,
   moveBlock,
@@ -54,6 +55,8 @@ function systemPrompt(doc: EmailDocument, selectedId?: string): string {
     'All blocks also support: { padding?, background? }. `padding` can be a single number or { top, right, bottom, left } in px.',
     '',
     'Template variables: the user can insert {{ mustache }} placeholders anywhere text is allowed (e.g. "Hi {{ firstName }}"). When the user asks for personalization, use {{ key }} placeholders with clear, snake/camelCase keys and tell them which variables you added — they will be substituted later via the API.',
+    '',
+    'Theming: when the user asks to change the look/feel/colors/vibe WITHOUT changing content or layout ("make it dark", "more playful", "match my brand green"), use set_theme — it restyles every block from design tokens. Available presets: ' + THEME_PRESETS.map(p => p.id).join(', ') + '. You can pass a preset, individual tokens, or both (tokens override the preset).',
     '',
     'Guidance:',
     '- When the user asks for a whole new email or a big redesign, prefer set_document with the full block list.',
@@ -164,6 +167,35 @@ export default defineEventHandler(async (event) => {
           description: 'Remove a block by id.',
           inputSchema: jsonSchema<{ id: string }>({ type: 'object', required: ['id'], properties: { id: { type: 'string' } } }),
           execute: async ({ id }) => apply(removeBlock(doc, id))
+        }),
+        set_theme: tool({
+          description: 'Restyle the whole email via design tokens (colors, font, button radius) without touching layout or copy. Pass a preset id and/or individual tokens; tokens override the preset.',
+          inputSchema: jsonSchema<{ preset?: string, tokens?: Partial<EmailTheme> }>({
+            type: 'object',
+            properties: {
+              preset: { type: 'string', enum: THEME_PRESETS.map(p => p.id) },
+              tokens: {
+                type: 'object',
+                properties: {
+                  brand: { type: 'string' },
+                  onBrand: { type: 'string' },
+                  background: { type: 'string' },
+                  surface: { type: 'string' },
+                  heading: { type: 'string' },
+                  text: { type: 'string' },
+                  muted: { type: 'string' },
+                  fontFamily: { type: 'string' },
+                  radius: { type: 'number' }
+                }
+              }
+            }
+          }),
+          execute: async ({ preset, tokens }) => {
+            const base = preset ? THEME_PRESETS.find(p => p.id === preset)?.theme : undefined
+            const patch = { ...(base ?? {}), ...(tokens ?? {}) }
+            if (!Object.keys(patch).length) return 'No theme tokens provided.'
+            return apply({ ok: true, message: 'Theme applied.', doc: applyThemeToDocument(doc, patch) })
+          }
         }),
         move_block: tool({
           description: 'Move a top-level block to a new index.',
