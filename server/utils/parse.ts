@@ -50,6 +50,8 @@ export interface AppUser {
 
 export interface AppSession {
   id: string
+  /** the opaque token stored in the session cookie */
+  token: string
   userId: string
   expiresAt: number
   userAgent: string | null
@@ -74,6 +76,8 @@ export interface EmailProject {
 
 export interface EmailChatMessage {
   id: string
+  /** the client/UI message id (UIMessage.id), distinct from the Parse objectId */
+  clientId: string | null
   projectId: string
   role: string
   parts: unknown[]
@@ -108,16 +112,33 @@ function classFor(name: string) {
 
 function toPlain<T>(obj: Parse.Object, fields: string[]): T & { id: string } {
   const out: Record<string, unknown> = { id: obj.id }
-  for (const field of fields) out[field] = obj.get(field)
+  for (const field of fields) {
+    // Parse's built-in createdAt/updatedAt come back as Dates; the app's
+    // records use epoch ms throughout.
+    const value = obj.get(field)
+    out[field] = value instanceof Date ? value.getTime() : value
+  }
   return out as T & { id: string }
 }
 
+/**
+ * Copy plain data onto a Parse object. `id` is skipped (it would be treated as
+ * the objectId, turning the save into an update of a nonexistent row) and
+ * `createdAt`/`updatedAt` are skipped because the Parse SDK silently ignores
+ * setting them — the server-maintained timestamps are authoritative.
+ */
+function setFields(obj: Parse.Object, data: Record<string, unknown>): void {
+  for (const [k, v] of Object.entries(data)) {
+    if (k === 'id' || k === 'createdAt' || k === 'updatedAt') continue
+    obj.set(k, v)
+  }
+}
+
 const USER_FIELDS = ['email', 'name', 'passwordHash', 'role', 'plan', 'planStatus', 'stripeCustomerId', 'stripeSubscriptionId', 'lastLoginAt', 'createdAt', 'updatedAt']
-const SESSION_FIELDS = ['userId', 'expiresAt', 'userAgent', 'createdAt']
+const SESSION_FIELDS = ['token', 'userId', 'expiresAt', 'userAgent', 'createdAt']
 const PROJECT_FIELDS = ['ownerId', 'name', 'document', 'variables', 'createdAt', 'updatedAt']
-const MESSAGE_FIELDS = ['projectId', 'role', 'parts', 'createdAt']
+const MESSAGE_FIELDS = ['clientId', 'projectId', 'role', 'parts', 'createdAt']
 const API_KEY_FIELDS = ['ownerId', 'name', 'prefix', 'hash', 'lastUsedAt', 'revokedAt', 'createdAt']
-const USAGE_FIELDS = ['userId', 'projectId', 'model', 'promptTokens', 'completionTokens', 'totalTokens', 'createdAt']
 
 export async function findUserByEmail(email: string): Promise<AppUser | null> {
   const Query = new Parse.Query(classFor('AppUser'))
@@ -144,45 +165,44 @@ export async function countUsers(): Promise<number> {
   return Query.count({ useMasterKey: true })
 }
 
-export async function createUser(data: Omit<AppUser, 'id'>): Promise<AppUser> {
+export async function createUser(data: Omit<AppUser, 'id' | 'createdAt' | 'updatedAt'>): Promise<AppUser> {
   const Obj = classFor('AppUser')
   const obj = new Obj()
-  Object.entries(data).forEach(([k, v]) => obj.set(k, v))
+  setFields(obj, data)
   await obj.save(null, { useMasterKey: true })
   return toPlain<AppUser>(obj, USER_FIELDS)
 }
 
-export async function updateUser(id: string, patch: Partial<Omit<AppUser, 'id' | 'createdAt'>>): Promise<AppUser> {
+export async function updateUser(id: string, patch: Partial<Omit<AppUser, 'id' | 'createdAt' | 'updatedAt'>>): Promise<AppUser> {
   const Obj = classFor('AppUser')
   const obj = Obj.createWithoutData(id)
-  Object.entries(patch).forEach(([k, v]) => obj.set(k, v))
-  obj.set('updatedAt', Date.now())
+  setFields(obj, patch)
   await obj.save(null, { useMasterKey: true })
   const fresh = await findUserById(id)
   if (!fresh) throw new Error('User not found after update')
   return fresh
 }
 
-export async function createSessionRecord(data: Omit<AppSession, 'id'> & { id?: string }): Promise<AppSession> {
+export async function createSessionRecord(data: Omit<AppSession, 'id' | 'createdAt'>): Promise<AppSession> {
   const Obj = classFor('AppSession')
-  const obj = data.id ? Obj.createWithoutData(data.id) : new Obj()
-  Object.entries(data).forEach(([k, v]) => {
-    if (k !== 'id') obj.set(k, v)
-  })
+  const obj = new Obj()
+  setFields(obj, data)
   await obj.save(null, { useMasterKey: true })
   return toPlain<AppSession>(obj, SESSION_FIELDS)
 }
 
-export async function findSession(id: string): Promise<AppSession | null> {
+export async function findSessionByToken(token: string): Promise<AppSession | null> {
   const Query = new Parse.Query(classFor('AppSession'))
-  const obj = await Query.get(id, { useMasterKey: true }).catch(() => null)
+  Query.equalTo('token', token)
+  const obj = await Query.first({ useMasterKey: true })
   return obj ? toPlain<AppSession>(obj, SESSION_FIELDS) : null
 }
 
-export async function deleteSession(id: string): Promise<void> {
-  const Obj = classFor('AppSession')
-  const obj = Obj.createWithoutData(id)
-  await obj.destroy({ useMasterKey: true }).catch(() => {})
+export async function deleteSessionByToken(token: string): Promise<void> {
+  const Query = new Parse.Query(classFor('AppSession'))
+  Query.equalTo('token', token)
+  const rows = await Query.find({ useMasterKey: true }).catch(() => [])
+  if (rows.length) await Parse.Object.destroyAll(rows, { useMasterKey: true }).catch(() => {})
 }
 
 export async function pruneExpiredSessionRecords(now: number): Promise<void> {
@@ -203,10 +223,10 @@ export async function countProjectsForOwner(ownerId: string): Promise<number> {
   return Query.count({ useMasterKey: true })
 }
 
-export async function createProject(data: Omit<EmailProject, 'id'>): Promise<EmailProject> {
+export async function createProject(data: Omit<EmailProject, 'id' | 'createdAt' | 'updatedAt'>): Promise<EmailProject> {
   const Obj = classFor('EmailProject')
   const obj = new Obj()
-  Object.entries(data).forEach(([k, v]) => obj.set(k, v))
+  setFields(obj, data)
   await obj.save(null, { useMasterKey: true })
   return toPlain<EmailProject>(obj, PROJECT_FIELDS)
 }
@@ -226,11 +246,10 @@ export async function listProjects(ownerId: string): Promise<EmailProject[]> {
   return rows.map((obj: Parse.Object) => toPlain<EmailProject>(obj, PROJECT_FIELDS))
 }
 
-export async function updateProject(id: string, patch: Partial<Omit<EmailProject, 'id' | 'ownerId' | 'createdAt'>>): Promise<EmailProject> {
+export async function updateProject(id: string, patch: Partial<Omit<EmailProject, 'id' | 'ownerId' | 'createdAt' | 'updatedAt'>>): Promise<EmailProject> {
   const Obj = classFor('EmailProject')
   const obj = Obj.createWithoutData(id)
-  Object.entries(patch).forEach(([k, v]) => obj.set(k, v))
-  obj.set('updatedAt', Date.now())
+  setFields(obj, patch)
   await obj.save(null, { useMasterKey: true })
   const fresh = await getProject(id)
   if (!fresh) throw new Error('Project not found after update')
@@ -242,12 +261,10 @@ export async function deleteProject(id: string): Promise<void> {
   await Obj.createWithoutData(id).destroy({ useMasterKey: true })
 }
 
-export async function createChatMessage(data: Omit<EmailChatMessage, 'id'> & { id?: string }): Promise<EmailChatMessage> {
+export async function createChatMessage(data: Omit<EmailChatMessage, 'id' | 'createdAt'>): Promise<EmailChatMessage> {
   const Obj = classFor('EmailChatMessage')
-  const obj = data.id ? Obj.createWithoutData(data.id) : new Obj()
-  Object.entries(data).forEach(([k, v]) => {
-    if (k !== 'id') obj.set(k, v)
-  })
+  const obj = new Obj()
+  setFields(obj, data)
   await obj.save(null, { useMasterKey: true })
   return toPlain<EmailChatMessage>(obj, MESSAGE_FIELDS)
 }
@@ -276,14 +293,16 @@ export async function deleteChatMessages(projectId: string): Promise<void> {
 export async function countActiveApiKeys(ownerId: string): Promise<number> {
   const Query = new Parse.Query(classFor('ApiKey'))
   Query.equalTo('ownerId', ownerId)
-  Query.doesNotExist('revokedAt')
+  // keys are created with revokedAt: null — equalTo(null) matches both null
+  // and missing, where doesNotExist() would treat an explicit null as revoked
+  Query.equalTo('revokedAt', null)
   return Query.count({ useMasterKey: true })
 }
 
-export async function createApiKeyRecord(data: Omit<ApiKeyRecord, 'id'>): Promise<ApiKeyRecord> {
+export async function createApiKeyRecord(data: Omit<ApiKeyRecord, 'id' | 'createdAt'>): Promise<ApiKeyRecord> {
   const Obj = classFor('ApiKey')
   const obj = new Obj()
-  Object.entries(data).forEach(([k, v]) => obj.set(k, v))
+  setFields(obj, data)
   await obj.save(null, { useMasterKey: true })
   return toPlain<ApiKeyRecord>(obj, API_KEY_FIELDS)
 }
@@ -306,7 +325,7 @@ export async function listApiKeys(ownerId: string): Promise<ApiKeyRecord[]> {
 export async function getActiveApiKeyByHash(hash: string): Promise<ApiKeyRecord | null> {
   const Query = new Parse.Query(classFor('ApiKey'))
   Query.equalTo('hash', hash)
-  Query.doesNotExist('revokedAt')
+  Query.equalTo('revokedAt', null)
   const obj = await Query.first({ useMasterKey: true })
   return obj ? toPlain<ApiKeyRecord>(obj, API_KEY_FIELDS) : null
 }
@@ -325,10 +344,10 @@ export async function touchApiKey(id: string): Promise<void> {
   await obj.save(null, { useMasterKey: true })
 }
 
-export async function recordAiUsage(data: AiUsageRecord): Promise<void> {
+export async function recordAiUsage(data: Omit<AiUsageRecord, 'id' | 'createdAt'>): Promise<void> {
   const Obj = classFor('AiUsage')
   const obj = new Obj()
-  Object.entries(data).forEach(([k, v]) => obj.set(k, v))
+  setFields(obj, data)
   await obj.save(null, { useMasterKey: true })
 }
 
@@ -342,7 +361,8 @@ export async function pingParse(): Promise<boolean> {
 export async function countAiUsageSince(userId: string, since: number): Promise<number> {
   const Query = new Parse.Query(classFor('AiUsage'))
   Query.equalTo('userId', userId)
-  Query.greaterThanOrEqualTo('createdAt', since)
+  // createdAt is Parse's built-in Date field — compare with a Date, not epoch ms
+  Query.greaterThanOrEqualTo('createdAt', new Date(since))
   return Query.count({ useMasterKey: true })
 }
 
@@ -353,8 +373,10 @@ export async function summarizeAiUsage(userId: string, since: number): Promise<{
   while (skip < count) {
     const Query = new Parse.Query(classFor('AiUsage'))
     Query.equalTo('userId', userId)
-    Query.greaterThanOrEqualTo('createdAt', since)
+    Query.greaterThanOrEqualTo('createdAt', new Date(since))
     Query.select('totalTokens')
+    // stable order so skip/limit pagination doesn't skip or double-count rows
+    Query.ascending('objectId')
     Query.skip(skip)
     Query.limit(1000)
     const rows = await Query.find({ useMasterKey: true })

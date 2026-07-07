@@ -76,8 +76,12 @@ const saveDoc = useDebounceFn(async () => {
       method: 'PUT',
       body: { document: document.value, name: name.value, variables: variables.value }
     })
-    // Keep variables reconciled with what the server stored.
-    variables.value = res.project.variables
+    // Keep variables reconciled with what the server stored. Only reassign on
+    // real changes — the response is always a fresh array, and reassigning
+    // unconditionally would retrigger the watcher and autosave forever.
+    if (JSON.stringify(res.project.variables) !== JSON.stringify(variables.value)) {
+      variables.value = res.project.variables
+    }
   } catch {
     toast.add({ title: 'Autosave failed', color: 'error' })
   } finally {

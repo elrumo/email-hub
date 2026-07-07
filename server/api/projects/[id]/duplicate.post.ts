@@ -14,14 +14,11 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 402, statusMessage: `You've reached your plan's limit of ${limit} projects.` })
   }
 
-  const now = Date.now()
   const row = await createProject({
     ownerId: user.id,
     name: `${source.name} copy`,
     document: source.document,
-    variables: source.variables,
-    createdAt: now,
-    updatedAt: now
+    variables: source.variables ?? []
   })
 
   return { project: projectSummary(row) }

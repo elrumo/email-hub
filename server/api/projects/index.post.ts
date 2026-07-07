@@ -19,14 +19,11 @@ export default defineEventHandler(async (event) => {
   }
 
   const doc: EmailDocument = (body.templateId && cloneEmailTemplateDocument(body.templateId)) || cloneBlankEmailDocument()
-  const now = Date.now()
   const row = await createProject({
     ownerId: user.id,
     name: (body.name ?? '').trim() || doc.settings.title || 'Untitled email',
     document: doc,
-    variables: reconcileVariables(doc, []),
-    createdAt: now,
-    updatedAt: now
+    variables: reconcileVariables(doc, [])
   })
 
   return { project: projectSummary(row) }
