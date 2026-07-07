@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 set -e
 
 SECRETS="/run/secrets/mongo.env"
@@ -6,9 +6,10 @@ mkdir -p "$(dirname "$SECRETS")"
 
 if [ ! -f "$SECRETS" ]; then
   _rand() { head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c "$1"; }
+  PASS=$(_rand 32)
   cat > "$SECRETS" <<EOF
 MONGO_USER=emailhub
-MONGO_PASSWORD=$(_rand 32)
+MONGO_PASSWORD=${PASS}
 MONGO_DB=parse
 EOF
   chmod 600 "$SECRETS"

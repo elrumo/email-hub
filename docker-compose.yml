@@ -41,7 +41,7 @@ services:
   mongo:
     image: mongo:8
     restart: unless-stopped
-    command: ["bash", "/scripts/mongo-init.sh"]
+    command: ["sh", "/scripts/mongo-init.sh"]
     ports:
       - "127.0.0.1:27017:27017"
     volumes:
