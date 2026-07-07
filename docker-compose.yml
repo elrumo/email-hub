@@ -15,7 +15,7 @@ services:
       PARSE_SERVER_URL: http://parse-server:1337${PARSE_MOUNT_PATH:-/parse}
       PARSE_PUBLIC_SERVER_URL: ${PARSE_PUBLIC_URL:-http://localhost:1337/parse}
       PARSE_SERVER_APPLICATION_ID: ${PARSE_APP_ID:-email-hub}
-      PARSE_SERVER_MASTER_KEY: ${PARSE_MASTER_KEY:-}
+      PARSE_SERVER_MASTER_KEY: ${PARS…Y:-}
       NUXT_AI_BASE_URL: ${NUXT_AI_BASE_URL:-http://litellm:4000/v1}
       NUXT_PUBLIC_APP_URL: ${NUXT_PUBLIC_APP_URL:-http://localhost:3000}
     healthcheck:
@@ -41,13 +41,13 @@ services:
   mongo:
     image: mongo:8
     restart: unless-stopped
-    command: ["sh", "/scripts/mongo-init.sh"]
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: emailhub
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-A8kQ3x…parse
     ports:
       - "127.0.0.1:27017:27017"
     volumes:
       - postcard_mongo:/data/db
-      - mongo_secrets:/run/secrets
-      - ./scripts/mongo-init.sh:/scripts/mongo-init.sh:ro
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
       interval: 10s
@@ -68,7 +68,8 @@ services:
       - "1337"
     environment:
       PARSE_SERVER_APPLICATION_ID: ${PARSE_APP_ID:-email-hub}
-      PARSE_SERVER_MASTER_KEY: ${PARSE_MASTER_KEY:?set PARSE_MASTER_KEY in Dokploy}
+      PARSE_SERVER_MASTER_KEY: ${PARS…?set PARSE_MASTER_KEY in Dokploy}
+      PARSE_SERVER_DATABASE_URI: mongodb://emailhub:${MONGO_PASSWORD:-A8kQ3x…27017/parse?authSource=admin
       PARSE_SERVER_MOUNT_PATH: ${PARSE_MOUNT_PATH:-/parse}
       PARSE_SERVER_URL: http://parse-server:1337${PARSE_MOUNT_PATH:-/parse}
       PARSE_PUBLIC_SERVER_URL: ${PARSE_PUBLIC_URL:-http://localhost:1337/parse}
@@ -83,8 +84,6 @@ services:
       S3_BUCKET_PREFIX: ${S3_BUCKET_PREFIX:-}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
-    volumes:
-      - mongo_secrets:/run/secrets:ro
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:1337'+(process.env.PARSE_SERVER_MOUNT_PATH||'/parse')+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 30s
@@ -104,4 +103,3 @@ services:
 volumes:
   postcard_redis:
   postcard_mongo:
-  mongo_secrets:
