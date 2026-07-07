@@ -39,6 +39,9 @@ export default defineEventHandler(async (event) => {
     variables: reconcileVariables(doc, []),
     projectId: null,
     folderId: null,
+    shareToken: null,
+    shareMode: null,
+    lastActorId: null,
     createdAt: now,
     updatedAt: now
   })

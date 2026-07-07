@@ -72,6 +72,12 @@ export interface EmailProject {
   projectId: string | null
   /** containing Folder within the project (null = project root) */
   folderId: string | null
+  /** public share link token (null = not shared) */
+  shareToken: string | null
+  /** 'view' = anyone with the link; 'edit' = signed-in users with the link */
+  shareMode: string | null
+  /** last editor (client tab id) — used to suppress echo in live sync */
+  lastActorId: string | null
   createdAt: number
   updatedAt: number
 }
@@ -81,6 +87,12 @@ export interface ProjectContainer {
   id: string
   ownerId: string
   name: string
+  /** user ids with full view/edit access to everything in the project */
+  memberIds: string[]
+  /** public share link token (null = not shared) */
+  shareToken: string | null
+  /** 'view' | 'edit' — link access level for the whole project */
+  shareMode: string | null
   createdAt: number
   updatedAt: number
 }
@@ -138,8 +150,8 @@ function toPlain<T>(obj: Parse.Object, fields: string[]): T & { id: string } {
 
 const USER_FIELDS = ['email', 'name', 'passwordHash', 'role', 'plan', 'planStatus', 'stripeCustomerId', 'stripeSubscriptionId', 'lastLoginAt', 'createdAt', 'updatedAt']
 const SESSION_FIELDS = ['userId', 'expiresAt', 'userAgent', 'createdAt']
-const PROJECT_FIELDS = ['ownerId', 'name', 'document', 'variables', 'projectId', 'folderId', 'createdAt', 'updatedAt']
-const CONTAINER_FIELDS = ['ownerId', 'name', 'createdAt', 'updatedAt']
+const PROJECT_FIELDS = ['ownerId', 'name', 'document', 'variables', 'projectId', 'folderId', 'shareToken', 'shareMode', 'lastActorId', 'createdAt', 'updatedAt']
+const CONTAINER_FIELDS = ['ownerId', 'name', 'memberIds', 'shareToken', 'shareMode', 'createdAt', 'updatedAt']
 const FOLDER_FIELDS = ['ownerId', 'projectId', 'parentId', 'name', 'createdAt', 'updatedAt']
 const MESSAGE_FIELDS = ['projectId', 'role', 'parts', 'createdAt']
 const API_KEY_FIELDS = ['ownerId', 'name', 'prefix', 'hash', 'lastUsedAt', 'revokedAt', 'createdAt']
@@ -345,6 +357,20 @@ export async function updateFolder(id: string, patch: Partial<Omit<ProjectFolder
 export async function deleteFolder(id: string): Promise<void> {
   const Obj = classFor('ProjectFolder')
   await Obj.createWithoutData(id).destroy({ useMasterKey: true })
+}
+
+export async function findEmailByShareToken(token: string): Promise<EmailProject | null> {
+  const Query = new Parse.Query(classFor('EmailProject'))
+  Query.equalTo('shareToken', token)
+  const obj = await Query.first({ useMasterKey: true })
+  return obj ? toPlain<EmailProject>(obj, PROJECT_FIELDS) : null
+}
+
+export async function findContainerByShareToken(token: string): Promise<ProjectContainer | null> {
+  const Query = new Parse.Query(classFor('ProjectContainer'))
+  Query.equalTo('shareToken', token)
+  const obj = await Query.first({ useMasterKey: true })
+  return obj ? toPlain<ProjectContainer>(obj, CONTAINER_FIELDS) : null
 }
 
 /** All emails inside one project container. */

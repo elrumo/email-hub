@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
     let home = containers.find(c => c.name === 'My emails')
     if (!home) {
       const now = Date.now()
-      home = await createContainer({ ownerId: user.id, name: 'My emails', createdAt: now, updatedAt: now })
+      home = await createContainer({ ownerId: user.id, name: 'My emails', memberIds: [], shareToken: null, shareMode: null, createdAt: now, updatedAt: now })
       containers = [home, ...containers]
     }
     for (const orphan of orphans) {

@@ -11,6 +11,7 @@ interface EmailRow {
   updatedAt: number
 }
 interface ProjectDetail {
+  access: 'owner' | 'member'
   project: { id: string, name: string }
   folders: FolderRow[]
   emails: EmailRow[]
@@ -111,6 +112,75 @@ async function removeEmail(e: EmailRow) {
   toast.add({ title: 'Deleted', icon: 'i-lucide-trash-2' })
 }
 
+// ---- sharing & members -------------------------------------------------------
+interface Member { id: string, email: string, name: string | null }
+const shareOpen = ref(false)
+const shareMode = ref<'off' | 'view' | 'edit'>('off')
+const shareToken = ref<string | null>(null)
+const members = ref<Member[]>([])
+const memberEmail = ref('')
+const shareBusy = ref(false)
+const memberError = ref('')
+
+const shareUrl = computed(() =>
+  shareToken.value && import.meta.client ? `${window.location.origin}/share/${shareToken.value}` : null
+)
+
+const shareModes = [
+  { value: 'off', label: 'Off — private', description: 'Only you and members can open this project.' },
+  { value: 'view', label: 'Anyone with the link can view', description: 'A clean browser preview of every email inside.' },
+  { value: 'edit', label: 'Link viewers can view · signed-in can edit', description: 'Signed-up users with the link co-edit live.' }
+]
+
+async function openShare() {
+  shareOpen.value = true
+  memberError.value = ''
+  try {
+    const res = await $fetch<{ members: Member[], share: { mode: string, token: string | null } }>(`/api/projects/${id}/members`)
+    members.value = res.members
+    shareMode.value = (res.share.mode as 'off' | 'view' | 'edit') || 'off'
+    shareToken.value = res.share.token
+  } catch { /* modal still opens with defaults */ }
+}
+
+async function setShareMode(mode: 'off' | 'view' | 'edit') {
+  shareBusy.value = true
+  try {
+    const res = await $fetch<{ mode: typeof mode, token: string | null }>(`/api/projects/${id}/share`, { method: 'POST', body: { mode } })
+    shareMode.value = res.mode
+    shareToken.value = res.token
+  } finally {
+    shareBusy.value = false
+  }
+}
+
+async function addMember() {
+  const email = memberEmail.value.trim()
+  if (!email) return
+  memberError.value = ''
+  shareBusy.value = true
+  try {
+    const res = await $fetch<{ member: Member }>(`/api/projects/${id}/members`, { method: 'POST', body: { email } })
+    members.value = [...members.value.filter(m => m.id !== res.member.id), res.member]
+    memberEmail.value = ''
+  } catch (e: any) {
+    memberError.value = e?.data?.statusMessage || 'Could not add that member.'
+  } finally {
+    shareBusy.value = false
+  }
+}
+
+async function removeMember(userId: string) {
+  await $fetch(`/api/projects/${id}/members`, { method: 'DELETE', body: { userId } })
+  members.value = members.value.filter(m => m.id !== userId)
+}
+
+async function copyShareUrl() {
+  if (!shareUrl.value) return
+  await navigator.clipboard.writeText(shareUrl.value)
+  toast.add({ title: 'Share link copied', icon: 'i-lucide-clipboard-check', color: 'success' })
+}
+
 const moving = ref<EmailRow | null>(null)
 const moveTarget = ref<string>('root')
 const moveItems = computed(() => [
@@ -162,6 +232,7 @@ async function saveMove() {
         </h1>
       </div>
       <div class="flex gap-2">
+        <UButton v-if="data?.access === 'owner'" color="neutral" variant="subtle" icon="i-lucide-share-2" @click="openShare">Share</UButton>
         <UButton color="neutral" variant="subtle" icon="i-lucide-folder-plus" @click="creatingFolder = true">New folder</UButton>
         <UButton :to="newEmailLink" color="primary" icon="i-lucide-plus">New email</UButton>
       </div>
@@ -233,6 +304,59 @@ async function saveMove() {
         </div>
       </div>
     </template>
+
+    <!-- Share project -->
+    <div v-if="shareOpen" class="fixed inset-0 z-50 grid place-items-center bg-black/30" @click.self="shareOpen = false">
+      <div class="pc-card p-5 w-[460px] max-w-[calc(100vw-2rem)] space-y-4 max-h-[85vh] overflow-y-auto pc-scroll">
+        <div class="flex items-center justify-between">
+          <div class="font-medium flex items-center gap-2">
+            <UIcon name="i-lucide-share-2" class="size-4 text-primary-500" /> Share “{{ data?.project.name }}”
+          </div>
+          <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="xs" aria-label="Close" @click="shareOpen = false" />
+        </div>
+
+        <!-- Link sharing -->
+        <div class="space-y-2">
+          <button
+            v-for="m in shareModes"
+            :key="m.value"
+            type="button"
+            class="w-full rounded-lg border p-3 text-left transition"
+            :class="shareMode === m.value ? 'border-primary-500 bg-primary-500/5' : 'pc-hairline hover:border-primary-500/40'"
+            :disabled="shareBusy"
+            @click="setShareMode(m.value as 'off' | 'view' | 'edit')"
+          >
+            <div class="text-sm font-medium">{{ m.label }}</div>
+            <div class="text-xs pc-dim mt-0.5">{{ m.description }}</div>
+          </button>
+        </div>
+        <div v-if="shareUrl" class="flex items-center gap-2">
+          <UInput :model-value="shareUrl" readonly class="flex-1" size="sm" />
+          <UButton icon="i-lucide-copy" size="sm" color="neutral" variant="subtle" @click="copyShareUrl">Copy</UButton>
+        </div>
+
+        <!-- Members -->
+        <div class="border-t pc-hairline pt-4">
+          <div class="text-sm font-medium mb-1">Members</div>
+          <p class="text-xs pc-dim mb-3">Members can view and edit every email in this project.</p>
+          <UAlert v-if="memberError" color="error" variant="soft" class="mb-2" :title="memberError" />
+          <div class="flex items-center gap-2 mb-3">
+            <UInput v-model="memberEmail" placeholder="teammate@example.com" class="flex-1" size="sm" @keyup.enter="addMember" />
+            <UButton size="sm" color="primary" :loading="shareBusy" @click="addMember">Add</UButton>
+          </div>
+          <ul v-if="members.length" class="space-y-1.5">
+            <li v-for="m in members" :key="m.id" class="flex items-center gap-2 text-sm">
+              <span class="grid place-items-center w-6 h-6 rounded-full bg-primary-500/10 text-primary-500 text-[11px] font-semibold shrink-0">
+                {{ (m.name || m.email).slice(0, 1).toUpperCase() }}
+              </span>
+              <span class="min-w-0 flex-1 truncate">{{ m.name || m.email }} <span class="pc-dim text-xs">{{ m.name ? m.email : '' }}</span></span>
+              <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="xs" aria-label="Remove member" @click="removeMember(m.id)" />
+            </li>
+          </ul>
+          <p v-else class="text-xs pc-dim">No members yet.</p>
+        </div>
+      </div>
+    </div>
 
     <!-- Move email -->
     <div v-if="moving" class="fixed inset-0 z-50 grid place-items-center bg-black/30" @click.self="moving = null">

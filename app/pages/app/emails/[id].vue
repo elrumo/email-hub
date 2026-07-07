@@ -36,14 +36,21 @@ const colorMode = useColorMode()
 const id = route.params.id as string
 
 interface ProjectResponse {
-  project: { id: string, name: string, document: EmailDocument, variables: TemplateVariable[], projectId: string | null, folderId: string | null, updatedAt: number }
+  access: 'owner' | 'edit' | 'view'
+  project: { id: string, name: string, document: EmailDocument, variables: TemplateVariable[], projectId: string | null, folderId: string | null, shareMode: string | null, shareToken: string | null, updatedAt: number }
   messages: Array<{ id: string, role: string, parts: UIMessage['parts'] }>
 }
 
-const { data, error } = await useFetch<ProjectResponse>(`/api/emails/${id}`, { key: `project-${id}` })
+const shareTokenParam = (route.query.share as string) || null
+const apiSuffix = shareTokenParam ? `?share=${encodeURIComponent(shareTokenParam)}` : ''
+
+const { data, error } = await useFetch<ProjectResponse>(`/api/emails/${id}${apiSuffix}`, { key: `project-${id}` })
 if (error.value || !data.value) {
   throw createError({ statusCode: 404, statusMessage: 'Email project not found' })
 }
+
+const access = computed(() => data.value?.access ?? 'owner')
+const isOwner = computed(() => access.value === 'owner')
 
 const backTo = computed(() =>
   data.value?.project.projectId ? `/app/projects/${data.value.project.projectId}` : '/app'
@@ -74,12 +81,17 @@ const previewDevice = computed(() => previewDevices.find(d => d.id === previewDe
 
 // ---- autosave -------------------------------------------------------------
 const saving = ref(false)
+// Per-tab identity for multiplayer echo suppression.
+const actorId = ref('')
+let skipNextSave = false
+
 const saveDoc = useDebounceFn(async () => {
+  if (access.value === 'view') return
   saving.value = true
   try {
-    const res = await $fetch<{ project: { variables: TemplateVariable[] } }>(`/api/emails/${id}`, {
+    const res = await $fetch<{ project: { variables: TemplateVariable[] } }>(`/api/emails/${id}${apiSuffix}`, {
       method: 'PUT',
-      body: { document: document.value, name: name.value, variables: variables.value }
+      body: { document: document.value, name: name.value, variables: variables.value, actorId: actorId.value }
     })
     // Keep variables reconciled with what the server stored.
     variables.value = res.project.variables
@@ -89,7 +101,71 @@ const saveDoc = useDebounceFn(async () => {
     saving.value = false
   }
 }, 800)
-watch([document, name, variables], saveDoc, { deep: true })
+watch([document, name, variables], () => {
+  if (skipNextSave) {
+    skipNextSave = false
+    return
+  }
+  saveDoc()
+}, { deep: true })
+
+// ---- live multiplayer sync --------------------------------------------------
+// Every open tab of this email streams document updates (SSE backed by Parse
+// Live Queries). Saves from other collaborators appear in place.
+let liveSource: EventSource | null = null
+onMounted(() => {
+  actorId.value = crypto.randomUUID()
+  liveSource = new EventSource(`/api/emails/${id}/events${apiSuffix}`)
+  liveSource.onmessage = (ev) => {
+    try {
+      const payload = JSON.parse(ev.data) as { document?: EmailDocument, variables?: TemplateVariable[], name?: string, actorId?: string | null }
+      if (!payload?.document || payload.actorId === actorId.value) return
+      skipNextSave = true
+      document.value = payload.document
+      if (payload.variables) variables.value = payload.variables
+      if (payload.name) name.value = payload.name
+    } catch { /* malformed frame — ignore */ }
+  }
+})
+onBeforeUnmount(() => liveSource?.close())
+
+// ---- sharing ----------------------------------------------------------------
+const shareOpen = ref(false)
+const shareMode = ref<'off' | 'view' | 'edit'>((data.value.project.shareMode as 'view' | 'edit' | null) ?? 'off')
+const shareToken = ref<string | null>(data.value.project.shareToken)
+const shareBusy = ref(false)
+
+const shareUrl = computed(() =>
+  shareToken.value && import.meta.client ? `${window.location.origin}/share/${shareToken.value}` : null
+)
+
+const shareModes = [
+  { value: 'off', label: 'Off — only you', description: 'No one else can open this email.' },
+  { value: 'view', label: 'Anyone with the link can view', description: 'A clean browser preview, no account needed.' },
+  { value: 'edit', label: 'Link viewers can view · signed-in can edit', description: 'Signed-up users with the link co-edit live.' }
+]
+
+async function setShareMode(mode: 'off' | 'view' | 'edit') {
+  shareBusy.value = true
+  try {
+    const res = await $fetch<{ mode: typeof mode, token: string | null }>(`/api/emails/${id}/share`, {
+      method: 'POST',
+      body: { mode }
+    })
+    shareMode.value = res.mode
+    shareToken.value = res.token
+  } catch (e: any) {
+    toast.add({ title: e?.data?.statusMessage || 'Could not update sharing.', color: 'error' })
+  } finally {
+    shareBusy.value = false
+  }
+}
+
+async function copyShareUrl() {
+  if (!shareUrl.value) return
+  await navigator.clipboard.writeText(shareUrl.value)
+  toast.add({ title: 'Share link copied', icon: 'i-lucide-clipboard-check', color: 'success' })
+}
 
 // ---- AI chat --------------------------------------------------------------
 const chat = new Chat<UIMessage>({
@@ -234,6 +310,16 @@ useHead({ title: () => `${name.value} · Postcard` })
         </UDropdownMenu>
         <UButton icon="i-lucide-layout-template" color="neutral" variant="ghost" size="xs" aria-label="Templates" @click="templateOpen = true" />
         <UButton
+          v-if="isOwner"
+          :icon="shareMode === 'off' ? 'i-lucide-share-2' : 'i-lucide-globe'"
+          :label="shareMode === 'off' ? 'Share' : 'Shared'"
+          :color="shareMode === 'off' ? 'neutral' : 'primary'"
+          variant="ghost"
+          size="xs"
+          :ui="{ label: 'hidden sm:inline' }"
+          @click="shareOpen = true"
+        />
+        <UButton
           color="neutral"
           variant="ghost"
           size="xs"
@@ -246,8 +332,21 @@ useHead({ title: () => `${name.value} · Postcard` })
 
       <!-- 3 panes -->
       <div class="min-h-0 flex-1 grid grid-cols-1 lg:grid-cols-[320px_1fr_320px]">
-        <!-- AI chat -->
-        <aside class="hidden lg:flex h-full min-h-0 flex-col border-r pc-hairline pc-sidebar-material">
+        <!-- AI chat (owner) / collaborator note -->
+        <aside v-if="!isOwner" class="hidden lg:flex h-full min-h-0 flex-col border-r pc-hairline pc-sidebar-material">
+          <div class="flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center">
+            <div class="grid place-items-center w-12 h-12 rounded-2xl bg-primary-500/10 text-primary-500">
+              <UIcon name="i-lucide-users" class="size-6" />
+            </div>
+            <p class="mt-3 text-sm font-medium">You're collaborating live</p>
+            <p class="mt-1 text-xs pc-dim">
+              Edits sync to everyone on this email in real time.
+              {{ access === 'view' ? 'You have view-only access.' : 'Postcard AI chat is available to the owner.' }}
+            </p>
+          </div>
+        </aside>
+
+        <aside v-else class="hidden lg:flex h-full min-h-0 flex-col border-r pc-hairline pc-sidebar-material">
           <div class="flex items-center gap-2 border-b pc-hairline px-4 py-3">
             <span class="grid place-items-center w-6 h-6 rounded-md bg-primary-500 text-white">
               <UIcon name="i-lucide-sparkles" class="size-3.5" />
@@ -392,5 +491,40 @@ useHead({ title: () => `${name.value} · Postcard` })
       @select="applyTemplate"
       @blank="applyBlank"
     />
+
+    <!-- Share modal -->
+    <div v-if="shareOpen" class="fixed inset-0 z-50 grid place-items-center bg-black/30" @click.self="shareOpen = false">
+      <div class="pc-card p-5 w-[440px] max-w-[calc(100vw-2rem)] space-y-4">
+        <div class="flex items-center justify-between">
+          <div class="font-medium flex items-center gap-2">
+            <UIcon name="i-lucide-share-2" class="size-4 text-primary-500" /> Share this email
+          </div>
+          <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="xs" aria-label="Close" @click="shareOpen = false" />
+        </div>
+
+        <div class="space-y-2">
+          <button
+            v-for="m in shareModes"
+            :key="m.value"
+            type="button"
+            class="w-full rounded-lg border p-3 text-left transition"
+            :class="shareMode === m.value ? 'border-primary-500 bg-primary-500/5' : 'pc-hairline hover:border-primary-500/40'"
+            :disabled="shareBusy"
+            @click="setShareMode(m.value as 'off' | 'view' | 'edit')"
+          >
+            <div class="text-sm font-medium">{{ m.label }}</div>
+            <div class="text-xs pc-dim mt-0.5">{{ m.description }}</div>
+          </button>
+        </div>
+
+        <div v-if="shareUrl" class="flex items-center gap-2">
+          <UInput :model-value="shareUrl" readonly class="flex-1" size="sm" />
+          <UButton icon="i-lucide-copy" size="sm" color="neutral" variant="subtle" @click="copyShareUrl">Copy</UButton>
+        </div>
+        <p v-if="shareMode === 'edit'" class="text-xs pc-dim">
+          Collaborators open the same link; signed-in users can edit and changes sync live to everyone.
+        </p>
+      </div>
+    </div>
   </div>
 </template>

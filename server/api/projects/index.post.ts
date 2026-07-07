@@ -8,6 +8,6 @@ export default defineEventHandler(async (event) => {
   if (!name) throw createError({ statusCode: 422, statusMessage: 'Give the project a name.' })
 
   const now = Date.now()
-  const project = await createContainer({ ownerId: user.id, name, createdAt: now, updatedAt: now })
+  const project = await createContainer({ ownerId: user.id, name, memberIds: [], shareToken: null, shareMode: null, createdAt: now, updatedAt: now })
   return { project }
 })

@@ -22,6 +22,9 @@ export default defineEventHandler(async (event) => {
     variables: source.variables,
     projectId: source.projectId ?? null,
     folderId: source.folderId ?? null,
+    shareToken: null,
+    shareMode: null,
+    lastActorId: null,
     createdAt: now,
     updatedAt: now
   })

@@ -1,19 +1,19 @@
 import type { EmailDocument } from '#shared/email/blocks'
 import type { TemplateVariable } from '../../../utils/parse'
 import { updateProject } from '../../../utils/parse'
-import { requireUser } from '../../../utils/auth'
-import { projectSummary, reconcileVariables, requireOwnedContainer, requireOwnedFolder, requireOwnedProject } from '../../../utils/projects'
+import { requireEmailAccess } from '../../../utils/access'
+import { projectSummary, reconcileVariables, requireOwnedContainer, requireOwnedFolder } from '../../../utils/projects'
 
 export default defineEventHandler(async (event) => {
-  const user = await requireUser(event)
   const id = getRouterParam(event, 'id')!
-  const project = await requireOwnedProject(id, user.id)
+  const { email: project, level, user } = await requireEmailAccess(event, id, 'edit')
   const body = await readBody<{
     name?: string
     document?: EmailDocument
     variables?: TemplateVariable[]
     projectId?: string
     folderId?: string | null
+    actorId?: string
   }>(event)
 
   const document = body.document ?? project.document
@@ -21,14 +21,16 @@ export default defineEventHandler(async (event) => {
   if (typeof body.name === 'string') patch.name = body.name.trim() || project.name
   if (body.document) patch.document = body.document
   patch.variables = reconcileVariables(document, body.variables ?? project.variables)
+  // Live-sync echo suppression: remember which client tab saved last.
+  patch.lastActorId = typeof body.actorId === 'string' ? body.actorId.slice(0, 64) : null
 
-  // Moving between projects/folders
-  if (body.projectId !== undefined || body.folderId !== undefined) {
+  // Moving between projects/folders is the owner's call only.
+  if (level === 'owner' && (body.projectId !== undefined || body.folderId !== undefined)) {
     const targetProjectId = body.projectId ?? project.projectId
-    if (targetProjectId) await requireOwnedContainer(targetProjectId, user.id)
+    if (targetProjectId) await requireOwnedContainer(targetProjectId, user!.id)
     let targetFolderId = body.folderId === undefined ? project.folderId : (body.folderId || null)
     if (targetFolderId) {
-      const folder = await requireOwnedFolder(targetFolderId, user.id)
+      const folder = await requireOwnedFolder(targetFolderId, user!.id)
       if (folder.projectId !== targetProjectId) targetFolderId = null
     }
     patch.projectId = targetProjectId
