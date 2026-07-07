@@ -115,7 +115,6 @@ services:
       retries: 3
       start_period: 20s
 
-  # LiteLLM gateway: OpenAI-compatible endpoint the app talks to.
   litellm:
     image: ghcr.io/berriai/litellm:main-stable
     restart: unless-stopped
