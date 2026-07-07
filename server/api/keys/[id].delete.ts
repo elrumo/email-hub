@@ -1,15 +1,13 @@
-import { and, eq } from 'drizzle-orm'
-import { getDb } from '../../db'
-import { apiKeys } from '../../db/schema'
+import { createError } from 'h3'
+import { listApiKeys, revokeApiKey } from '../../utils/parse'
 import { requireUser } from '../../utils/auth'
 
 export default defineEventHandler(async (event) => {
   const user = await requireUser(event)
   const id = getRouterParam(event, 'id')!
-  const db = getDb()
-  const rows = await db.select().from(apiKeys).where(and(eq(apiKeys.id, id), eq(apiKeys.ownerId, user.id)))
-  if (!rows[0]) throw createError({ statusCode: 404, statusMessage: 'API key not found' })
-
-  await db.update(apiKeys).set({ revokedAt: Date.now() }).where(eq(apiKeys.id, id))
+  const keys = await listApiKeys(user.id)
+  const key = keys.find(k => k.id === id)
+  if (!key) throw createError({ statusCode: 404, statusMessage: 'API key not found' })
+  await revokeApiKey(id)
   return { ok: true }
 })

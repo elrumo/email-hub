@@ -1,14 +1,7 @@
-/**
- * Public API: render one project to email-safe HTML.
- *
- * Mustache variables ({{ key }}) are substituted from query params, falling back
- * to each variable's declared default. `?format=html` returns raw text/html;
- * otherwise a JSON envelope with the html string.
- */
 import type { EmailDocument } from '#shared/email/blocks'
 import { applyTemplateVariables } from '#shared/email/placeholders'
 import { renderEmailHtml } from '#shared/email/render'
-import type { TemplateVariable } from '../../../../db/schema'
+import type { TemplateVariable } from '../../../../utils/parse'
 import { requireApiUser } from '../../../../utils/apiKey'
 import { requireOwnedProject } from '../../../../utils/projects'
 
@@ -19,9 +12,7 @@ export default defineEventHandler(async (event) => {
 
   const query = getQuery(event)
   const format = String(query.format ?? 'json')
-
-  // Build the substitution map: declared defaults first, then query overrides.
-  const declared = (project.variables ?? []) as TemplateVariable[]
+  const declared = project.variables as TemplateVariable[]
   const vars: Record<string, string> = {}
   for (const v of declared) {
     if (v.defaultValue != null) vars[v.key] = v.defaultValue
@@ -38,6 +29,7 @@ export default defineEventHandler(async (event) => {
     setResponseHeader(event, 'content-type', 'text/html; charset=utf-8')
     return html
   }
+
   return {
     id: project.id,
     name: project.name,

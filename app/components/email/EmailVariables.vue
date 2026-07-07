@@ -7,7 +7,7 @@
  */
 import type { EmailDocument } from '#shared/email/blocks'
 import { extractTemplateVariables } from '#shared/email/placeholders'
-import type { TemplateVariable } from '~~/server/db/schema'
+import type { TemplateVariable } from '~~/server/utils/parse'
 
 const props = defineProps<{
   document: EmailDocument

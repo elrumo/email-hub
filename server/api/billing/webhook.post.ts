@@ -1,31 +1,23 @@
-/**
- * Stripe webhook — the source of truth for entitlement changes. Verifies the
- * signature against the raw body, then reconciles the user's `plan`/`planStatus`
- * from the subscription. Configure the endpoint URL in Stripe as
- * `<app>/api/billing/webhook` and set NUXT_STRIPE_WEBHOOK_SECRET.
- */
 import type Stripe from 'stripe'
-import { eq } from 'drizzle-orm'
-import { getDb } from '../../db'
-import { users } from '../../db/schema'
+import { findUserById, updateUser } from '../../utils/parse'
 import { planForPriceId } from '../../utils/plans'
 import { getStripe } from '../../utils/stripe'
 
 async function applySubscription(sub: Stripe.Subscription): Promise<void> {
-  const db = getDb()
   const priceId = sub.items.data[0]?.price?.id
   const customerId = typeof sub.customer === 'string' ? sub.customer : sub.customer.id
   const active = sub.status === 'active' || sub.status === 'trialing'
   const plan = active ? (planForPriceId(priceId) ?? 'free') : 'free'
 
-  await db.update(users)
-    .set({
-      plan,
-      planStatus: sub.status,
-      stripeSubscriptionId: sub.id,
-      updatedAt: Date.now()
-    })
-    .where(eq(users.stripeCustomerId, customerId))
+  const userId = String(sub.metadata.userId || '')
+  const user = userId ? await findUserById(userId) : null
+  if (!user || user.stripeCustomerId !== customerId) return
+
+  await updateUser(user.id, {
+    plan,
+    planStatus: sub.status,
+    stripeSubscriptionId: sub.id
+  })
 }
 
 export default defineEventHandler(async (event) => {

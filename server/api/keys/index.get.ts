@@ -1,15 +1,9 @@
-import { desc, eq } from 'drizzle-orm'
-import { getDb } from '../../db'
-import { apiKeys } from '../../db/schema'
+import { listApiKeys } from '../../utils/parse'
 import { requireUser } from '../../utils/auth'
 
 export default defineEventHandler(async (event) => {
   const user = await requireUser(event)
-  const rows = await getDb()
-    .select()
-    .from(apiKeys)
-    .where(eq(apiKeys.ownerId, user.id))
-    .orderBy(desc(apiKeys.createdAt))
+  const rows = await listApiKeys(user.id)
   return {
     keys: rows.map(k => ({
       id: k.id,

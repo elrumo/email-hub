@@ -1,12 +1,5 @@
 /**
  * Postcard AI — the email designer's chat endpoint.
- *
- * The assistant edits the typed block document via tools (never raw HTML for the
- * whole email), streaming the working document back so the live preview updates
- * as it works. Token usage is metered per user, and the monthly message
- * allowance for the user's plan is enforced before generation. The underlying
- * provider/model is never referenced in any response — the product only knows
- * "Postcard AI".
  */
 import { randomUUID } from 'node:crypto'
 import {
@@ -19,7 +12,6 @@ import {
   tool,
   type UIMessage
 } from 'ai'
-import { eq } from 'drizzle-orm'
 import { emptyDocument, findBlock, type EmailDocument } from '#shared/email/blocks'
 import {
   addBlock,
@@ -30,12 +22,14 @@ import {
   updateSettings
 } from '#shared/email/ops'
 import { renderEmailHtml } from '#shared/email/render'
-import { getDb } from '../../../db'
-import { emailChatMessages, emailProjects } from '../../../db/schema'
+import {
+  createChatMessage,
+  updateProject
+} from '../../../utils/parse'
 import { requireUser } from '../../../utils/auth'
 import { getAssistantModel } from '../../../utils/ai'
 import { planFor } from '../../../utils/plans'
-import { messagesThisMonth, recordUsage } from '../../../utils/usage'
+import { messagesThisMonth, recordUsageForUser } from '../../../utils/usage'
 import { reconcileVariables, requireOwnedProject } from '../../../utils/projects'
 
 const BLOCK_TYPES = ['heading', 'text', 'button', 'image', 'divider', 'spacer', 'columns', 'html'] as const
@@ -81,7 +75,6 @@ export default defineEventHandler(async (event) => {
   const projectId = getRouterParam(event, 'id')!
   const project = await requireOwnedProject(projectId, user.id)
 
-  // Enforce the plan's monthly assistant allowance.
   const limit = planFor(user.plan).limits.aiMessagesPerMonth
   const used = await messagesThisMonth(user.id)
   if (used >= limit) {
@@ -97,14 +90,12 @@ export default defineEventHandler(async (event) => {
     selectedId?: string
   }
 
-  const db = getDb()
-  let doc: EmailDocument = body.document ?? (project.document as EmailDocument) ?? emptyDocument()
+  let doc: EmailDocument = body.document ?? project.document ?? emptyDocument()
   const selectedId = body.selectedId
-
   const incoming = body.messages ?? []
   const lastUser = [...incoming].reverse().find(m => m.role === 'user')
   if (lastUser) {
-    await db.insert(emailChatMessages).values({
+    await createChatMessage({
       id: lastUser.id || randomUUID(),
       projectId,
       role: 'user',
@@ -205,7 +196,7 @@ export default defineEventHandler(async (event) => {
     },
     onFinish: async ({ responseMessage }) => {
       if (responseMessage) {
-        await db.insert(emailChatMessages).values({
+        await createChatMessage({
           id: responseMessage.id || randomUUID(),
           projectId,
           role: 'assistant',
@@ -214,14 +205,11 @@ export default defineEventHandler(async (event) => {
         })
       }
       void renderEmailHtml(doc)
-      await db.update(emailProjects)
-        .set({
-          document: doc,
-          variables: reconcileVariables(doc, project.variables ?? []),
-          updatedAt: Date.now()
-        })
-        .where(eq(emailProjects.id, projectId))
-      await recordUsage(user.id, projectId, modelId, captured)
+      await updateProject(projectId, {
+        document: doc,
+        variables: reconcileVariables(doc, project.variables ?? [])
+      })
+      await recordUsageForUser(user.id, projectId, modelId, captured)
     }
   })
 

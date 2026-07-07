@@ -20,7 +20,7 @@ import { addBlock, moveBlock } from '#shared/email/ops'
 import { renderEmailHtml } from '#shared/email/render'
 import { applyTemplateVariables } from '#shared/email/placeholders'
 import { isStarterEmailDocument, type EmailTemplateDefinition } from '#shared/email/templates'
-import type { TemplateVariable } from '~~/server/db/schema'
+import type { TemplateVariable } from '~~/server/utils/parse'
 
 import EmailPreview from '~/components/email/EmailPreview.vue'
 import EmailInspector from '~/components/email/EmailInspector.vue'

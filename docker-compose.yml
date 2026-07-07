@@ -4,8 +4,6 @@ services:
     image: postcard
     restart: unless-stopped
     depends_on:
-      db:
-        condition: service_healthy
       redis:
         condition: service_started
       parse-server:
@@ -13,7 +11,6 @@ services:
     expose:
       - "3000"
     environment:
-      NUXT_DATABASE_URL: postgres://postcard:${POSTGRES_PASSWORD:-postcard}@db:5432/postcard
       NUXT_REDIS_URL: redis://redis:6379
       PARSE_SERVER_URL: http://parse-server:1337${PARSE_MOUNT_PATH:-/parse}
       PARSE_PUBLIC_SERVER_URL: ${PARSE_PUBLIC_URL:-http://localhost:1337/parse}
@@ -27,22 +24,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
-
-  db:
-    image: postgres:17-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: postcard
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postcard}
-      POSTGRES_DB: postcard
-    volumes:
-      - postcard_db:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postcard -d postcard"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
 
   redis:
     image: redis:7-alpine
@@ -88,7 +69,7 @@ services:
       - "1337"
     environment:
       PARSE_SERVER_APPLICATION_ID: ${PARSE_APP_ID:-email-hub}
-      PARSE_SERVER_MASTER_KEY: ${PARSE_MASTER_KEY:?set PARSE_MASTER_KEY in .env}
+      PARSE_SERVER_MASTER_KEY: ${PARSE_MASTER_KEY:?set PARSE_MASTER_KEY in Dokploy}
       PARSE_SERVER_DATABASE_URI: mongodb://${MONGO_USER:-emailhub}:${MONGO_PASSWORD:-emailhub}@mongo:27017/${MONGO_DB:-parse}?authSource=admin
       PARSE_SERVER_MOUNT_PATH: ${PARSE_MOUNT_PATH:-/parse}
       PARSE_SERVER_URL: http://parse-server:1337${PARSE_MOUNT_PATH:-/parse}
@@ -121,6 +102,5 @@ services:
       - ./litellm.config.yaml:/app/litellm.config.yaml:ro
 
 volumes:
-  postcard_db:
   postcard_redis:
   postcard_mongo:

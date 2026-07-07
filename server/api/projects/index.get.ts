@@ -1,15 +1,9 @@
-import { desc, eq } from 'drizzle-orm'
-import { getDb } from '../../db'
-import { emailProjects } from '../../db/schema'
+import { listProjects } from '../../utils/parse'
 import { requireUser } from '../../utils/auth'
 import { projectSummary } from '../../utils/projects'
 
 export default defineEventHandler(async (event) => {
   const user = await requireUser(event)
-  const rows = await getDb()
-    .select()
-    .from(emailProjects)
-    .where(eq(emailProjects.ownerId, user.id))
-    .orderBy(desc(emailProjects.updatedAt))
+  const rows = await listProjects(user.id)
   return { projects: rows.map(projectSummary) }
 })

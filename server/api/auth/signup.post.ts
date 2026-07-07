@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import { eq } from 'drizzle-orm'
-import { getDb } from '../../db'
-import { users } from '../../db/schema'
+import {
+  countUsers,
+  createUser,
+  findUserByEmail
+} from '../../utils/parse'
 import {
   createSession,
   hashPassword,
@@ -22,31 +24,28 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 422, statusMessage: 'Password must be at least 8 characters.' })
   }
 
-  const db = getDb()
-  const existing = await db.select({ id: users.id }).from(users).where(eq(users.email, email))
-  if (existing.length) {
+  const existing = await findUserByEmail(email)
+  if (existing) {
     throw createError({ statusCode: 409, statusMessage: 'An account with this email already exists.' })
   }
 
-  // First user becomes the admin.
-  const any = await db.select({ id: users.id }).from(users).limit(1)
-  const role = any.length === 0 ? 'admin' : 'user'
-
+  const role = await countUsers() === 0 ? 'admin' : 'user'
   const now = Date.now()
-  const id = randomUUID()
-  const [user] = await db.insert(users).values({
-    id,
+  const user = await createUser({
     email,
     name,
     passwordHash: await hashPassword(password),
     role,
     plan: 'free',
+    planStatus: null,
+    stripeCustomerId: null,
+    stripeSubscriptionId: null,
+    lastLoginAt: now,
     createdAt: now,
-    updatedAt: now,
-    lastLoginAt: now
-  }).returning()
+    updatedAt: now
+  })
 
-  const token = await createSession(user!.id, getRequestHeader(event, 'user-agent'))
+  const token = await createSession(user.id, getRequestHeader(event, 'user-agent'))
   setSessionCookie(event, token)
-  return { user: toPublicUser(user!) }
+  return { user: toPublicUser(user) }
 })

@@ -1,7 +1,6 @@
-import { eq } from 'drizzle-orm'
 import type { EmailDocument } from '#shared/email/blocks'
-import { getDb } from '../../../db'
-import { emailProjects, type TemplateVariable } from '../../../db/schema'
+import type { TemplateVariable } from '../../../utils/parse'
+import { updateProject } from '../../../utils/parse'
 import { requireUser } from '../../../utils/auth'
 import { projectSummary, reconcileVariables, requireOwnedProject } from '../../../utils/projects'
 
@@ -15,18 +14,12 @@ export default defineEventHandler(async (event) => {
     variables?: TemplateVariable[]
   }>(event)
 
-  const document = body.document ?? (project.document as EmailDocument)
-  const patch: Record<string, unknown> = { updatedAt: Date.now() }
+  const document = body.document ?? project.document
+  const patch: Record<string, unknown> = {}
   if (typeof body.name === 'string') patch.name = body.name.trim() || project.name
   if (body.document) patch.document = body.document
-  // Variables always tracked against the (possibly new) document.
-  patch.variables = reconcileVariables(document, body.variables ?? (project.variables as TemplateVariable[]))
+  patch.variables = reconcileVariables(document, body.variables ?? project.variables)
 
-  const [row] = await getDb()
-    .update(emailProjects)
-    .set(patch)
-    .where(eq(emailProjects.id, id))
-    .returning()
-
-  return { project: projectSummary(row!) }
+  const row = await updateProject(id, patch)
+  return { project: projectSummary(row) }
 })

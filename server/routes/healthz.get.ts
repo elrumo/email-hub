@@ -1,8 +1,8 @@
-import { getClient } from '../db'
+import { initParse } from '../utils/parse'
 
 export default defineEventHandler(async (event) => {
   try {
-    await getClient().unsafe('select 1')
+    initParse()
     return { ok: true }
   } catch {
     setResponseStatus(event, 503)

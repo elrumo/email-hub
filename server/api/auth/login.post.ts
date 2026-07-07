@@ -1,6 +1,4 @@
-import { eq } from 'drizzle-orm'
-import { getDb } from '../../db'
-import { users } from '../../db/schema'
+import { findUserByEmail, updateUser } from '../../utils/parse'
 import {
   createSession,
   setSessionCookie,
@@ -13,11 +11,7 @@ export default defineEventHandler(async (event) => {
   const email = (body.email ?? '').trim().toLowerCase()
   const password = body.password ?? ''
 
-  const db = getDb()
-  const rows = await db.select().from(users).where(eq(users.email, email))
-  const user = rows[0]
-
-  // Constant-ish: always verify against a hash to avoid user enumeration timing.
+  const user = await findUserByEmail(email)
   const ok = user
     ? await verifyPassword(password, user.passwordHash)
     : await verifyPassword(password, '$argon2id$v=19$m=65536,t=2,p=1$AAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA').then(() => false)
@@ -26,8 +20,8 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, statusMessage: 'Incorrect email or password.' })
   }
 
-  await db.update(users).set({ lastLoginAt: Date.now() }).where(eq(users.id, user.id))
+  const updated = await updateUser(user.id, { lastLoginAt: Date.now() })
   const token = await createSession(user.id, getRequestHeader(event, 'user-agent'))
   setSessionCookie(event, token)
-  return { user: toPublicUser(user) }
+  return { user: toPublicUser(updated) }
 })
