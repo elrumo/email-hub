@@ -12,7 +12,7 @@ MONGO_USER=emailhub
 MONGO_PASSWORD=${PASS}
 MONGO_DB=parse
 EOF
-  chmod 600 "$SECRETS"
+  chmod 644 "$SECRETS"
 fi
 
 . "$SECRETS"
