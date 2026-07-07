@@ -42,6 +42,12 @@ services:
   mongo:
     image: mongo:8
     restart: unless-stopped
+    # Reconciles the root user with MONGO_PASSWORD on every boot — the stock
+    # image only applies MONGO_INITDB_* on an empty volume, so a password
+    # change (or a volume created before creds existed) would otherwise leave
+    # parse-server failing with "Authentication failed".
+    entrypoint: ["/usr/local/bin/mongo-entrypoint.sh"]
+    command: ["mongod"]
     environment:
       MONGO_INITDB_ROOT_USERNAME: emailhub
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-68aa30aaa9402a7a4a5dd5c5d5280057}
@@ -49,8 +55,11 @@ services:
       - "127.0.0.1:27017:27017"
     volumes:
       - postcard_mongo:/data/db
+      - ./mongo/mongo-entrypoint.sh:/usr/local/bin/mongo-entrypoint.sh:ro
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      # Authenticated ping: a credentials mismatch keeps mongo "unhealthy" so
+      # parse-server (depends_on: service_healthy) never crash-loops on it.
+      test: ["CMD-SHELL", "mongosh --quiet -u \"$$MONGO_INITDB_ROOT_USERNAME\" -p \"$$MONGO_INITDB_ROOT_PASSWORD\" --authenticationDatabase admin --eval \"db.adminCommand('ping')\""]
       interval: 10s
       timeout: 5s
       retries: 5

@@ -112,11 +112,10 @@ export default defineEventHandler(async (event) => {
   const lastUser = [...incoming].reverse().find(m => m.role === 'user')
   if (lastUser) {
     await createChatMessage({
-      id: lastUser.id || randomUUID(),
+      clientId: lastUser.id || randomUUID(),
       projectId,
       role: 'user',
-      parts: lastUser.parts as unknown[],
-      createdAt: Date.now()
+      parts: lastUser.parts as unknown[]
     })
   }
 
@@ -249,11 +248,10 @@ export default defineEventHandler(async (event) => {
       try {
         if (responseMessage) {
           await createChatMessage({
-            id: responseMessage.id || randomUUID(),
+            clientId: responseMessage.id || randomUUID(),
             projectId,
             role: 'assistant',
-            parts: responseMessage.parts as unknown[],
-            createdAt: Date.now()
+            parts: responseMessage.parts as unknown[]
           })
         }
         await updateProject(projectId, {

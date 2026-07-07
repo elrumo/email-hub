@@ -12,7 +12,7 @@ export default defineEventHandler(async (event) => {
 
   const query = getQuery(event)
   const format = String(query.format ?? 'json')
-  const declared = project.variables as TemplateVariable[]
+  const declared = (project.variables ?? []) as TemplateVariable[]
   const vars: Record<string, string> = {}
   for (const v of declared) {
     if (v.defaultValue != null) vars[v.key] = v.defaultValue
@@ -33,7 +33,8 @@ export default defineEventHandler(async (event) => {
   return {
     id: project.id,
     name: project.name,
-    subject: (project.document as EmailDocument).settings.title,
+    // subject from the substituted document so {{ vars }} in the title resolve too
+    subject: doc.settings.title,
     html
   }
 })

@@ -37,7 +37,6 @@ export default defineEventHandler(async (event) => {
   }
 
   const doc: EmailDocument = (body.templateId && cloneEmailTemplateDocument(body.templateId)) || cloneBlankEmailDocument()
-  const now = Date.now()
   const row = await createProject({
     ownerId: user.id,
     name: (body.name ?? '').trim() || doc.settings.title || 'Untitled email',
@@ -47,9 +46,7 @@ export default defineEventHandler(async (event) => {
     folderId,
     shareToken: null,
     shareMode: null,
-    lastActorId: null,
-    createdAt: now,
-    updatedAt: now
+    lastActorId: null
   })
 
   return { project: projectSummary(row) }

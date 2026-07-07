@@ -9,13 +9,15 @@ export function useAuth() {
   const loaded = useState<boolean>('auth:loaded', () => false)
 
   async function fetchUser() {
+    // useRequestFetch forwards the incoming request's cookies during SSR —
+    // plain $fetch would always see a logged-out session on the server.
+    const requestFetch = useRequestFetch()
     try {
-      const { user: u } = await $fetch<{ user: PublicUser | null }>('/api/auth/me')
+      const { user: u } = await requestFetch<{ user: PublicUser | null }>('/api/auth/me')
       user.value = u
+      loaded.value = true
     } catch {
       user.value = null
-    } finally {
-      loaded.value = true
     }
   }
 

@@ -3,6 +3,7 @@ definePageMeta({ layout: 'default' })
 useHead({ title: 'Create account — Postcard' })
 
 const { signup } = useAuth()
+const route = useRoute()
 const name = ref('')
 const email = ref('')
 const password = ref('')
@@ -14,7 +15,7 @@ async function submit() {
   loading.value = true
   try {
     await signup(email.value, password.value, name.value)
-    await navigateTo('/app')
+    await navigateTo((route.query.redirect as string) || '/app')
   } catch (e: any) {
     error.value = e?.data?.statusMessage || e?.statusMessage || 'Could not create your account.'
   } finally {
