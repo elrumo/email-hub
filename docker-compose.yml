@@ -42,11 +42,11 @@ services:
     image: mongo:8
     restart: unless-stopped
     environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-emailhub}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-emailhub}
-      MONGO_INITDB_DATABASE: ${MONGO_DB:-parse}
+      MONGO_INITDB_ROOT_USERNAME: emailhub
+      MONGO_INITDB_ROOT_PASSWORD: emailhub
+      MONGO_INITDB_DATABASE: parse
     ports:
-      - "${MONGO_BIND_ADDR:-127.0.0.1}:${MONGO_PORT:-27017}:27017"
+      - "127.0.0.1:27017:27017"
     volumes:
       - postcard_mongo:/data/db
     healthcheck:
@@ -70,12 +70,12 @@ services:
     environment:
       PARSE_SERVER_APPLICATION_ID: ${PARSE_APP_ID:-email-hub}
       PARSE_SERVER_MASTER_KEY: ${PARSE_MASTER_KEY:?set PARSE_MASTER_KEY in Dokploy}
-      PARSE_SERVER_DATABASE_URI: mongodb://${MONGO_USER:-emailhub}:${MONGO_PASSWORD:-emailhub}@mongo:27017/${MONGO_DB:-parse}?authSource=admin
+      PARSE_SERVER_DATABASE_URI: mongodb://emailhub:emailhub@mongo:27017/parse?authSource=admin
       PARSE_SERVER_MOUNT_PATH: ${PARSE_MOUNT_PATH:-/parse}
       PARSE_SERVER_URL: http://parse-server:1337${PARSE_MOUNT_PATH:-/parse}
       PARSE_PUBLIC_SERVER_URL: ${PARSE_PUBLIC_URL:-http://localhost:1337/parse}
       PARSE_SERVER_ALLOW_CLIENT_CLASS_CREATION: ${PARSE_ALLOW_CLIENT_CLASS_CREATION:-false}
-      PARSE_SERVER_FILES_ADAPTER: ${PARSE_SERVER_FILES_ADAPTER-@parse/s3-files-adapter}
+      PARSE_SERVER_FILES_ADAPTER: ${PARSE_SERVER_FILES_ADAPTER:-}
       S3_BUCKET: ${S3_BUCKET:-}
       S3_REGION: ${S3_REGION:-us-east-1}
       S3_ENDPOINT: ${S3_ENDPOINT:-}
