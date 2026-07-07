@@ -16,6 +16,7 @@
 import { Chat } from '@ai-sdk/vue'
 import { DefaultChatTransport, isTextUIPart, type UIMessage } from 'ai'
 import type { EmailBlock, EmailBlockType, EmailDocument } from '#shared/email/blocks'
+import { findBlock } from '#shared/email/blocks'
 import { addBlock, moveBlock } from '#shared/email/ops'
 import { renderEmailHtml } from '#shared/email/render'
 import { applyTemplateVariables } from '#shared/email/placeholders'
@@ -116,10 +117,38 @@ function onSubmit() {
   input.value = ''
 }
 
-const promptPlaceholder = computed(() => {
-  const b = selectedId.value ? document.value.blocks.find(x => x.id === selectedId.value) : null
-  return b ? `Ask Postcard AI to change the selected ${b.type}…` : 'Describe the email you want, or ask for a change…'
-})
+const selectedBlock = computed<EmailBlock | null>(() =>
+  selectedId.value ? findBlock(document.value.blocks, selectedId.value) : null
+)
+
+const promptPlaceholder = computed(() =>
+  selectedBlock.value
+    ? `Ask Postcard AI to change the selected ${selectedBlock.value.type}…`
+    : 'Describe the email you want, or ask for a change…'
+)
+
+// v0-style quick actions — one tap sends a scoped or whole-email prompt.
+const quickActions = computed(() =>
+  selectedBlock.value
+    ? [
+        { label: 'Improve this', prompt: 'Improve the selected block: sharpen the copy and polish its styling. Keep its intent.' },
+        { label: 'Shorten', prompt: 'Make the selected block shorter and punchier without losing meaning.' },
+        { label: 'Make it pop', prompt: 'Make the selected block stand out more — stronger hierarchy, better contrast, without clashing with the theme.' }
+      ]
+    : [
+        { label: 'Improve copy', prompt: 'Improve the copy across the whole email: clearer, more concrete, more persuasive. Keep the layout.' },
+        { label: 'Polish design', prompt: 'Polish the design: spacing rhythm, hierarchy and color contrast. Keep the content.' },
+        { label: 'Add footer', prompt: 'Add a proper muted footer with the sender address line and an unsubscribe link.' },
+        { label: 'Shorter', prompt: 'Tighten the whole email — fewer words, same message.' }
+      ]
+)
+
+const busyChat = computed(() => chat.status === 'streaming' || chat.status === 'submitted')
+
+function sendQuick(prompt: string) {
+  if (busyChat.value) return
+  chat.sendMessage({ text: prompt })
+}
 
 onMounted(() => {
   if (!chat.messages.length && isStarterEmailDocument(document.value)) templateOpen.value = true
@@ -255,7 +284,32 @@ useHead({ title: () => `${name.value} · Postcard` })
             </template>
           </UChatMessages>
 
-          <div class="border-t pc-hairline p-3">
+          <div class="border-t pc-hairline p-3 space-y-2">
+            <!-- Scoped-edit context chip -->
+            <div v-if="selectedBlock" class="flex items-center gap-1.5 text-xs">
+              <span class="inline-flex items-center gap-1.5 rounded-full bg-primary-500/10 text-primary-500 pl-2.5 pr-1 py-1">
+                <UIcon name="i-lucide-square-mouse-pointer" class="size-3.5" />
+                <span class="max-w-[180px] truncate">Editing: {{ blockLabel(selectedBlock) }}</span>
+                <button type="button" class="grid place-items-center size-4 rounded-full hover:bg-primary-500/20" aria-label="Clear selection" @click="selectedId = null">
+                  <UIcon name="i-lucide-x" class="size-3" />
+                </button>
+              </span>
+            </div>
+
+            <!-- Quick actions -->
+            <div class="flex flex-wrap gap-1.5">
+              <UButton
+                v-for="a in quickActions"
+                :key="a.label"
+                :label="a.label"
+                size="xs"
+                color="neutral"
+                variant="subtle"
+                :disabled="busyChat"
+                @click="sendQuick(a.prompt)"
+              />
+            </div>
+
             <UChatPrompt v-model="input" :error="chat.error" :placeholder="promptPlaceholder" variant="subtle" @submit="onSubmit">
               <UChatPromptSubmit :status="chat.status" @stop="chat.stop()" @reload="chat.regenerate()" />
             </UChatPrompt>

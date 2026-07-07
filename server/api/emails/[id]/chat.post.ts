@@ -22,7 +22,6 @@ import {
   updateBlock,
   updateSettings
 } from '#shared/email/ops'
-import { renderEmailHtml } from '#shared/email/render'
 import {
   createChatMessage,
   updateProject
@@ -34,6 +33,12 @@ import { messagesThisMonth, recordUsageForUser } from '../../../utils/usage'
 import { reconcileVariables, requireOwnedProject } from '../../../utils/projects'
 
 const BLOCK_TYPES = ['heading', 'text', 'button', 'image', 'divider', 'spacer', 'columns', 'html'] as const
+
+/** The full document, bounded so a giant email can't blow the context. */
+function documentForPrompt(doc: EmailDocument): string {
+  const json = JSON.stringify(doc)
+  return json.length > 14000 ? `${json.slice(0, 14000)}…(truncated — use block ids above to target edits)` : json
+}
 
 function systemPrompt(doc: EmailDocument, selectedId?: string): string {
   const selected = selectedId ? findBlock(doc.blocks, selectedId) : null
@@ -62,11 +67,14 @@ function systemPrompt(doc: EmailDocument, selectedId?: string): string {
     '- When the user asks for a whole new email or a big redesign, prefer set_document with the full block list.',
     '- For targeted tweaks, use update_block / update_settings / add_block / remove_block / move_block.',
     '- Keep content width-friendly (~600px), use real, sensible copy, and accessible color contrast.',
+    '- Structure quality: lead with a clear hero (heading + supporting text), one primary CTA button, generous spacer rhythm, and a muted footer (small text block) with the sender address and an unsubscribe line.',
+    '- Copy quality: concrete and concise; subject (settings.title) under ~50 chars; always set a preheader that complements the subject.',
     '- IMAGES: never invent or hotlink random image URLs. Use clearly-labelled placeholder URLs (e.g. dummyimage.com) for layout and tell the user to swap them for their own.',
+    '- If a request is ambiguous, make the most reasonable choice and note the assumption in one short sentence — do not stall by asking questions for simple edits.',
     '- After editing, briefly tell the user what you changed. Do not dump the JSON or HTML.',
     '',
-    `Current document settings: ${JSON.stringify(doc.settings)}.`,
     `Current top-level blocks (id:type): ${doc.blocks.map(b => `${b.id}:${b.type}`).join(', ') || '(none)'}.`,
+    `Current document JSON: ${documentForPrompt(doc)}`,
     selected
       ? `The user has SELECTED this block — assume edits target it unless they say otherwise:\n${JSON.stringify(selected)}`
       : 'No block is currently selected.'
@@ -95,7 +103,12 @@ export default defineEventHandler(async (event) => {
 
   let doc: EmailDocument = body.document ?? project.document ?? emptyDocument()
   const selectedId = body.selectedId
-  const incoming = body.messages ?? []
+  // Cap the history sent upstream — old turns matter less than the current
+  // document state (which is always included in the system prompt).
+  const incoming = (body.messages ?? []).slice(-30)
+  if (!incoming.length) {
+    throw createError({ statusCode: 422, statusMessage: 'No messages provided.' })
+  }
   const lastUser = [...incoming].reverse().find(m => m.role === 'user')
   if (lastUser) {
     await createChatMessage({
@@ -211,7 +224,8 @@ export default defineEventHandler(async (event) => {
         system: systemPrompt(doc, selectedId),
         messages: await convertToModelMessages(incoming),
         tools,
-        stopWhen: stepCountIs(8),
+        maxRetries: 3,
+        stopWhen: stepCountIs(12),
         onFinish: ({ usage, totalUsage }) => {
           const u = (totalUsage ?? usage) as unknown as Record<string, number> | undefined
           if (u) {
@@ -226,21 +240,31 @@ export default defineEventHandler(async (event) => {
 
       writer.merge(result.toUIMessageStream())
     },
+    // Surface a readable message in the chat instead of a dead stream.
+    onError: (e) => {
+      console.error('[chat] stream error:', e instanceof Error ? e.message : e)
+      return 'Postcard AI hit a temporary problem talking to the model. Your email is unchanged — try sending that again.'
+    },
     onFinish: async ({ responseMessage }) => {
-      if (responseMessage) {
-        await createChatMessage({
-          id: responseMessage.id || randomUUID(),
-          projectId,
-          role: 'assistant',
-          parts: responseMessage.parts as unknown[],
-          createdAt: Date.now()
+      try {
+        if (responseMessage) {
+          await createChatMessage({
+            id: responseMessage.id || randomUUID(),
+            projectId,
+            role: 'assistant',
+            parts: responseMessage.parts as unknown[],
+            createdAt: Date.now()
+          })
+        }
+        await updateProject(projectId, {
+          document: doc,
+          variables: reconcileVariables(doc, project.variables ?? [])
         })
+      } catch (e) {
+        // Persistence must not kill the stream; the client still holds the doc
+        // and its autosave will retry.
+        console.error('[chat] persist failed:', e instanceof Error ? e.message : e)
       }
-      void renderEmailHtml(doc)
-      await updateProject(projectId, {
-        document: doc,
-        variables: reconcileVariables(doc, project.variables ?? [])
-      })
       await recordUsageForUser(user.id, projectId, modelId, captured)
     }
   })
