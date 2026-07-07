@@ -41,14 +41,13 @@ services:
   mongo:
     image: mongo:8
     restart: unless-stopped
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: emailhub
-      MONGO_INITDB_ROOT_PASSWORD: emailhub
-      MONGO_INITDB_DATABASE: parse
+    command: ["bash", "/scripts/mongo-init.sh"]
     ports:
       - "127.0.0.1:27017:27017"
     volumes:
       - postcard_mongo:/data/db
+      - mongo_secrets:/run/secrets
+      - ./scripts/mongo-init.sh:/scripts/mongo-init.sh:ro
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
       interval: 10s
@@ -70,7 +69,6 @@ services:
     environment:
       PARSE_SERVER_APPLICATION_ID: ${PARSE_APP_ID:-email-hub}
       PARSE_SERVER_MASTER_KEY: ${PARSE_MASTER_KEY:?set PARSE_MASTER_KEY in Dokploy}
-      PARSE_SERVER_DATABASE_URI: mongodb://emailhub:emailhub@mongo:27017/parse?authSource=admin
       PARSE_SERVER_MOUNT_PATH: ${PARSE_MOUNT_PATH:-/parse}
       PARSE_SERVER_URL: http://parse-server:1337${PARSE_MOUNT_PATH:-/parse}
       PARSE_PUBLIC_SERVER_URL: ${PARSE_PUBLIC_URL:-http://localhost:1337/parse}
@@ -85,6 +83,8 @@ services:
       S3_BUCKET_PREFIX: ${S3_BUCKET_PREFIX:-}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+    volumes:
+      - mongo_secrets:/run/secrets:ro
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:1337'+(process.env.PARSE_SERVER_MOUNT_PATH||'/parse')+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 30s
@@ -104,3 +104,4 @@ services:
 volumes:
   postcard_redis:
   postcard_mongo:
+  mongo_secrets:

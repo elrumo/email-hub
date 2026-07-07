@@ -1,5 +1,5 @@
 import type Stripe from 'stripe'
-import { findUserById, updateUser } from '../../utils/parse'
+import { findUserById, findUserByStripeCustomerId, updateUser } from '../../utils/parse'
 import { planForPriceId } from '../../utils/plans'
 import { getStripe } from '../../utils/stripe'
 
@@ -10,12 +10,15 @@ async function applySubscription(sub: Stripe.Subscription): Promise<void> {
   const plan = active ? (planForPriceId(priceId) ?? 'free') : 'free'
 
   const userId = String(sub.metadata.userId || '')
-  const user = userId ? await findUserById(userId) : null
-  if (!user || user.stripeCustomerId !== customerId) return
+  const user = userId
+    ? (await findUserById(userId)) ?? (await findUserByStripeCustomerId(customerId))
+    : await findUserByStripeCustomerId(customerId)
+  if (!user) return
 
   await updateUser(user.id, {
     plan,
     planStatus: sub.status,
+    stripeCustomerId: user.stripeCustomerId ?? customerId,
     stripeSubscriptionId: sub.id
   })
 }

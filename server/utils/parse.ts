@@ -132,6 +132,13 @@ export async function findUserById(id: string): Promise<AppUser | null> {
   return obj ? toPlain<AppUser>(obj, USER_FIELDS) : null
 }
 
+export async function findUserByStripeCustomerId(customerId: string): Promise<AppUser | null> {
+  const Query = new Parse.Query(classFor('AppUser'))
+  Query.equalTo('stripeCustomerId', customerId)
+  const obj = await Query.first({ useMasterKey: true })
+  return obj ? toPlain<AppUser>(obj, USER_FIELDS) : null
+}
+
 export async function countUsers(): Promise<number> {
   const Query = new Parse.Query(classFor('AppUser'))
   return Query.count({ useMasterKey: true })
@@ -179,11 +186,15 @@ export async function deleteSession(id: string): Promise<void> {
 }
 
 export async function pruneExpiredSessionRecords(now: number): Promise<void> {
-  const Query = new Parse.Query(classFor('AppSession'))
-  Query.lessThan('expiresAt', now)
-  Query.limit(1000)
-  const rows = await Query.find({ useMasterKey: true })
-  if (rows.length) await Parse.Object.destroyAll(rows, { useMasterKey: true })
+  let deleted = 0
+  do {
+    const Query = new Parse.Query(classFor('AppSession'))
+    Query.lessThan('expiresAt', now)
+    Query.limit(1000)
+    const rows = await Query.find({ useMasterKey: true })
+    deleted = rows.length
+    if (deleted) await Parse.Object.destroyAll(rows, { useMasterKey: true })
+  } while (deleted >= 1000)
 }
 
 export async function countProjectsForOwner(ownerId: string): Promise<number> {
@@ -251,11 +262,15 @@ export async function listChatMessages(projectId: string): Promise<EmailChatMess
 }
 
 export async function deleteChatMessages(projectId: string): Promise<void> {
-  const Query = new Parse.Query(classFor('EmailChatMessage'))
-  Query.equalTo('projectId', projectId)
-  Query.limit(1000)
-  const rows = await Query.find({ useMasterKey: true })
-  if (rows.length) await Parse.Object.destroyAll(rows, { useMasterKey: true })
+  let deleted = 0
+  do {
+    const Query = new Parse.Query(classFor('EmailChatMessage'))
+    Query.equalTo('projectId', projectId)
+    Query.limit(1000)
+    const rows = await Query.find({ useMasterKey: true })
+    deleted = rows.length
+    if (deleted) await Parse.Object.destroyAll(rows, { useMasterKey: true })
+  } while (deleted >= 1000)
 }
 
 export async function countActiveApiKeys(ownerId: string): Promise<number> {
@@ -271,6 +286,12 @@ export async function createApiKeyRecord(data: Omit<ApiKeyRecord, 'id'>): Promis
   Object.entries(data).forEach(([k, v]) => obj.set(k, v))
   await obj.save(null, { useMasterKey: true })
   return toPlain<ApiKeyRecord>(obj, API_KEY_FIELDS)
+}
+
+export async function getApiKeyById(id: string): Promise<ApiKeyRecord | null> {
+  const Query = new Parse.Query(classFor('ApiKey'))
+  const obj = await Query.get(id, { useMasterKey: true }).catch(() => null)
+  return obj ? toPlain<ApiKeyRecord>(obj, API_KEY_FIELDS) : null
 }
 
 export async function listApiKeys(ownerId: string): Promise<ApiKeyRecord[]> {
@@ -311,6 +332,13 @@ export async function recordAiUsage(data: AiUsageRecord): Promise<void> {
   await obj.save(null, { useMasterKey: true })
 }
 
+export async function pingParse(): Promise<boolean> {
+  const Query = new Parse.Query(classFor('AppUser'))
+  Query.limit(1)
+  await Query.find({ useMasterKey: true })
+  return true
+}
+
 export async function countAiUsageSince(userId: string, since: number): Promise<number> {
   const Query = new Parse.Query(classFor('AiUsage'))
   Query.equalTo('userId', userId)
@@ -319,13 +347,20 @@ export async function countAiUsageSince(userId: string, since: number): Promise<
 }
 
 export async function summarizeAiUsage(userId: string, since: number): Promise<{ used: number, totalTokens: number }> {
-  const Query = new Parse.Query(classFor('AiUsage'))
-  Query.equalTo('userId', userId)
-  Query.greaterThanOrEqualTo('createdAt', since)
-  Query.limit(1000)
-  const rows = await Query.find({ useMasterKey: true })
-  return {
-    used: rows.length,
-    totalTokens: rows.reduce((sum: number, row: Parse.Object) => sum + Number(row.get('totalTokens') || 0), 0)
+  const count = await countAiUsageSince(userId, since)
+  let totalTokens = 0
+  let skip = 0
+  while (skip < count) {
+    const Query = new Parse.Query(classFor('AiUsage'))
+    Query.equalTo('userId', userId)
+    Query.greaterThanOrEqualTo('createdAt', since)
+    Query.select('totalTokens')
+    Query.skip(skip)
+    Query.limit(1000)
+    const rows = await Query.find({ useMasterKey: true })
+    if (!rows.length) break
+    totalTokens += rows.reduce((sum: number, row: Parse.Object) => sum + Number(row.get('totalTokens') || 0), 0)
+    skip += rows.length
   }
+  return { used: count, totalTokens }
 }

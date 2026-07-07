@@ -1,8 +1,8 @@
-import { initParse } from '../utils/parse'
+import { pingParse } from '../utils/parse'
 
 export default defineEventHandler(async (event) => {
   try {
-    initParse()
+    await pingParse()
     return { ok: true }
   } catch {
     setResponseStatus(event, 503)
