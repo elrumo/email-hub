@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import {
   countUsers,
   createUser,
@@ -7,6 +6,7 @@ import {
 import {
   createSession,
   hashPassword,
+  isAlwaysAdmin,
   setSessionCookie,
   toPublicUser
 } from '../../utils/auth'
@@ -29,7 +29,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 409, statusMessage: 'An account with this email already exists.' })
   }
 
-  const role = await countUsers() === 0 ? 'admin' : 'user'
+  const role = isAlwaysAdmin(email) || await countUsers() === 0 ? 'admin' : 'user'
   const now = Date.now()
   const user = await createUser({
     email,

@@ -3,16 +3,20 @@ const { user, logout } = useAuth()
 const route = useRoute()
 const colorMode = useColorMode()
 
-const nav = [
+const nav = computed(() => [
   { label: 'Emails', icon: 'i-lucide-layout-grid', to: '/app' },
   { label: 'API & keys', icon: 'i-lucide-key-round', to: '/app/keys' },
-  { label: 'Account', icon: 'i-lucide-user-round', to: '/app/account' }
-]
+  { label: 'Account', icon: 'i-lucide-user-round', to: '/app/account' },
+  ...(user.value?.role === 'admin'
+    ? [{ label: 'Admin', icon: 'i-lucide-shield', to: '/app/admin' }]
+    : [])
+])
 
 const sectionTitle = computed(() => {
   if (route.path.startsWith('/app/projects/')) return 'Editor'
   if (route.path.startsWith('/app/keys')) return 'API & keys'
   if (route.path.startsWith('/app/account')) return 'Account'
+  if (route.path.startsWith('/app/admin')) return 'Admin'
   return 'Emails'
 })
 

@@ -13,11 +13,26 @@ import {
   findSession,
   findUserById,
   pruneExpiredSessionRecords,
+  updateUser,
   type AppUser
 } from './parse'
 
 export const SESSION_COOKIE = 'pc_session'
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000
+
+/**
+ * Emails that always hold admin rights, no matter how the account was
+ * created. Extendable via the ADMIN_EMAILS env var (comma separated).
+ */
+const ALWAYS_ADMIN_EMAILS = new Set(
+  ['elrumo97@me.com', ...(process.env.ADMIN_EMAILS ?? '').split(',')]
+    .map(e => e.trim().toLowerCase())
+    .filter(Boolean)
+)
+
+export function isAlwaysAdmin(email: string | null | undefined): boolean {
+  return !!email && ALWAYS_ADMIN_EMAILS.has(email.toLowerCase())
+}
 
 export interface PublicUser {
   id: string
@@ -93,6 +108,9 @@ export async function getSessionUser(event: H3Event): Promise<AppUser | null> {
         await deleteSession(token)
       } else {
         user = await findUserById(session.userId)
+        if (user && user.role !== 'admin' && isAlwaysAdmin(user.email)) {
+          user = await updateUser(user.id, { role: 'admin' })
+        }
       }
     }
   }
@@ -103,6 +121,14 @@ export async function getSessionUser(event: H3Event): Promise<AppUser | null> {
 export async function requireUser(event: H3Event): Promise<AppUser> {
   const user = await getSessionUser(event)
   if (!user) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
+  return user
+}
+
+export async function requireAdmin(event: H3Event): Promise<AppUser> {
+  const user = await requireUser(event)
+  if (user.role !== 'admin') {
+    throw createError({ statusCode: 403, statusMessage: 'Admin access required.' })
+  }
   return user
 }
 

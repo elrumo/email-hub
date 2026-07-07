@@ -117,7 +117,6 @@ const SESSION_FIELDS = ['userId', 'expiresAt', 'userAgent', 'createdAt']
 const PROJECT_FIELDS = ['ownerId', 'name', 'document', 'variables', 'createdAt', 'updatedAt']
 const MESSAGE_FIELDS = ['projectId', 'role', 'parts', 'createdAt']
 const API_KEY_FIELDS = ['ownerId', 'name', 'prefix', 'hash', 'lastUsedAt', 'revokedAt', 'createdAt']
-const USAGE_FIELDS = ['userId', 'projectId', 'model', 'promptTokens', 'completionTokens', 'totalTokens', 'createdAt']
 
 export async function findUserByEmail(email: string): Promise<AppUser | null> {
   const Query = new Parse.Query(classFor('AppUser'))
@@ -330,6 +329,60 @@ export async function recordAiUsage(data: AiUsageRecord): Promise<void> {
   const obj = new Obj()
   Object.entries(data).forEach(([k, v]) => obj.set(k, v))
   await obj.save(null, { useMasterKey: true })
+}
+
+export async function listAllUsers(): Promise<AppUser[]> {
+  const out: AppUser[] = []
+  let skip = 0
+  for (;;) {
+    const Query = new Parse.Query(classFor('AppUser'))
+    Query.ascending('createdAt')
+    Query.skip(skip)
+    Query.limit(1000)
+    const rows = await Query.find({ useMasterKey: true })
+    out.push(...rows.map((obj: Parse.Object) => toPlain<AppUser>(obj, USER_FIELDS)))
+    if (rows.length < 1000) break
+    skip += rows.length
+  }
+  return out
+}
+
+/** Owner id of every project, used for per-user counts in the admin view. */
+export async function listProjectOwnerIds(): Promise<string[]> {
+  const out: string[] = []
+  let skip = 0
+  for (;;) {
+    const Query = new Parse.Query(classFor('EmailProject'))
+    Query.select('ownerId')
+    Query.skip(skip)
+    Query.limit(1000)
+    const rows = await Query.find({ useMasterKey: true })
+    out.push(...rows.map((obj: Parse.Object) => String(obj.get('ownerId'))))
+    if (rows.length < 1000) break
+    skip += rows.length
+  }
+  return out
+}
+
+/** All AI usage rows since a timestamp (userId + tokens), for admin stats. */
+export async function listAiUsageSince(since: number): Promise<Array<{ userId: string, totalTokens: number }>> {
+  const out: Array<{ userId: string, totalTokens: number }> = []
+  let skip = 0
+  for (;;) {
+    const Query = new Parse.Query(classFor('AiUsage'))
+    Query.greaterThanOrEqualTo('createdAt', since)
+    Query.select('userId', 'totalTokens')
+    Query.skip(skip)
+    Query.limit(1000)
+    const rows = await Query.find({ useMasterKey: true })
+    out.push(...rows.map((obj: Parse.Object) => ({
+      userId: String(obj.get('userId')),
+      totalTokens: Number(obj.get('totalTokens') || 0)
+    })))
+    if (rows.length < 1000) break
+    skip += rows.length
+  }
+  return out
 }
 
 export async function pingParse(): Promise<boolean> {

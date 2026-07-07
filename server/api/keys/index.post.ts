@@ -1,6 +1,6 @@
 import { countActiveApiKeys, createApiKeyRecord } from '../../utils/parse'
 import { requireUser } from '../../utils/auth'
-import { generateKey, newApiKeyId } from '../../utils/apiKey'
+import { generateKey } from '../../utils/apiKey'
 import { planFor } from '../../utils/plans'
 
 export default defineEventHandler(async (event) => {
