@@ -1,6 +1,7 @@
 import { findUserByEmail, updateUser } from '../../utils/parse'
 import {
   createSession,
+  isAlwaysAdmin,
   setSessionCookie,
   toPublicUser,
   verifyPassword
@@ -20,7 +21,10 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, statusMessage: 'Incorrect email or password.' })
   }
 
-  const updated = await updateUser(user.id, { lastLoginAt: Date.now() })
+  const updated = await updateUser(user.id, {
+    lastLoginAt: Date.now(),
+    ...(user.role !== 'admin' && isAlwaysAdmin(email) ? { role: 'admin' } : {})
+  })
   const token = await createSession(user.id, getRequestHeader(event, 'user-agent'))
   setSessionCookie(event, token)
   return { user: toPublicUser(updated) }

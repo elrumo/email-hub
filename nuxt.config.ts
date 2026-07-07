@@ -17,6 +17,14 @@ export default defineNuxtConfig({
       priceStarter: '',
       pricePro: ''
     },
+    mail: {
+      smtpHost: '',
+      smtpPort: '587',
+      smtpSecure: '',
+      smtpUser: '',
+      smtpPass: '',
+      from: ''
+    },
     public: {
       appName: 'Postcard',
       appUrl: ''

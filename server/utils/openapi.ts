@@ -11,7 +11,7 @@ export function buildOpenApiDocument(appUrl: string): Record<string, unknown> {
       title: 'Postcard API',
       version: '1.0.0',
       description:
-        'Fetch the rendered HTML of your Postcard email projects, with optional mustache variable substitution. Authenticate with a personal API key as a Bearer token.'
+        'Fetch the rendered HTML of your Postcard email projects, create new ones (from a template or an AI prompt), and send emails — with optional mustache variable substitution. Authenticate with a personal API key as a Bearer token.'
     },
     servers: [{ url: `${server}/api/v1` }],
     security: [{ bearerAuth: [] }],
@@ -72,6 +72,87 @@ export function buildOpenApiDocument(appUrl: string): Record<string, unknown> {
               }
             },
             401: { description: 'Unauthorized', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
+          }
+        },
+        post: {
+          summary: 'Create an email project',
+          description:
+            'Create a new email project. Pass `prompt` to have Postcard AI design the whole email from your brief (counts against your plan\'s monthly AI allowance), `templateId` to start from a predefined template, or neither for a blank canvas.',
+          operationId: 'createProject',
+          requestBody: {
+            required: false,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    name: { type: 'string', description: 'project name (defaults to the email subject)' },
+                    templateId: { type: 'string', description: 'a predefined template id' },
+                    prompt: { type: 'string', description: 'an AI brief, e.g. "a welcome email for a coffee subscription"' }
+                  }
+                }
+              }
+            }
+          },
+          responses: {
+            201: { description: 'The created project', content: { 'application/json': { schema: { $ref: '#/components/schemas/ProjectSummary' } } } },
+            402: { description: 'Plan limit reached (projects or AI messages)', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+            502: { description: 'The assistant could not produce an email' }
+          }
+        }
+      },
+      '/send': {
+        post: {
+          summary: 'Send an email',
+          description:
+            'Send an email to up to 50 recipients — either raw HTML supplied in the request body, or one of your stored projects rendered with `variables` substituted into its `{{ mustache }}` placeholders. Requires the server to have SMTP configured.',
+          operationId: 'sendEmail',
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  required: ['to'],
+                  properties: {
+                    to: {
+                      oneOf: [
+                        { type: 'string', format: 'email' },
+                        { type: 'array', items: { type: 'string', format: 'email' }, maxItems: 50 }
+                      ]
+                    },
+                    subject: { type: 'string', description: 'required with raw html; defaults to the project subject otherwise' },
+                    html: { type: 'string', description: 'raw email HTML (alternative to projectId)' },
+                    text: { type: 'string', description: 'optional plain-text alternative' },
+                    projectId: { type: 'string', description: 'send a stored project (alternative to html)' },
+                    variables: {
+                      type: 'object',
+                      additionalProperties: { type: 'string' },
+                      description: 'values substituted into the project\'s mustache placeholders'
+                    }
+                  }
+                }
+              }
+            }
+          },
+          responses: {
+            200: {
+              description: 'Delivery summary',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      sent: { type: 'integer' },
+                      failed: { type: 'array', items: { type: 'string' } },
+                      subject: { type: 'string' }
+                    }
+                  }
+                }
+              }
+            },
+            422: { description: 'Validation error', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+            503: { description: 'SMTP not configured on this server' }
           }
         }
       },

@@ -13,20 +13,24 @@ interface TemplateMeta {
 }
 
 const { data } = await useFetch<{ templates: TemplateMeta[] }>('/api/templates')
+const route = useRoute()
 const creating = ref<string | null>(null)
 const error = ref('')
+
+const projectId = (route.query.projectId as string) || undefined
+const folderId = (route.query.folderId as string) || undefined
 
 async function create(templateId?: string) {
   error.value = ''
   creating.value = templateId || 'blank'
   try {
-    const { project } = await $fetch<{ project: { id: string } }>('/api/projects', {
+    const { project } = await $fetch<{ project: { id: string } }>('/api/emails', {
       method: 'POST',
-      body: { templateId }
+      body: { templateId, projectId, folderId }
     })
-    await navigateTo(`/app/projects/${project.id}`)
+    await navigateTo(`/app/emails/${project.id}`)
   } catch (e: any) {
-    error.value = e?.data?.statusMessage || 'Could not create the project.'
+    error.value = e?.data?.statusMessage || 'Could not create the email.'
     creating.value = null
   }
 }
@@ -35,7 +39,7 @@ async function create(templateId?: string) {
 <template>
   <div class="p-8 max-w-5xl mx-auto">
     <div class="flex items-center gap-2 mb-6">
-      <UButton to="/app" color="neutral" variant="ghost" size="sm" icon="i-lucide-arrow-left" />
+      <UButton :to="projectId ? `/app/projects/${projectId}` : '/app'" color="neutral" variant="ghost" size="sm" icon="i-lucide-arrow-left" />
       <div>
         <h1 class="text-2xl font-semibold tracking-tight">Start a new email</h1>
         <p class="pc-dim text-sm">Pick a template or begin from scratch.</p>

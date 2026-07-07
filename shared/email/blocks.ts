@@ -10,6 +10,31 @@
  * reordering and AI edits simple — the AI references a block by its stable `id`.
  */
 
+/**
+ * Design tokens the theme designer edits. Applying a theme rewrites the
+ * settings and block colors below from these tokens — layout is untouched.
+ */
+export interface EmailTheme {
+  /** accent for buttons and links */
+  brand: string
+  /** text on top of the brand color (button labels) */
+  onBrand: string
+  /** outer page background */
+  background: string
+  /** content card background */
+  surface: string
+  /** heading color */
+  heading: string
+  /** body text color */
+  text: string
+  /** dividers / secondary hairlines */
+  muted: string
+  /** base font family stack */
+  fontFamily: string
+  /** button corner radius in px */
+  radius: number
+}
+
 /** Document-level settings applied to the email wrapper. */
 export interface EmailSettings {
   /** outer page background (around the content card) */
@@ -26,6 +51,8 @@ export interface EmailSettings {
   title: string
   /** hidden preheader text shown in inbox previews */
   preheader: string
+  /** the design tokens last applied via the theme designer (if any) */
+  theme?: EmailTheme
 }
 
 export type Align = 'left' | 'center' | 'right'

@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import {
   countUsers,
   createUser,
@@ -7,9 +6,11 @@ import {
 import {
   createSession,
   hashPassword,
+  isAlwaysAdmin,
   setSessionCookie,
   toPublicUser
 } from '../../utils/auth'
+import { fireTrigger } from '../../utils/triggers'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ email?: string, password?: string, name?: string }>(event)
@@ -29,7 +30,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 409, statusMessage: 'An account with this email already exists.' })
   }
 
-  const role = await countUsers() === 0 ? 'admin' : 'user'
+  const role = isAlwaysAdmin(email) || await countUsers() === 0 ? 'admin' : 'user'
   const now = Date.now()
   const user = await createUser({
     email,
@@ -47,5 +48,9 @@ export default defineEventHandler(async (event) => {
 
   const token = await createSession(user.id, getRequestHeader(event, 'user-agent'))
   setSessionCookie(event, token)
+
+  // Fire-and-forget: the welcome email must never block or fail signup.
+  void fireTrigger('welcome', user)
+
   return { user: toPublicUser(user) }
 })
