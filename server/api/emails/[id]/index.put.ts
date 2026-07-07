@@ -2,7 +2,7 @@ import type { EmailDocument } from '#shared/email/blocks'
 import type { TemplateVariable } from '../../../utils/parse'
 import { updateProject } from '../../../utils/parse'
 import { requireEmailAccess } from '../../../utils/access'
-import { projectSummary, reconcileVariables, requireOwnedContainer, requireOwnedFolder } from '../../../utils/projects'
+import { projectSummary, reconcileVariables, requireOwnedContainer, requireOwnedFolder, snapshotVersion } from '../../../utils/projects'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
@@ -38,5 +38,12 @@ export default defineEventHandler(async (event) => {
   }
 
   const row = await updateProject(id, patch)
+
+  // Periodic history checkpoint for manual edits (at most one every 10 min);
+  // fire-and-forget so autosave stays snappy.
+  if (body.document) {
+    void snapshotVersion(id, row.name, row.document, row.variables ?? [], 'manual', 10 * 60_000)
+  }
+
   return { project: projectSummary(row) }
 })

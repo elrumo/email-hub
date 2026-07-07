@@ -12,7 +12,14 @@ interface TemplateMeta {
   description: string
 }
 
-const { data } = await useFetch<{ templates: TemplateMeta[] }>('/api/templates')
+interface SavedTemplateMeta {
+  id: string
+  name: string
+  description: string
+  updatedAt: number
+}
+
+const { data } = await useFetch<{ templates: TemplateMeta[], userTemplates?: SavedTemplateMeta[] }>('/api/templates')
 const route = useRoute()
 const creating = ref<string | null>(null)
 const error = ref('')
@@ -20,13 +27,13 @@ const error = ref('')
 const projectId = (route.query.projectId as string) || undefined
 const folderId = (route.query.folderId as string) || undefined
 
-async function create(templateId?: string) {
+async function create(templateId?: string, userTemplateId?: string) {
   error.value = ''
-  creating.value = templateId || 'blank'
+  creating.value = userTemplateId || templateId || 'blank'
   try {
     const { project } = await $fetch<{ project: { id: string } }>('/api/emails', {
       method: 'POST',
-      body: { templateId, projectId, folderId }
+      body: { templateId, userTemplateId, projectId, folderId }
     })
     await navigateTo(`/app/emails/${project.id}`)
   } catch (e: any) {
@@ -47,6 +54,27 @@ async function create(templateId?: string) {
     </div>
 
     <UAlert v-if="error" color="error" variant="soft" class="mb-5" :title="error" />
+
+    <!-- The user's saved templates -->
+    <template v-if="data?.userTemplates?.length">
+      <div class="mb-3 text-xs font-medium uppercase tracking-wide pc-dim">Your templates</div>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+        <button
+          v-for="t in data.userTemplates"
+          :key="t.id"
+          class="pc-card p-6 text-left hover:-translate-y-0.5 hover:shadow-md transition flex flex-col items-start"
+          :disabled="!!creating"
+          @click="create(undefined, t.id)"
+        >
+          <div class="grid place-items-center w-11 h-11 rounded-xl bg-primary-500/10 text-primary-500 mb-4">
+            <UIcon :name="creating === t.id ? 'i-lucide-loader-circle' : 'i-lucide-bookmark'" class="w-5 h-5" :class="creating === t.id && 'animate-spin'" />
+          </div>
+          <div class="font-medium">{{ t.name }}</div>
+          <p class="text-sm pc-dim mt-1">{{ t.description || 'A template you saved.' }}</p>
+        </button>
+      </div>
+      <div class="mb-3 text-xs font-medium uppercase tracking-wide pc-dim">Starters</div>
+    </template>
 
     <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
       <!-- Blank -->

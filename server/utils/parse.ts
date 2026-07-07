@@ -108,6 +108,31 @@ export interface ProjectFolder {
   updatedAt: number
 }
 
+/** A point-in-time snapshot of one email, for the History panel. */
+export interface EmailVersion {
+  id: string
+  /** the EmailProject this version belongs to */
+  projectId: string
+  /** email name at snapshot time */
+  name: string
+  document: EmailDocument
+  variables: TemplateVariable[]
+  /** what produced the snapshot: 'ai' | 'manual' | 'restore' */
+  cause: string
+  createdAt: number
+}
+
+/** A user-saved reusable email template. */
+export interface UserTemplate {
+  id: string
+  ownerId: string
+  name: string
+  description: string
+  document: EmailDocument
+  createdAt: number
+  updatedAt: number
+}
+
 export interface EmailChatMessage {
   id: string
   projectId: string
@@ -154,6 +179,8 @@ const PROJECT_FIELDS = ['ownerId', 'name', 'document', 'variables', 'projectId',
 const CONTAINER_FIELDS = ['ownerId', 'name', 'memberIds', 'shareToken', 'shareMode', 'createdAt', 'updatedAt']
 const FOLDER_FIELDS = ['ownerId', 'projectId', 'parentId', 'name', 'createdAt', 'updatedAt']
 const MESSAGE_FIELDS = ['projectId', 'role', 'parts', 'createdAt']
+const VERSION_FIELDS = ['projectId', 'name', 'document', 'variables', 'cause', 'createdAt']
+const USER_TEMPLATE_FIELDS = ['ownerId', 'name', 'description', 'document', 'createdAt', 'updatedAt']
 const API_KEY_FIELDS = ['ownerId', 'name', 'prefix', 'hash', 'lastUsedAt', 'revokedAt', 'createdAt']
 
 export async function findUserByEmail(email: string): Promise<AppUser | null> {
@@ -412,6 +439,98 @@ export async function deleteChatMessages(projectId: string): Promise<void> {
     deleted = rows.length
     if (deleted) await Parse.Object.destroyAll(rows, { useMasterKey: true })
   } while (deleted >= 1000)
+}
+
+// --- Version history ----------------------------------------------------------
+
+/** How many snapshots we keep per email; older ones are pruned on write. */
+export const VERSIONS_KEPT_PER_EMAIL = 50
+
+export async function createEmailVersion(data: Omit<EmailVersion, 'id'>): Promise<EmailVersion> {
+  const Obj = classFor('EmailVersion')
+  const obj = new Obj()
+  Object.entries(data).forEach(([k, v]) => obj.set(k, v))
+  await obj.save(null, { useMasterKey: true })
+  // Best-effort prune: history is a convenience, never fail the write for it.
+  await pruneEmailVersions(data.projectId).catch(() => {})
+  return toPlain<EmailVersion>(obj, VERSION_FIELDS)
+}
+
+export async function listEmailVersions(projectId: string, limit = VERSIONS_KEPT_PER_EMAIL): Promise<EmailVersion[]> {
+  const Query = new Parse.Query(classFor('EmailVersion'))
+  Query.equalTo('projectId', projectId)
+  Query.descending('createdAt')
+  Query.limit(limit)
+  const rows = await Query.find({ useMasterKey: true })
+  return rows.map((obj: Parse.Object) => toPlain<EmailVersion>(obj, VERSION_FIELDS))
+}
+
+export async function getEmailVersion(id: string): Promise<EmailVersion | null> {
+  const Query = new Parse.Query(classFor('EmailVersion'))
+  const obj = await Query.get(id, { useMasterKey: true }).catch(() => null)
+  return obj ? toPlain<EmailVersion>(obj, VERSION_FIELDS) : null
+}
+
+/** Most recent snapshot's timestamp for an email (0 = none yet). */
+export async function latestEmailVersionAt(projectId: string): Promise<number> {
+  const Query = new Parse.Query(classFor('EmailVersion'))
+  Query.equalTo('projectId', projectId)
+  Query.descending('createdAt')
+  Query.select('createdAt')
+  const obj = await Query.first({ useMasterKey: true })
+  return obj ? Number(obj.get('createdAt') || 0) : 0
+}
+
+async function pruneEmailVersions(projectId: string): Promise<void> {
+  const Query = new Parse.Query(classFor('EmailVersion'))
+  Query.equalTo('projectId', projectId)
+  Query.descending('createdAt')
+  Query.skip(VERSIONS_KEPT_PER_EMAIL)
+  Query.limit(1000)
+  const stale = await Query.find({ useMasterKey: true })
+  if (stale.length) await Parse.Object.destroyAll(stale, { useMasterKey: true })
+}
+
+export async function deleteEmailVersions(projectId: string): Promise<void> {
+  let deleted = 0
+  do {
+    const Query = new Parse.Query(classFor('EmailVersion'))
+    Query.equalTo('projectId', projectId)
+    Query.limit(1000)
+    const rows = await Query.find({ useMasterKey: true })
+    deleted = rows.length
+    if (deleted) await Parse.Object.destroyAll(rows, { useMasterKey: true })
+  } while (deleted >= 1000)
+}
+
+// --- User templates -------------------------------------------------------------
+
+export async function createUserTemplate(data: Omit<UserTemplate, 'id'>): Promise<UserTemplate> {
+  const Obj = classFor('UserTemplate')
+  const obj = new Obj()
+  Object.entries(data).forEach(([k, v]) => obj.set(k, v))
+  await obj.save(null, { useMasterKey: true })
+  return toPlain<UserTemplate>(obj, USER_TEMPLATE_FIELDS)
+}
+
+export async function listUserTemplates(ownerId: string): Promise<UserTemplate[]> {
+  const Query = new Parse.Query(classFor('UserTemplate'))
+  Query.equalTo('ownerId', ownerId)
+  Query.descending('updatedAt')
+  Query.limit(200)
+  const rows = await Query.find({ useMasterKey: true })
+  return rows.map((obj: Parse.Object) => toPlain<UserTemplate>(obj, USER_TEMPLATE_FIELDS))
+}
+
+export async function getUserTemplate(id: string): Promise<UserTemplate | null> {
+  const Query = new Parse.Query(classFor('UserTemplate'))
+  const obj = await Query.get(id, { useMasterKey: true }).catch(() => null)
+  return obj ? toPlain<UserTemplate>(obj, USER_TEMPLATE_FIELDS) : null
+}
+
+export async function deleteUserTemplate(id: string): Promise<void> {
+  const Obj = classFor('UserTemplate')
+  await Obj.createWithoutData(id).destroy({ useMasterKey: true })
 }
 
 export async function countActiveApiKeys(ownerId: string): Promise<number> {

@@ -24,8 +24,55 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   (e: 'update:open', value: boolean): void
   (e: 'select', payload: { template: EmailTemplateDefinition, document: EmailDocument }): void
+  (e: 'select-saved', payload: { name: string, document: EmailDocument }): void
   (e: 'blank', document: EmailDocument): void
 }>()
+
+// ---- the user's saved templates --------------------------------------------
+interface SavedTemplateMeta {
+  id: string
+  name: string
+  description: string
+  updatedAt: number
+}
+
+const toast = useToast()
+const savedTemplates = ref<SavedTemplateMeta[]>([])
+const savedBusy = ref<string | null>(null)
+
+watch(() => props.open, async (open) => {
+  if (!open) return
+  try {
+    const res = await $fetch<{ userTemplates?: SavedTemplateMeta[] }>('/api/templates')
+    savedTemplates.value = res.userTemplates ?? []
+  } catch {
+    savedTemplates.value = []
+  }
+}, { immediate: true })
+
+async function chooseSaved(meta: SavedTemplateMeta) {
+  savedBusy.value = meta.id
+  try {
+    const res = await $fetch<{ template: { name: string, document: EmailDocument } }>(`/api/templates/${meta.id}`)
+    emit('select-saved', { name: res.template.name, document: structuredClone(toRaw(res.template.document)) })
+  } catch {
+    toast.add({ title: 'Could not load that template.', color: 'error' })
+  } finally {
+    savedBusy.value = null
+  }
+}
+
+async function deleteSaved(meta: SavedTemplateMeta) {
+  savedBusy.value = meta.id
+  try {
+    await $fetch(`/api/templates/${meta.id}`, { method: 'DELETE' })
+    savedTemplates.value = savedTemplates.value.filter(t => t.id !== meta.id)
+  } catch {
+    toast.add({ title: 'Could not delete the template.', color: 'error' })
+  } finally {
+    savedBusy.value = null
+  }
+}
 
 type TypeFilter = 'All' | EmailTemplateType
 type StyleFilter = 'All' | EmailTemplateStyle
@@ -68,6 +115,45 @@ function chooseBlank() {
   >
     <template #body>
       <div class="space-y-5">
+        <!-- Your templates -->
+        <div v-if="savedTemplates.length" class="space-y-2">
+          <div class="text-xs font-medium uppercase tracking-wide text-muted">Your templates</div>
+          <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div
+              v-for="t in savedTemplates"
+              :key="t.id"
+              class="group flex items-center gap-2 rounded-lg border border-default p-3 transition hover:border-primary/50"
+            >
+              <button
+                type="button"
+                class="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+                :disabled="busy || savedBusy === t.id"
+                @click="chooseSaved(t)"
+              >
+                <UIcon
+                  :name="savedBusy === t.id ? 'i-lucide-loader-circle' : 'i-lucide-bookmark'"
+                  class="size-4 shrink-0 text-primary"
+                  :class="savedBusy === t.id && 'animate-spin'"
+                />
+                <span class="min-w-0">
+                  <span class="block truncate text-sm font-medium text-highlighted">{{ t.name }}</span>
+                  <span v-if="t.description" class="block truncate text-xs text-muted">{{ t.description }}</span>
+                </span>
+              </button>
+              <UButton
+                icon="i-lucide-trash-2"
+                color="error"
+                variant="ghost"
+                size="xs"
+                class="opacity-0 transition group-hover:opacity-100"
+                aria-label="Delete template"
+                :disabled="savedBusy === t.id"
+                @click="deleteSaved(t)"
+              />
+            </div>
+          </div>
+        </div>
+
         <div class="space-y-3">
           <div class="flex flex-wrap gap-2">
             <UButton

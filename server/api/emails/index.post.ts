@@ -1,6 +1,6 @@
 import { cloneBlankEmailDocument, cloneEmailTemplateDocument } from '#shared/email/templates'
 import type { EmailDocument } from '#shared/email/blocks'
-import { countProjectsForOwner, createProject } from '../../utils/parse'
+import { countProjectsForOwner, createProject, getUserTemplate } from '../../utils/parse'
 import { requireUser } from '../../utils/auth'
 import { planFor } from '../../utils/plans'
 import { projectSummary, reconcileVariables, requireOwnedContainer, requireOwnedFolder } from '../../utils/projects'
@@ -10,6 +10,8 @@ export default defineEventHandler(async (event) => {
   const body = await readBody<{
     name?: string
     templateId?: string
+    /** id of one of the user's saved templates (takes precedence over templateId) */
+    userTemplateId?: string
     projectId?: string
     folderId?: string
   }>(event)
@@ -36,11 +38,22 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const doc: EmailDocument = (body.templateId && cloneEmailTemplateDocument(body.templateId)) || cloneBlankEmailDocument()
+  let doc: EmailDocument | null = null
+  let templateName: string | null = null
+  if (body.userTemplateId) {
+    const saved = await getUserTemplate(body.userTemplateId)
+    if (!saved || saved.ownerId !== user.id) {
+      throw createError({ statusCode: 404, statusMessage: 'Template not found' })
+    }
+    doc = structuredClone(saved.document)
+    templateName = saved.name
+  }
+  if (!doc) doc = (body.templateId && cloneEmailTemplateDocument(body.templateId)) || cloneBlankEmailDocument()
+
   const now = Date.now()
   const row = await createProject({
     ownerId: user.id,
-    name: (body.name ?? '').trim() || doc.settings.title || 'Untitled email',
+    name: (body.name ?? '').trim() || templateName || doc.settings.title || 'Untitled email',
     document: doc,
     variables: reconcileVariables(doc, []),
     projectId,

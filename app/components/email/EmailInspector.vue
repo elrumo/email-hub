@@ -19,6 +19,10 @@ import { applyThemeToDocument, currentTheme, FONT_STACKS, THEME_PRESETS } from '
 const props = defineProps<{
   document: EmailDocument
   selectedId?: string | null
+  /** email id — enables the AI subject-line suggester in settings */
+  emailId?: string
+  /** whether AI features are available to this user (owner only) */
+  canAi?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -111,6 +115,32 @@ function applyPreset(presetId: string) {
 }
 
 const fontItems = FONT_STACKS.map(f => ({ label: f.label, value: f.value }))
+
+// ---- AI subject line suggestions -------------------------------------------
+const toast = useToast()
+const suggesting = ref(false)
+const suggestions = ref<Array<{ subject: string, preheader: string, angle: string }>>([])
+
+async function suggestSubjects() {
+  if (!props.emailId || suggesting.value) return
+  suggesting.value = true
+  try {
+    const res = await $fetch<{ suggestions: typeof suggestions.value }>(`/api/emails/${props.emailId}/subjects`, {
+      method: 'POST',
+      body: { document: props.document }
+    })
+    suggestions.value = res.suggestions
+  } catch (e: unknown) {
+    const err = e as { data?: { statusMessage?: string } }
+    toast.add({ title: err?.data?.statusMessage || 'Could not get suggestions.', color: 'error' })
+  } finally {
+    suggesting.value = false
+  }
+}
+
+function applySuggestion(s: { subject: string, preheader: string }) {
+  emit('update:document', updateSettings(props.document, { title: s.subject, preheader: s.preheader }).doc)
+}
 
 const paddingPopoverOpen = ref(false)
 
@@ -429,6 +459,35 @@ watch(() => props.selectedId, () => {
             @update:model-value="patchSettings('preheader', $event)"
           />
         </UFormField>
+
+        <!-- AI subject line ideas -->
+        <div v-if="canAi && emailId" class="space-y-2">
+          <UButton
+            :label="suggestions.length ? 'More ideas' : 'Suggest subject & preheader'"
+            icon="i-lucide-sparkles"
+            size="xs"
+            color="primary"
+            variant="soft"
+            :loading="suggesting"
+            @click="suggestSubjects"
+          />
+          <div v-if="suggestions.length" class="space-y-1.5">
+            <button
+              v-for="(s, i) in suggestions"
+              :key="i"
+              type="button"
+              class="w-full rounded-lg border border-default p-2.5 text-left transition hover:border-primary/50"
+              @click="applySuggestion(s)"
+            >
+              <div class="flex items-center justify-between gap-2">
+                <span class="min-w-0 truncate text-xs font-medium text-highlighted">{{ s.subject }}</span>
+                <UBadge v-if="s.angle" :label="s.angle" color="neutral" variant="soft" size="sm" class="shrink-0" />
+              </div>
+              <p class="mt-0.5 line-clamp-2 text-[11px] leading-4 text-muted">{{ s.preheader }}</p>
+            </button>
+            <p class="text-[11px] text-muted">Tap an idea to apply its subject and preheader.</p>
+          </div>
+        </div>
         <!-- Theme designer -->
         <div class="border-t border-default pt-4">
           <div class="flex items-center gap-2 mb-1">

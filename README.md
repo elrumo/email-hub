@@ -25,22 +25,35 @@ demand.
 - 💳 **Stripe billing** — Free / Starter / Pro plans with usage limits.
 - 📈 **AI usage metering** — every assistant turn is recorded per user and
   enforced against the plan's monthly allowance.
+- 🕘 **Version history & undo** — automatic snapshots on AI edits and periodic
+  checkpoints on manual edits, restorable from the editor; plus instant
+  undo/redo (⌘Z / ⇧⌘Z).
+- ✅ **Built-in review** — a deterministic linter checks subjects, preheaders,
+  dead links, placeholder images, alt text, color contrast and unsubscribe
+  footers on every edit; findings feed the AI so "fix issues" just works.
+- 📬 **Test sends** — email the current design (with sample variables) to any
+  inbox straight from the editor.
+- 📑 **Saved templates** — save any email as a personal template and reuse it
+  from the gallery.
 
 ## Stack
 
 - [Nuxt 4](https://nuxt.com) + [Nuxt UI](https://ui.nuxt.com) (Vue 3, Tailwind 4)
 - [Bun](https://bun.sh) runtime
-- **Postgres** via Bun's native SQL driver + [Drizzle ORM](https://orm.drizzle.team)
+- [Parse Server](https://parseplatform.org) over **MongoDB** for persistence
+  (with Live Queries powering real-time co-editing)
 - [Vercel AI SDK](https://sdk.vercel.ai) talking to an OpenAI-compatible
   **LiteLLM** gateway (model alias `mini-v2`)
 - [Stripe](https://stripe.com) for subscriptions
+- [Nodemailer](https://nodemailer.com) SMTP for trigger emails, test sends and
+  the send API
 
 ## Quick start (Docker Compose)
 
 ```bash
 cp .env.example .env       # fill in Parse, Stripe and upstream AI credentials
 docker compose up --build
-# → app on http://localhost:3000, with Postgres, Redis, Mongo, Parse Server and LiteLLM alongside it
+# → app on http://localhost:3000, with Redis, Mongo, Parse Server and LiteLLM alongside it
 ```
 
 The schema is created automatically on first boot. The first account you create
@@ -55,7 +68,7 @@ service on port 3000, with `NUXT_SESSION_COOKIE_SECURE=1`.
 
 ```bash
 bun install
-# point NUXT_DATABASE_URL at a local Postgres (or `docker compose up db`)
+# point PARSE_SERVER_URL at a running Parse Server (or `docker compose up mongo parse-server`)
 bun dev
 ```
 
@@ -66,13 +79,13 @@ Notable groups:
 
 | Group | Vars |
 | --- | --- |
-| Database | `NUXT_DATABASE_URL`, `POSTGRES_PASSWORD` |
-| Redis | `NUXT_REDIS_URL` |
-| Parse + Mongo | `PARSE_APP_ID`, `PARSE_MASTER_KEY`, `PARSE_PUBLIC_URL`, `MONGO_USER`, `MONGO_PASSWORD`, `MONGO_DB` |
-| S3 file storage | `S3_BUCKET`, `S3_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` |
+| Parse + Mongo | `PARSE_APP_ID`, `PARSE_MASTER_KEY`, `PARSE_SERVER_URL`, `PARSE_PUBLIC_URL` |
+| Redis | `NUXT_REDIS_URL` (reserved for background jobs) |
+| S3 file storage (optional) | `PARSE_SERVER_FILES_ADAPTER`, `S3_BUCKET`, `S3_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` |
 | AI (hidden from users) | `NUXT_AI_BASE_URL`, `NUXT_AI_API_KEY`, `NUXT_AI_MODEL` |
 | Billing | `NUXT_STRIPE_SECRET_KEY`, `NUXT_STRIPE_WEBHOOK_SECRET`, `NUXT_STRIPE_PRICE_STARTER`, `NUXT_STRIPE_PRICE_PRO` |
-| App | `NUXT_PUBLIC_APP_URL` |
+| Outgoing mail | `NUXT_MAIL_SMTP_HOST`, `NUXT_MAIL_SMTP_PORT`, `NUXT_MAIL_SMTP_USER`, `NUXT_MAIL_SMTP_PASS`, `NUXT_MAIL_FROM` |
+| App | `NUXT_PUBLIC_APP_URL`, `NUXT_SESSION_COOKIE_SECURE` |
 
 The AI provider is configured only in `litellm.config.yaml` and via env — the UI
 only ever references "Postcard AI" and the `mini-v2` alias.

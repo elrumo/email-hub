@@ -57,6 +57,21 @@ function replaceBlock(blocks: EmailBlock[], updated: EmailBlock): boolean {
   return false
 }
 
+/** Locate a block anywhere in the tree: its containing list and index. */
+function locateBlock(blocks: EmailBlock[], id: string): { list: EmailBlock[], index: number } | null {
+  for (let i = 0; i < blocks.length; i++) {
+    const b = blocks[i]!
+    if (b.id === id) return { list: blocks, index: i }
+    if (b.type === 'columns') {
+      for (const col of b.columns) {
+        const found = locateBlock(col, id)
+        if (found) return found
+      }
+    }
+  }
+  return null
+}
+
 /** Remove a block by id anywhere in the tree. */
 function removeBlockById(blocks: EmailBlock[], id: string): boolean {
   for (let i = 0; i < blocks.length; i++) {
@@ -138,6 +153,22 @@ export function removeBlock(doc: EmailDocument, id: string): OpResult {
   const next = clone(doc)
   if (!removeBlockById(next.blocks, id)) return { ok: false, message: `No block with id "${id}".`, doc }
   return { ok: true, message: `Removed block "${id}".`, doc: next }
+}
+
+/**
+ * Duplicate a block (anywhere in the tree, including inside columns). The copy
+ * gets fresh ids throughout and is inserted right after the original.
+ */
+export function duplicateBlock(doc: EmailDocument, id: string): OpResult & { id?: string } {
+  const next = clone(doc)
+  const found = locateBlock(next.blocks, id)
+  if (!found) return { ok: false, message: `No block with id "${id}".`, doc }
+  const copy = clone({ settings: next.settings, blocks: [found.list[found.index]!] }).blocks[0]!
+  walkBlocks([copy], (b) => {
+    (b as { id: string }).id = newBlockId()
+  })
+  found.list.splice(found.index + 1, 0, copy)
+  return { ok: true, id: copy.id, message: `Duplicated ${copy.type} block "${id}" as "${copy.id}".`, doc: next }
 }
 
 /** Move a top-level block to a new index. */
