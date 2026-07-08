@@ -37,7 +37,11 @@ export interface RateLimitOptions {
 export function assertRateLimit(event: H3Event, bucket: string, opts: RateLimitOptions): void {
   const now = Date.now()
   sweep(now)
-  const ip = getRequestIP(event, { xForwardedFor: true }) || 'unknown'
+  // X-Forwarded-For is client-spoofable when the app is exposed directly (the
+  // default compose setup) — an attacker could mint a fresh bucket per request.
+  // Only honour it when the deployment declares a trusted proxy in front.
+  const trustProxy = process.env.NUXT_TRUST_PROXY === '1'
+  const ip = getRequestIP(event, { xForwardedFor: trustProxy }) || 'unknown'
   const key = `${bucket}:${ip}${opts.key ? `:${opts.key}` : ''}`
   const current = windows.get(key)
   if (!current || current.resetAt <= now) {

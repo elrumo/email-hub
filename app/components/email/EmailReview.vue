@@ -72,7 +72,7 @@ function fixAll() {
             <ul class="space-y-2">
               <li
                 v-for="(issue, i) in group.items"
-                :key="`${issue.code}-${issue.blockId ?? i}`"
+                :key="`${issue.code}-${issue.blockId ?? 'doc'}-${i}`"
                 class="rounded-lg border pc-hairline p-3 transition"
                 :class="issue.blockId ? 'cursor-pointer hover:border-primary/40' : ''"
                 @click="onIssueClick(issue)"

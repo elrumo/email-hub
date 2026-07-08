@@ -1,5 +1,6 @@
 import { generateText, jsonSchema, stepCountIs, tool } from 'ai'
-import type { EmailDocument } from '#shared/email/blocks'
+import { walkBlocks, type EmailDocument } from '#shared/email/blocks'
+import { stripTags } from '#shared/email/lint'
 import { requireUser } from '../../../utils/auth'
 import { getAssistantModel } from '../../../utils/ai'
 import { planFor } from '../../../utils/plans'
@@ -27,15 +28,11 @@ function briefFor(doc: EmailDocument): string {
   parts.push(`Current subject: ${doc.settings.title || '(none)'}`)
   parts.push(`Current preheader: ${doc.settings.preheader || '(none)'}`)
   const texts: string[] = []
-  const walk = (blocks: EmailDocument['blocks']) => {
-    for (const b of blocks) {
-      if (b.type === 'heading') texts.push(b.text)
-      if (b.type === 'text') texts.push(b.html.replace(/<[^>]+>/g, ' '))
-      if (b.type === 'button') texts.push(`[CTA: ${b.label}]`)
-      if (b.type === 'columns') for (const col of b.columns) walk(col)
-    }
-  }
-  walk(doc.blocks)
+  walkBlocks(doc.blocks, (b) => {
+    if (b.type === 'heading') texts.push(b.text)
+    if (b.type === 'text') texts.push(stripTags(b.html))
+    if (b.type === 'button') texts.push(`[CTA: ${b.label}]`)
+  })
   parts.push(`Email content:\n${texts.join('\n').replace(/\s+/g, ' ').trim().slice(0, 3000)}`)
   return parts.join('\n')
 }
@@ -61,7 +58,11 @@ export default defineEventHandler(async (event) => {
   }
 
   const body = await readBody<{ document?: EmailDocument }>(event).catch(() => ({} as { document?: EmailDocument }))
-  const doc = (body.document ?? project.document) as EmailDocument
+  // Use the editor's in-flight document only when it's actually well-formed.
+  const candidate = body.document
+  const doc = (candidate && candidate.settings && Array.isArray(candidate.blocks)
+    ? candidate
+    : project.document) as EmailDocument
 
   const { model, modelId } = getAssistantModel()
   let suggestions: SubjectIdea[] = []
@@ -107,6 +108,12 @@ export default defineEventHandler(async (event) => {
     }
   })
 
+  if (!suggestions.length) {
+    // Don't burn a metered message on a turn that produced nothing usable —
+    // the toast invites a retry and retries would eat the plan allowance.
+    throw createError({ statusCode: 502, statusMessage: 'The assistant did not produce suggestions — try again.' })
+  }
+
   const u = (result.totalUsage ?? result.usage) as unknown as Record<string, number> | undefined
   await recordUsageForUser(user.id, id, modelId, {
     promptTokens: u?.promptTokens ?? u?.inputTokens,
@@ -114,8 +121,5 @@ export default defineEventHandler(async (event) => {
     totalTokens: u?.totalTokens
   })
 
-  if (!suggestions.length) {
-    throw createError({ statusCode: 502, statusMessage: 'The assistant did not produce suggestions — try again.' })
-  }
   return { suggestions }
 })

@@ -12,6 +12,7 @@ import {
 } from '../../utils/auth'
 import { fireTrigger } from '../../utils/triggers'
 import { assertRateLimit } from '../../utils/rateLimit'
+import { EMAIL_RE } from '../../utils/mailer'
 
 export default defineEventHandler(async (event) => {
   // Keep bots from mass-creating accounts: 5 signups per IP per hour.
@@ -26,7 +27,7 @@ export default defineEventHandler(async (event) => {
   const password = body.password ?? ''
   const name = (body.name ?? '').trim() || null
 
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+  if (!EMAIL_RE.test(email)) {
     throw createError({ statusCode: 422, statusMessage: 'Enter a valid email address.' })
   }
   if (password.length < 8) {

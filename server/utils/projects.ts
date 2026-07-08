@@ -6,11 +6,13 @@ import {
   getContainer,
   getFolder,
   getProject,
+  getUserTemplate,
   latestEmailVersionAt,
   type EmailProject,
   type ProjectContainer,
   type ProjectFolder,
-  type TemplateVariable
+  type TemplateVariable,
+  type UserTemplate
 } from './parse'
 
 export async function requireOwnedProject(id: string, ownerId: string): Promise<EmailProject> {
@@ -37,6 +39,14 @@ export async function requireOwnedFolder(id: string, ownerId: string): Promise<P
   return folder
 }
 
+export async function requireOwnedTemplate(id: string, ownerId: string): Promise<UserTemplate> {
+  const template = await getUserTemplate(id)
+  if (!template || template.ownerId !== ownerId) {
+    throw createError({ statusCode: 404, statusMessage: 'Template not found' })
+  }
+  return template
+}
+
 export function reconcileVariables(
   doc: EmailDocument,
   declared: TemplateVariable[] = []
@@ -47,6 +57,14 @@ export function reconcileVariables(
   for (const key of present) out.push(byKey.get(key) ?? { key })
   return out.sort((a, b) => a.key.localeCompare(b.key))
 }
+
+/**
+ * Per-process cache of each email's latest snapshot time. Autosave PUTs land
+ * roughly once a second per active editor; without this every one of them
+ * would query Parse just to learn "not yet" (the app runs single-node — the
+ * same assumption rateLimit.ts documents). Falls back to the DB on cold start.
+ */
+const lastSnapshotAt = new Map<string, number>()
 
 /**
  * Snapshot an email into version history unless a snapshot newer than
@@ -63,7 +81,9 @@ export async function snapshotVersion(
 ): Promise<void> {
   try {
     if (minIntervalMs > 0) {
-      const latest = await latestEmailVersionAt(projectId)
+      const cached = lastSnapshotAt.get(projectId)
+      const latest = cached ?? await latestEmailVersionAt(projectId)
+      if (cached === undefined) lastSnapshotAt.set(projectId, latest)
       if (Date.now() - latest < minIntervalMs) return
     }
     await createEmailVersion({
@@ -73,6 +93,8 @@ export async function snapshotVersion(
       variables,
       cause
     })
+    lastSnapshotAt.set(projectId, Date.now())
+    if (lastSnapshotAt.size > 10_000) lastSnapshotAt.clear()
   } catch (e) {
     console.error('[versions] snapshot failed:', e instanceof Error ? e.message : e)
   }

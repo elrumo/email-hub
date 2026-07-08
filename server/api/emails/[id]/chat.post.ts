@@ -281,7 +281,12 @@ export default defineEventHandler(async (event) => {
         const reconciled = reconcileVariables(doc, project.variables ?? [])
         await updateProject(projectId, {
           document: doc,
-          variables: reconciled
+          variables: reconciled,
+          // Clear the last autosave's actorId: this save is the AI's, and
+          // leaving a tab's id here would make that tab discard the SSE
+          // broadcast as its own echo (hiding a server-side overwrite, e.g.
+          // right after a local undo).
+          lastActorId: null
         })
         // Every AI edit lands in version history so it can be rolled back.
         if (docChanged) {

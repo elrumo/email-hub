@@ -16,8 +16,8 @@ const ALLOWED_TYPES: Record<string, string> = {
   'image/webp': 'webp'
 }
 
-/** ~5 MB of raw image; base64 inflates by 4/3. */
-const MAX_BASE64_LENGTH = Math.ceil((5 * 1024 * 1024 * 4) / 3)
+/** 5 MB of raw image; base64 is 4 chars per 3-byte group (padded). */
+const MAX_BASE64_LENGTH = 4 * Math.ceil((5 * 1024 * 1024) / 3)
 
 export default defineEventHandler(async (event) => {
   const user = await requireUser(event)

@@ -2,7 +2,7 @@ import type { EmailDocument } from '#shared/email/blocks'
 import { renderEmailHtml } from '#shared/email/render'
 import { applyTemplateVariables } from '#shared/email/placeholders'
 import { requireEmailAccess } from '../../../utils/access'
-import { isMailerConfigured, sendMail } from '../../../utils/mailer'
+import { EMAIL_RE, isMailerConfigured, sendMail } from '../../../utils/mailer'
 import { assertRateLimit } from '../../../utils/rateLimit'
 
 /**
@@ -25,7 +25,7 @@ export default defineEventHandler(async (event) => {
 
   const body = await readBody<{ to?: string, document?: EmailDocument }>(event).catch(() => ({} as { to?: string, document?: EmailDocument }))
   const to = (body.to ?? '').trim() || user.email
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) {
+  if (!EMAIL_RE.test(to)) {
     throw createError({ statusCode: 422, statusMessage: 'Enter a valid recipient email address.' })
   }
 

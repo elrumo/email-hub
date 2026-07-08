@@ -135,14 +135,18 @@ let lastEditAt = 0
 let skipHistoryOnce = false
 
 watch(document, () => {
+  if (access.value === 'view') return
   const json = JSON.stringify(document.value)
-  if (json === lastSnapshot) return
+  // Consume the one-shot flag even when the payload is identical (a live-sync
+  // echo of our own state) — leaking it would swallow the next real edit's
+  // undo step.
   if (skipHistoryOnce) {
     skipHistoryOnce = false
     lastSnapshot = json
     lastEditAt = 0
     return
   }
+  if (json === lastSnapshot) return
   const now = Date.now()
   if (now - lastEditAt > HISTORY_COALESCE_MS) {
     undoStack.value.push(lastSnapshot)
@@ -792,6 +796,7 @@ useHead({ title: () => `${name.value} · Postcard` })
               :selected-id="selectedId"
               :email-id="id"
               :can-ai="isOwner"
+              :can-edit="canEdit"
               @update:document="document = $event"
               @select="selectedId = $event"
             />

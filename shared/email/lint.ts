@@ -38,7 +38,8 @@ function isLiveHref(href: string | undefined | null): boolean {
   return !/^https?:\/\/(www\.)?example\.(com|org|net)\b/i.test(value)
 }
 
-function stripTags(html: string): string {
+/** Collapse inline HTML to its readable text. */
+export function stripTags(html: string): string {
   return String(html ?? '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
 }
 

@@ -23,6 +23,8 @@ const props = defineProps<{
   emailId?: string
   /** whether AI features are available to this user (owner only) */
   canAi?: boolean
+  /** false for view-only visitors — hides actions whose results can't persist */
+  canEdit?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -102,7 +104,10 @@ const uploading = ref(false)
 async function onUploadPicked(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0]
   if (uploadInput.value) uploadInput.value.value = ''
-  if (!file || !props.selectedId) return
+  // Pin the target now: the user may select another block while the upload
+  // runs, and the URL must land on the image block it was picked for.
+  const targetId = props.selectedId
+  if (!file || !targetId) return
   if (file.size > 5 * 1024 * 1024) {
     toast.add({ title: 'Images are limited to 5 MB.', color: 'error' })
     return
@@ -119,8 +124,13 @@ async function onUploadPicked(e: Event) {
       method: 'POST',
       body: { name: file.name, contentType: file.type, data }
     })
-    patch('src', res.url)
-    toast.add({ title: 'Image uploaded', icon: 'i-lucide-image-up', color: 'success' })
+    const target = findBlock(props.document.blocks, targetId)
+    if (target?.type === 'image') {
+      emit('update:document', updateBlock(props.document, targetId, { src: res.url }).doc)
+      toast.add({ title: 'Image uploaded', icon: 'i-lucide-image-up', color: 'success' })
+    } else {
+      toast.add({ title: 'Image uploaded, but its block was removed.', description: res.url, color: 'warning' })
+    }
   } catch (err: unknown) {
     const e2 = err as { data?: { statusMessage?: string } }
     toast.add({ title: e2?.data?.statusMessage || 'Upload failed.', color: 'error' })
@@ -330,22 +340,24 @@ watch(() => props.selectedId, () => {
                 class="w-full"
                 @update:model-value="patch('src', $event)"
               />
-              <input
-                ref="uploadInput"
-                type="file"
-                accept="image/png,image/jpeg,image/gif,image/webp"
-                class="hidden"
-                @change="onUploadPicked"
-              >
-              <UButton
-                label="Upload image"
-                icon="i-lucide-image-up"
-                size="xs"
-                color="neutral"
-                variant="subtle"
-                :loading="uploading"
-                @click="uploadInput?.click()"
-              />
+              <template v-if="canEdit !== false">
+                <input
+                  ref="uploadInput"
+                  type="file"
+                  accept="image/png,image/jpeg,image/gif,image/webp"
+                  class="hidden"
+                  @change="onUploadPicked"
+                >
+                <UButton
+                  label="Upload image"
+                  icon="i-lucide-image-up"
+                  size="xs"
+                  color="neutral"
+                  variant="subtle"
+                  :loading="uploading"
+                  @click="uploadInput?.click()"
+                />
+              </template>
             </div>
           </UFormField>
           <UFormField label="Alt text">
