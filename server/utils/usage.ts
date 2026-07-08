@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import { countAiUsageSince, recordAiUsage, summarizeAiUsage } from './parse'
 import { planFor } from './plans'
 
@@ -22,14 +21,12 @@ export async function recordUsageForUser(
   const completion = usage.completionTokens ?? 0
   const total = usage.totalTokens ?? prompt + completion
   await recordAiUsage({
-    id: randomUUID(),
     userId,
     projectId,
     model,
     promptTokens: prompt,
     completionTokens: completion,
-    totalTokens: total,
-    createdAt: Date.now()
+    totalTokens: total
   }).catch((e) => {
     console.error('[usage] recordUsage failed:', e instanceof Error ? e.message : e)
   })

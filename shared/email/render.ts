@@ -118,7 +118,7 @@ function renderColumns(b: ColumnsBlock, contentWidth: number): string {
   const cols = b.columns.length || 1
   const gap = typeof b.gap === 'number' ? b.gap : 16
   const inner = Math.max(contentWidth - paddingHorizontal(b.padding), 0)
-  const colWidth = Math.floor((inner - gap * (cols - 1)) / cols)
+  const colWidth = Math.max(0, Math.floor((inner - gap * (cols - 1)) / cols))
   const cells = b.columns.map((col, i) => {
     const ml = i > 0 ? `padding-left:${gap}px;` : ''
     const body = col.length

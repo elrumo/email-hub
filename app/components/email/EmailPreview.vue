@@ -289,6 +289,9 @@ function postSelected() {
 }
 
 function onMessage(e: MessageEvent) {
+  // only accept messages from our own preview iframe (its sandboxed origin is
+  // opaque, so identify it by source window rather than origin)
+  if (e.source !== frame.value?.contentWindow) return
   const d = e.data
   if (!d || !d.__email) return
   if (d.type === 'select') emit('select', d.id ?? null)
@@ -351,7 +354,7 @@ watch(() => props.device, () => nextTick(updateScale), { deep: true })
           ref="frame"
           :srcdoc="srcDoc"
           title="Email preview"
-          sandbox="allow-scripts allow-same-origin"
+          sandbox="allow-scripts"
           class="border-0 bg-white"
           :style="iframeStyle"
         />

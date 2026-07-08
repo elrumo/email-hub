@@ -21,6 +21,6 @@ export default defineEventHandler(async (event) => {
       shareToken: level === 'owner' ? project.shareToken ?? null : null,
       updatedAt: project.updatedAt
     },
-    messages: messages.map(m => ({ id: m.id, role: m.role, parts: m.parts }))
+    messages: messages.map(m => ({ id: m.clientId || m.id, role: m.role, parts: m.parts }))
   }
 })

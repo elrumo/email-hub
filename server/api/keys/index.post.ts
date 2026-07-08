@@ -21,8 +21,7 @@ export default defineEventHandler(async (event) => {
     prefix,
     hash,
     lastUsedAt: null,
-    revokedAt: null,
-    createdAt: Date.now()
+    revokedAt: null
   })
 
   return {

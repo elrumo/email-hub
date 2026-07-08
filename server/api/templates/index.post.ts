@@ -24,14 +24,11 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 422, statusMessage: `You've reached the limit of ${MAX_TEMPLATES_PER_USER} saved templates.` })
   }
 
-  const now = Date.now()
   const template = await createUserTemplate({
     ownerId: user.id,
     name: name.slice(0, 120),
     description: (body.description ?? '').trim().slice(0, 300),
-    document,
-    createdAt: now,
-    updatedAt: now
+    document
   })
 
   return {

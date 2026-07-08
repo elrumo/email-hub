@@ -22,8 +22,7 @@ export default defineEventHandler(async (event) => {
     name: email.name,
     document: email.document,
     variables: email.variables ?? [],
-    cause: 'restore',
-    createdAt: Date.now()
+    cause: 'restore'
   })
 
   const document = version.document as EmailDocument

@@ -39,7 +39,6 @@ export default defineEventHandler(async (event) => {
   }
 
   const role = isAlwaysAdmin(email) || await countUsers() === 0 ? 'admin' : 'user'
-  const now = Date.now()
   const user = await createUser({
     email,
     name,
@@ -49,9 +48,7 @@ export default defineEventHandler(async (event) => {
     planStatus: null,
     stripeCustomerId: null,
     stripeSubscriptionId: null,
-    lastLoginAt: now,
-    createdAt: now,
-    updatedAt: now
+    lastLoginAt: Date.now()
   })
 
   const token = await createSession(user.id, getRequestHeader(event, 'user-agent'))

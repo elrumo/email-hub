@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { createError, getRequestHeader, type H3Event } from 'h3'
 import { findUserById, getActiveApiKeyByHash, touchApiKey, type AppUser } from './parse'
 
@@ -18,10 +18,6 @@ export function generateKey(): GeneratedKey {
   const random = randomBytes(24).toString('base64url')
   const secret = `${PREFIX}${random}`
   return { secret, prefix: secret.slice(0, PREFIX.length + 6), hash: hashKey(secret) }
-}
-
-export function newApiKeyId(): string {
-  return randomUUID()
 }
 
 export async function requireApiUser(event: H3Event): Promise<AppUser> {

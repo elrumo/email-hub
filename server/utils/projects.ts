@@ -71,8 +71,7 @@ export async function snapshotVersion(
       name,
       document,
       variables,
-      cause,
-      createdAt: Date.now()
+      cause
     })
   } catch (e) {
     console.error('[versions] snapshot failed:', e instanceof Error ? e.message : e)

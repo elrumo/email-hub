@@ -9,8 +9,8 @@ import {
 } from 'h3'
 import {
   createSessionRecord,
-  deleteSession,
-  findSession,
+  deleteSessionByToken,
+  findSessionByToken,
   findUserById,
   pruneExpiredSessionRecords,
   updateUser,
@@ -66,15 +66,16 @@ export function verifyPassword(password: string, hash: string): Promise<boolean>
 
 export async function createSession(userId: string, userAgent?: string | null): Promise<string> {
   const now = Date.now()
-  const id = randomUUID()
+  const token = randomUUID()
   await createSessionRecord({
-    id,
+    token,
     userId,
     expiresAt: now + SESSION_TTL_MS,
-    userAgent: userAgent ?? null,
-    createdAt: now
+    userAgent: userAgent ?? null
   })
-  return id
+  // opportunistic cleanup so expired sessions don't accumulate forever
+  void pruneExpiredSessions()
+  return token
 }
 
 export function setSessionCookie(event: H3Event, token: string): void {
@@ -92,7 +93,7 @@ export function setSessionCookie(event: H3Event, token: string): void {
 
 export async function destroySession(event: H3Event): Promise<void> {
   const token = getCookie(event, SESSION_COOKIE)
-  if (token) await deleteSession(token)
+  if (token) await deleteSessionByToken(token)
   deleteCookie(event, SESSION_COOKIE, { path: '/' })
 }
 
@@ -102,10 +103,10 @@ export async function getSessionUser(event: H3Event): Promise<AppUser | null> {
   let user: AppUser | null = null
   const token = getCookie(event, SESSION_COOKIE)
   if (token) {
-    const session = await findSession(token)
+    const session = await findSessionByToken(token)
     if (session) {
       if (session.expiresAt < Date.now()) {
-        await deleteSession(token)
+        await deleteSessionByToken(token)
       } else {
         user = await findUserById(session.userId)
         if (user && user.role !== 'admin' && isAlwaysAdmin(user.email)) {
