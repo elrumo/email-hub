@@ -21,7 +21,7 @@ export default defineEventHandler(async (event) => {
 
   return {
     access: isOwner ? 'owner' as const : 'member' as const,
-    project: { id: container.id, name: container.name, updatedAt: container.updatedAt, createdAt: container.createdAt },
+    project: { id: container.id, name: container.name, description: container.description ?? null, tags: container.tags ?? [], updatedAt: container.updatedAt, createdAt: container.createdAt },
     folders: folders.map(f => ({ id: f.id, name: f.name, parentId: f.parentId ?? null })),
     emails: emails.map(projectSummary)
   }

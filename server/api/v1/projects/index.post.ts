@@ -4,7 +4,7 @@ import { countProjectsForOwner, createProject } from '../../../utils/parse'
 import { requireApiUser } from '../../../utils/apiKey'
 import { generateEmailDocument } from '../../../utils/aiGenerate'
 import { planFor } from '../../../utils/plans'
-import { projectSummary, reconcileVariables } from '../../../utils/projects'
+import { normalizeDescription, normalizeTags, projectSummary, reconcileVariables } from '../../../utils/projects'
 
 /**
  * Create an email project over the API — from a predefined template, from an
@@ -12,7 +12,7 @@ import { projectSummary, reconcileVariables } from '../../../utils/projects'
  */
 export default defineEventHandler(async (event) => {
   const user = await requireApiUser(event)
-  const body = await readBody<{ name?: string, templateId?: string, prompt?: string }>(event)
+  const body = await readBody<{ name?: string, description?: string, tags?: string[], templateId?: string, prompt?: string }>(event)
 
   const n = await countProjectsForOwner(user.id)
   const limit = planFor(user.plan).limits.projects
@@ -34,6 +34,8 @@ export default defineEventHandler(async (event) => {
   const row = await createProject({
     ownerId: user.id,
     name: (body.name ?? '').trim() || doc.settings.title || 'Untitled email',
+    description: normalizeDescription(body.description) ?? null,
+    tags: normalizeTags(body.tags) ?? [],
     document: doc,
     variables: reconcileVariables(doc, []),
     projectId: null,

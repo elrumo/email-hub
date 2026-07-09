@@ -68,6 +68,8 @@ export default defineEventHandler(async (event) => {
   const row = await createProject({
     ownerId: user.id,
     name: doc.settings.title,
+    description: null,
+    tags: [],
     document: doc,
     variables: reconcileVariables(doc, []),
     projectId: resolvedProjectId,

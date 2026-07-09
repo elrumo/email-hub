@@ -136,6 +136,10 @@ Authenticate with a personal API key (`Authorization: Bearer pc_live_…`).
 | `GET` | `/api/v1/projects` | List your email projects |
 | `GET` | `/api/v1/projects/{id}` | Get one project's metadata + variables |
 | `GET` | `/api/v1/projects/{id}/html` | Render to HTML (substitutes `{{ vars }}` from query params; `?format=html` for raw HTML) |
+| `GET` | `/api/v1/templates` | List all templates in a project (`?projectId=…`) or across every project (the root); `?include=full` adds each template's document + rendered HTML |
+
+Projects and templates (documents) can carry a `name`, a `description` and
+freeform `tags` for organising and filtering.
 
 The full machine-readable contract is served at `/api/openapi.json` and rendered
 at `/docs/api`.

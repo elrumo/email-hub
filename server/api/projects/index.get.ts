@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
     let home = containers.find(c => c.name === 'My emails')
     if (!home) {
       const now = Date.now()
-      home = await createContainer({ ownerId: user.id, name: 'My emails', memberIds: [], shareToken: null, shareMode: null, createdAt: now, updatedAt: now })
+      home = await createContainer({ ownerId: user.id, name: 'My emails', description: null, tags: [], memberIds: [], shareToken: null, shareMode: null, createdAt: now, updatedAt: now })
       containers = [home, ...containers]
     }
     for (const orphan of orphans) {
@@ -37,6 +37,8 @@ export default defineEventHandler(async (event) => {
     projects: containers.map(c => ({
       id: c.id,
       name: c.name,
+      description: c.description ?? null,
+      tags: c.tags ?? [],
       emails: counts.get(c.id) ?? 0,
       updatedAt: c.updatedAt,
       createdAt: c.createdAt
