@@ -27,7 +27,11 @@ export default defineNuxtConfig({
     },
     public: {
       appName: 'Postcard',
-      appUrl: ''
+      appUrl: '',
+      // When true (NUXT_PUBLIC_SELF_HOSTED=true), the instance runs in
+      // self-hosted mode: plan limits are lifted and all billing/pricing UI is
+      // hidden. The Docker Compose stack sets this automatically.
+      selfHosted: false
     }
   },
 

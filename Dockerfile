@@ -1,5 +1,5 @@
-# Postcard — single-stage Bun image. Nuxt builds to a Nitro server bundle that
-# Bun runs directly. The DB lives in a sibling Postgres container (compose).
+# Postcard — Bun image. Nuxt builds to a Nitro server bundle that Bun runs
+# directly. Data lives in sibling Parse Server + MongoDB containers (compose).
 FROM oven/bun:1.3.5 AS build
 WORKDIR /app
 

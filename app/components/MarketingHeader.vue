@@ -1,6 +1,7 @@
 <script setup lang="ts">
 const { user } = useAuth()
 const colorMode = useColorMode()
+const selfHosted = useRuntimeConfig().public.selfHosted
 </script>
 
 <template>
@@ -15,7 +16,7 @@ const colorMode = useColorMode()
 
       <nav class="hidden md:flex items-center gap-7 text-sm pc-dim">
         <NuxtLink to="/#features" class="hover:text-(--pc-text) transition">Features</NuxtLink>
-        <NuxtLink to="/pricing" class="hover:text-(--pc-text) transition">Pricing</NuxtLink>
+        <NuxtLink v-if="!selfHosted" to="/pricing" class="hover:text-(--pc-text) transition">Pricing</NuxtLink>
         <NuxtLink to="/docs/api" class="hover:text-(--pc-text) transition">API</NuxtLink>
       </nav>
 
