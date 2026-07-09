@@ -15,7 +15,7 @@ export default defineEventHandler(async (event) => {
   const user = await findUserByEmail(email)
   const ok = user
     ? await verifyPassword(password, user.passwordHash)
-    : await verifyPassword(password, '$argon2id$v=19$m=65536,t=2,p=1$AAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA').then(() => false)
+    : await verifyPassword(password, '$argon2id$v=19$m=65536,t=2,p=1$AAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA').catch(() => false)
 
   if (!user || !ok) {
     throw createError({ statusCode: 401, statusMessage: 'Incorrect email or password.' })
