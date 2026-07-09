@@ -10,6 +10,7 @@ export default defineEventHandler(async (event) => {
   const body = await readBody<{
     name?: string
     templateId?: string
+    document?: EmailDocument
     projectId?: string
     folderId?: string
   }>(event)
@@ -36,7 +37,7 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const doc: EmailDocument = (body.templateId && cloneEmailTemplateDocument(body.templateId)) || cloneBlankEmailDocument()
+  const doc: EmailDocument = body.document ?? ((body.templateId && cloneEmailTemplateDocument(body.templateId)) || cloneBlankEmailDocument())
   const row = await createProject({
     ownerId: user.id,
     name: (body.name ?? '').trim() || doc.settings.title || 'Untitled email',

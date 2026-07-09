@@ -333,6 +333,34 @@ async function copyHtml() {
   }
 }
 
+function downloadFile(content: string, filename: string, type: string) {
+  const blob = new Blob([content], { type })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+function exportJson() {
+  const payload = { name: name.value, document: document.value, variables: variables.value }
+  downloadFile(JSON.stringify(payload, null, 2), `${name.value || 'email'}.json`, 'application/json')
+  toast.add({ title: 'Project exported', icon: 'i-lucide-download', color: 'success' })
+}
+
+function downloadHtml() {
+  downloadFile(renderEmailHtml(document.value), `${name.value || 'email'}.html`, 'text/html')
+  toast.add({ title: 'HTML downloaded', icon: 'i-lucide-download', color: 'success' })
+}
+
+function copyEndpoint() {
+  const origin = window.location.origin
+  const url = `${origin}/api/v1/projects/${id}/html?format=html`
+  navigator.clipboard.writeText(url)
+  toast.add({ title: 'API endpoint copied', icon: 'i-lucide-clipboard-check', color: 'success' })
+}
+
 function blockLabel(b: EmailBlock): string {
   if (b.type === 'heading') return b.text || 'Heading'
   if (b.type === 'text') return b.html.replace(/<[^>]+>/g, '').slice(0, 28) || 'Text'
@@ -386,7 +414,30 @@ useHead({ title: () => `${name.value} · Postcard` })
           aria-label="Toggle theme"
           @click="colorMode.preference = colorMode.value === 'dark' ? 'light' : 'dark'"
         />
-        <UButton icon="i-lucide-code-xml" label="Copy HTML" size="xs" :ui="{ label: 'hidden sm:inline' }" @click="copyHtml" />
+        <UPopover>
+          <UButton icon="i-lucide-code-xml" label="Export" size="xs" :ui="{ label: 'hidden sm:inline' }" />
+          <template #content>
+            <div class="p-1 w-52">
+              <button type="button" class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/5 transition" @click="exportJson">
+                <UIcon name="i-lucide-folder-down" class="size-4 text-primary-500" />
+                <span>Export project</span>
+              </button>
+              <button type="button" class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/5 transition" @click="downloadHtml">
+                <UIcon name="i-lucide-download" class="size-4 text-primary-500" />
+                <span>Download HTML</span>
+              </button>
+              <button type="button" class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/5 transition" @click="copyHtml">
+                <UIcon name="i-lucide-clipboard" class="size-4 text-primary-500" />
+                <span>Copy HTML</span>
+              </button>
+              <div class="border-t pc-hairline my-1" />
+              <button type="button" class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/5 transition" @click="copyEndpoint">
+                <UIcon name="i-lucide-link" class="size-4 text-primary-500" />
+                <span>Copy API endpoint</span>
+              </button>
+            </div>
+          </template>
+        </UPopover>
       </div>
 
       <!-- 3 panes -->

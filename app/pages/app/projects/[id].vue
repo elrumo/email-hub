@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import type { EmailDocument } from '#shared/email/blocks'
+import { walkBlocks } from '#shared/email/blocks'
+
 definePageMeta({ layout: 'app' })
 
 interface FolderRow { id: string, name: string, parentId: string | null }
@@ -110,6 +113,64 @@ async function removeEmail(e: EmailRow) {
   await $fetch(`/api/emails/${e.id}`, { method: 'DELETE' })
   await refresh()
   toast.add({ title: 'Deleted', icon: 'i-lucide-trash-2' })
+}
+
+// ---- import ----------------------------------------------------------------
+const fileInput = ref<HTMLInputElement | null>(null)
+
+function isValidEmailDocument(doc: unknown): doc is EmailDocument {
+  if (!doc || typeof doc !== 'object') return false
+  const d = doc as Record<string, unknown>
+  if (!d.settings || typeof d.settings !== 'object') return false
+  if (!Array.isArray(d.blocks)) return false
+  return true
+}
+
+function assignBlockIds(blocks: EmailDocument['blocks']) {
+  walkBlocks(blocks, (b) => {
+    if (!b.id) (b as { id: string }).id = `blk_${Math.random().toString(36).slice(2, 9)}`
+  })
+}
+
+async function onImportFile(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  input.value = ''
+
+  try {
+    const text = await file.text()
+    const parsed = JSON.parse(text)
+
+    let doc: EmailDocument
+    let name: string
+
+    if (isValidEmailDocument(parsed)) {
+      doc = parsed
+      name = file.name.replace(/\.json$/i, '') || 'Imported email'
+    } else if (parsed.document && isValidEmailDocument(parsed.document)) {
+      doc = parsed.document
+      name = parsed.name || file.name.replace(/\.json$/i, '') || 'Imported email'
+    } else {
+      toast.add({ title: 'Invalid file — expected an email document (.json)', color: 'error' })
+      return
+    }
+
+    assignBlockIds(doc.blocks)
+
+    busy.value = true
+    const res = await $fetch<{ project: { id: string } }>('/api/emails', {
+      method: 'POST',
+      body: { name, document: doc, projectId: id, folderId: currentFolderId.value }
+    })
+    await refresh()
+    toast.add({ title: `Imported "${name}"`, icon: 'i-lucide-upload', color: 'success' })
+    await navigateTo(`/app/emails/${res.project.id}`)
+  } catch (err: any) {
+    toast.add({ title: err?.data?.statusMessage || 'Import failed — check the file format.', color: 'error' })
+  } finally {
+    busy.value = false
+  }
 }
 
 // ---- sharing & members -------------------------------------------------------
@@ -234,8 +295,10 @@ async function saveMove() {
       <div class="flex gap-2">
         <UButton v-if="data?.access === 'owner'" color="neutral" variant="subtle" icon="i-lucide-share-2" @click="openShare">Share</UButton>
         <UButton color="neutral" variant="subtle" icon="i-lucide-folder-plus" @click="creatingFolder = true">New folder</UButton>
+        <UButton color="neutral" variant="subtle" icon="i-lucide-upload" @click="fileInput?.click()">Import</UButton>
         <UButton :to="newEmailLink" color="primary" icon="i-lucide-plus">New email</UButton>
       </div>
+      <input ref="fileInput" type="file" accept=".json" class="hidden" @change="onImportFile" />
     </div>
 
     <!-- New folder inline form -->
