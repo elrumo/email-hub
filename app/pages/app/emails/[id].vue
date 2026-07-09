@@ -23,6 +23,8 @@ import { applyTemplateVariables } from '#shared/email/placeholders'
 import { isStarterEmailDocument, type EmailTemplateDefinition } from '#shared/email/templates'
 import type { TemplateVariable } from '~~/server/utils/parse'
 
+import { useUndoRedo, type EditorSnapshot } from '~/composables/useUndoRedo'
+
 import EmailPreview from '~/components/email/EmailPreview.vue'
 import EmailInspector from '~/components/email/EmailInspector.vue'
 import EmailVariables from '~/components/email/EmailVariables.vue'
@@ -64,6 +66,51 @@ const selectedId = ref<string | null>(null)
 const input = ref('')
 const templateOpen = ref(false)
 const rightTab = ref<'design' | 'variables'>('design')
+
+// ---- undo / redo -----------------------------------------------------------
+const { push: pushHistory, undo: undoPop, redo: redoPop, clear: clearHistory, canUndo, canRedo } = useUndoRedo()
+let skipHistory = false
+
+function snapshot(): EditorSnapshot {
+  return { document: document.value, name: name.value, variables: variables.value }
+}
+
+function applySnapshot(snap: EditorSnapshot) {
+  skipHistory = true
+  skipNextSave = true
+  document.value = snap.document
+  name.value = snap.name
+  variables.value = snap.variables
+}
+
+function undo() {
+  const prev = undoPop(snapshot())
+  if (prev) applySnapshot(prev)
+}
+
+function redo() {
+  const next = redoPop(snapshot())
+  if (next) applySnapshot(next)
+}
+
+// Push to history on user-initiated document changes (not sync/AI/undo).
+watch(document, (_next, prev) => {
+  if (skipHistory) { skipHistory = false; return }
+  pushHistory({ document: prev, name: name.value, variables: variables.value })
+})
+
+// Keyboard shortcuts.
+onMounted(() => {
+  function onKey(e: KeyboardEvent) {
+    const mod = e.metaKey || e.ctrlKey
+    if (!mod) return
+    if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo() }
+    if (e.key === 'z' && e.shiftKey) { e.preventDefault(); redo() }
+    if (e.key === 'y') { e.preventDefault(); redo() }
+  }
+  window.addEventListener('keydown', onKey)
+  onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+})
 
 // Preview merges sample values so previews look real; the saved doc keeps {{ }}.
 const previewDocument = computed(() => {
@@ -125,6 +172,7 @@ onMounted(() => {
       const payload = JSON.parse(ev.data) as { document?: EmailDocument, variables?: TemplateVariable[], name?: string, actorId?: string | null }
       if (!payload?.document || payload.actorId === actorId.value) return
       skipNextSave = true
+      skipHistory = true
       document.value = payload.document
       if (payload.variables) variables.value = payload.variables
       if (payload.name) name.value = payload.name
@@ -182,6 +230,7 @@ const chat = new Chat<UIMessage>({
   }),
   onData: (part) => {
     if (part.type === 'data-document' && part.data) {
+      skipHistory = true
       document.value = part.data as unknown as EmailDocument
     }
   },
@@ -253,16 +302,20 @@ function insert(type: EmailBlockType) {
 }
 
 function applyTemplate(payload: { template: EmailTemplateDefinition, document: EmailDocument }) {
+  skipHistory = true
   document.value = payload.document
   name.value = payload.template.name
   selectedId.value = null
   templateOpen.value = false
+  clearHistory()
   toast.add({ title: `Applied “${payload.template.name}”`, color: 'success' })
 }
 function applyBlank(next: EmailDocument) {
+  skipHistory = true
   document.value = next
   selectedId.value = null
   templateOpen.value = false
+  clearHistory()
 }
 
 function onPreviewMove({ id: bid, to }: { id: string, to: number }) {
@@ -309,6 +362,8 @@ useHead({ title: () => `${name.value} · Postcard` })
           <span class="hidden sm:inline">{{ saving ? 'Saving…' : 'Saved' }}</span>
         </span>
         <div class="flex-1" />
+        <UButton icon="i-lucide-undo-2" color="neutral" variant="ghost" size="xs" aria-label="Undo" :disabled="!canUndo" @click="undo" />
+        <UButton icon="i-lucide-redo-2" color="neutral" variant="ghost" size="xs" aria-label="Redo" :disabled="!canRedo" @click="redo" />
         <UDropdownMenu :items="addItems">
           <UButton icon="i-lucide-plus" label="Add" color="neutral" variant="ghost" size="xs" :ui="{ label: 'hidden sm:inline' }" />
         </UDropdownMenu>
@@ -337,7 +392,7 @@ useHead({ title: () => `${name.value} · Postcard` })
       <!-- 3 panes -->
       <div class="min-h-0 flex-1 grid grid-cols-1 lg:grid-cols-[320px_1fr_320px]">
         <!-- AI chat (owner) / collaborator note -->
-        <aside v-if="!isOwner" class="hidden lg:flex h-full min-h-0 flex-col border-r pc-hairline pc-sidebar-material">
+        <aside v-if="!isOwner" class="hidden relative lg:flex h-full min-h-0 flex-col border-r pc-hairline pc-sidebar-material">
           <div class="flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center">
             <div class="grid place-items-center w-12 h-12 rounded-2xl bg-primary-500/10 text-primary-500">
               <UIcon name="i-lucide-users" class="size-6" />
@@ -350,7 +405,7 @@ useHead({ title: () => `${name.value} · Postcard` })
           </div>
         </aside>
 
-        <aside v-else class="hidden lg:flex h-full min-h-0 flex-col border-r pc-hairline pc-sidebar-material">
+        <aside v-else class="hidden relative lg:flex h-full min-h-0 flex-col border-r pc-hairline pc-sidebar-material">
           <div class="flex items-center gap-2 border-b pc-hairline px-4 py-3">
             <span class="grid place-items-center w-6 h-6 rounded-md bg-primary-500 text-white">
               <UIcon name="i-lucide-sparkles" class="size-3.5" />
@@ -431,7 +486,7 @@ useHead({ title: () => `${name.value} · Postcard` })
         </main>
 
         <!-- inspector / variables -->
-        <aside class="hidden lg:flex h-full min-h-0 flex-col border-l pc-hairline">
+        <aside class="relative hidden lg:flex h-full min-h-0 flex-col border-l pc-hairline">
           <div class="flex items-center gap-1 border-b pc-hairline p-2">
             <UButton
               label="Design"
