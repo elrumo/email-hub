@@ -2,17 +2,16 @@
 @import "@nuxt/ui";
 
 /**
- * Postcard design language — "native macOS, designed by Apple".
+ * Postcard design language — v0-inspired, clean and minimal.
  *
- * The whole product is framed as a desktop app: frosted material surfaces,
- * hairline separators, deep-but-soft shadows, SF-style typography, traffic-light
- * window controls, and restrained, confident motion. These tokens drive both the
- * marketing site and the studio.
+ * A modern email creation studio with a sidebar-first layout,
+ * frosted material surfaces, and refined typography. Supports
+ * both light and dark themes.
  */
 
 @theme {
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
-    "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 
   /* Apple system accent (macOS blue) */
   --color-primary-50: #eef4ff;
@@ -20,7 +19,7 @@
   --color-primary-200: #bcd3ff;
   --color-primary-300: #8eb5ff;
   --color-primary-400: #598dff;
-  --color-primary-500: #0a84ff; /* macOS accent */
+  --color-primary-500: #0a84ff;
   --color-primary-600: #0066d6;
   --color-primary-700: #0050a8;
   --color-primary-800: #073f80;
@@ -31,30 +30,38 @@
   --radius-card: 12px;
 }
 
+/* ── Light theme ───────────────────────────────────────────────────────── */
 :root {
-  --pc-bg: #ececf0;
-  --pc-window: rgba(255, 255, 255, 0.72);
-  --pc-window-solid: #fbfbfd;
-  --pc-sidebar: rgba(245, 245, 248, 0.6);
-  --pc-border: rgba(0, 0, 0, 0.09);
+  --pc-bg: #f7f7f8;
+  --pc-window: #ffffff;
+  --pc-window-solid: #ffffff;
+  --pc-sidebar: #fafafa;
+  --pc-border: rgba(0, 0, 0, 0.08);
   --pc-border-strong: rgba(0, 0, 0, 0.14);
-  --pc-text: #1d1d1f;
-  --pc-text-dim: #6e6e73;
-  --pc-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.28), 0 2px 8px -2px rgba(0, 0, 0, 0.12);
-  --pc-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06), 0 1px 1px rgba(0, 0, 0, 0.04);
+  --pc-text: #171717;
+  --pc-text-dim: #737373;
+  --pc-text-muted: #a3a3a3;
+  --pc-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 8px 24px -4px rgba(0, 0, 0, 0.08);
+  --pc-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --pc-hover: rgba(0, 0, 0, 0.04);
+  --pc-surface: #f5f5f5;
 }
 
+/* ── Dark theme ────────────────────────────────────────────────────────── */
 .dark {
-  --pc-bg: #1a1a1c;
-  --pc-window: rgba(40, 40, 44, 0.72);
-  --pc-window-solid: #232326;
-  --pc-sidebar: rgba(30, 30, 33, 0.55);
-  --pc-border: rgba(255, 255, 255, 0.1);
-  --pc-border-strong: rgba(255, 255, 255, 0.16);
-  --pc-text: #f5f5f7;
-  --pc-text-dim: #98989d;
-  --pc-shadow: 0 16px 50px -12px rgba(0, 0, 0, 0.6), 0 2px 10px -2px rgba(0, 0, 0, 0.4);
-  --pc-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --pc-bg: #0a0a0a;
+  --pc-window: #111113;
+  --pc-window-solid: #111113;
+  --pc-sidebar: #0f0f11;
+  --pc-border: rgba(255, 255, 255, 0.08);
+  --pc-border-strong: rgba(255, 255, 255, 0.14);
+  --pc-text: #ededed;
+  --pc-text-dim: #737373;
+  --pc-text-muted: #525252;
+  --pc-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 8px 24px -4px rgba(0, 0, 0, 0.4);
+  --pc-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --pc-hover: rgba(255, 255, 255, 0.05);
+  --pc-surface: #1a1a1c;
 }
 
 html, body, #__nuxt {
@@ -101,6 +108,9 @@ body {
   width: 12px; height: 12px; border-radius: 9999px;
   display: inline-block; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.15);
 }
+.dark .pc-traffic span {
+  box-shadow: inset 0 0 0 0.5px rgba(255,255,255,0.15);
+}
 .pc-traffic .red { background: #ff5f57; }
 .pc-traffic .amber { background: #febc2e; }
 .pc-traffic .green { background: #28c840; }
@@ -114,23 +124,22 @@ body {
 }
 
 /* ── Refined scrollbars ────────────────────────────────────────────────── */
-.pc-scroll { scrollbar-width: thin; scrollbar-color: rgba(140,140,150,0.4) transparent; }
-.pc-scroll::-webkit-scrollbar { width: 9px; height: 9px; }
+.pc-scroll { scrollbar-width: thin; scrollbar-color: rgba(140,140,150,0.3) transparent; }
+.pc-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
 .pc-scroll::-webkit-scrollbar-thumb {
-  background: rgba(140,140,150,0.35); border-radius: 9999px;
-  border: 2px solid transparent; background-clip: content-box;
+  background: rgba(140,140,150,0.25); border-radius: 9999px;
 }
-.pc-scroll::-webkit-scrollbar-thumb:hover { background: rgba(140,140,150,0.55); background-clip: content-box; }
+.pc-scroll::-webkit-scrollbar-thumb:hover { background: rgba(140,140,150,0.45); }
 .pc-scroll::-webkit-scrollbar-track { background: transparent; }
 
 /* ── Subtle, confident motion ──────────────────────────────────────────── */
 @keyframes pc-rise {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
-.pc-rise { animation: pc-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
-.pc-rise-2 { animation: pc-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.08s both; }
-.pc-rise-3 { animation: pc-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.16s both; }
+.pc-rise { animation: pc-rise 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.pc-rise-2 { animation: pc-rise 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.06s both; }
+.pc-rise-3 { animation: pc-rise 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both; }
 
 @keyframes pc-float {
   0%, 100% { transform: translateY(0); }

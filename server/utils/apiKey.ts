@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto'
-import { createError, getRequestHeader, type H3Event } from 'h3'
+import { createError, getRequestHeader, getQuery, type H3Event } from 'h3'
 import { findUserById, getActiveApiKeyByHash, touchApiKey, type AppUser } from './parse'
 
 const PREFIX = 'pc_live_'
@@ -21,9 +21,11 @@ export function generateKey(): GeneratedKey {
 }
 
 export async function requireApiUser(event: H3Event): Promise<AppUser> {
+  // Accept key from Authorization header or ?api_key= query param.
   const header = getRequestHeader(event, 'authorization') || ''
   const match = header.match(/^Bearer\s+(.+)$/i)
-  const secret = match?.[1]?.trim()
+  const query = getQuery(event)
+  const secret = match?.[1]?.trim() || (typeof query.api_key === 'string' ? query.api_key : '')
   if (!secret || !secret.startsWith(PREFIX)) {
     throw createError({ statusCode: 401, statusMessage: 'Missing or malformed API key' })
   }
