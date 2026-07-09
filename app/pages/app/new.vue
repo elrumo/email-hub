@@ -51,6 +51,35 @@ const filteredTemplates = computed(() => {
   return (data.value?.templates ?? []).filter(t => t.type === activeTab.value)
 })
 
+const fileInput = ref<HTMLInputElement | null>(null)
+const uploading = ref(false)
+
+async function uploadHtml(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  input.value = ''
+  error.value = ''
+  uploading.value = true
+  creating.value = 'upload'
+  try {
+    const form = new FormData()
+    form.append('file', file)
+    if (projectId) form.append('projectId', projectId)
+    if (folderId) form.append('folderId', folderId)
+    const { project } = await $fetch<{ project: { id: string } }>('/api/emails/upload', {
+      method: 'POST',
+      body: form
+    })
+    await navigateTo(`/app/emails/${project.id}`)
+  } catch (e: any) {
+    error.value = e?.data?.statusMessage || 'Upload failed.'
+    creating.value = null
+  } finally {
+    uploading.value = false
+  }
+}
+
 async function create(templateId?: string) {
   error.value = ''
   creating.value = templateId || 'blank'
@@ -138,6 +167,17 @@ function handleKeydown(e: KeyboardEvent) {
             </div>
             <span class="new-quick-label">{{ action.label }}</span>
           </button>
+          <button
+            class="new-quick-card"
+            :disabled="!!creating"
+            @click="fileInput?.click()"
+          >
+            <div class="new-quick-icon" style="background: rgba(108,108,115,0.1)">
+              <UIcon :name="creating === 'upload' ? 'i-lucide-loader-circle' : 'i-lucide-upload'" class="w-4 h-4" :class="creating === 'upload' && 'animate-spin'" />
+            </div>
+            <span class="new-quick-label">Upload HTML</span>
+          </button>
+          <input ref="fileInput" type="file" accept=".html,.htm" class="hidden" @change="uploadHtml" />
         </div>
       </div>
     </section>

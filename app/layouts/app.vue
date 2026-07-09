@@ -11,6 +11,7 @@ const initials = computed(() => {
 const navItems = [
   { label: 'Home', icon: 'i-lucide-home', to: '/app/new' },
   { label: 'Projects', icon: 'i-lucide-layout-grid', to: '/app' },
+  { label: 'Tools', icon: 'i-lucide-wrench', to: '/app/tools' },
 ]
 
 const bottomNav = computed(() => [
