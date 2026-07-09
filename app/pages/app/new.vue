@@ -23,6 +23,7 @@ const creating = ref<string | null>(null)
 const error = ref('')
 const prompt = ref('')
 const textarea = ref<HTMLTextAreaElement | null>(null)
+const activeTab = ref('all')
 
 const projectId = (route.query.projectId as string) || undefined
 const folderId = (route.query.folderId as string) || undefined
@@ -33,8 +34,22 @@ const quickActions = [
   { label: 'Flash sale', icon: 'i-lucide-badge-percent', templateId: 'promotion-minimal' },
   { label: 'Welcome email', icon: 'i-lucide-hand-heart', templateId: 'welcome-soft' },
   { label: 'Event invite', icon: 'i-lucide-calendar-days', templateId: 'event-dark' },
-  { label: 'Account update', icon: 'i-lucide-shield-check', templateId: 'transactional-utility' },
 ]
+
+const tabs = [
+  { id: 'all', label: 'All' },
+  { id: 'Launch', label: 'Launches' },
+  { id: 'Newsletter', label: 'Newsletters' },
+  { id: 'Promotion', label: 'Promotions' },
+  { id: 'Welcome', label: 'Welcome' },
+  { id: 'Event', label: 'Events' },
+  { id: 'Transactional', label: 'Transactional' },
+]
+
+const filteredTemplates = computed(() => {
+  if (activeTab.value === 'all') return data.value?.templates ?? []
+  return (data.value?.templates ?? []).filter(t => t.type === activeTab.value)
+})
 
 async function create(templateId?: string) {
   error.value = ''
@@ -73,38 +88,39 @@ function handleKeydown(e: KeyboardEvent) {
   <div class="new-email-page pc-scroll">
     <!-- Hero -->
     <section class="new-hero">
-      <div class="new-hero-bg" />
       <div class="new-hero-content">
         <h1 class="new-hero-title pc-rise">What do you want to create?</h1>
         <p class="new-hero-sub pc-rise-2">Describe your email and Postcard AI will bring it to life.</p>
 
-        <!-- AI Prompt Input -->
+        <!-- Prompt Input -->
         <div class="new-prompt-card pc-rise-2">
-          <div class="new-prompt-inner">
-            <textarea
-              ref="textarea"
-              v-model="prompt"
-              class="new-prompt-input"
-              placeholder="Describe your email…"
-              rows="1"
-              @input="autoResize"
-              @keydown="handleKeydown"
-            />
-          </div>
+          <textarea
+            ref="textarea"
+            v-model="prompt"
+            class="new-prompt-input"
+            placeholder="Describe your email…"
+            rows="1"
+            @input="autoResize"
+            @keydown="handleKeydown"
+          />
           <div class="new-prompt-footer">
-            <div class="new-prompt-hint">
-              <span class="new-prompt-hint-dot" />
-              Postcard AI
+            <div class="new-prompt-model">
+              <span class="new-prompt-dot" />
+              <span>Postcard AI</span>
             </div>
-            <UButton
-              color="primary"
-              variant="ghost"
-              size="xs"
-              icon="i-lucide-arrow-up"
-              :disabled="!!creating"
-              class="new-prompt-send"
-              @click="handleSubmit"
-            />
+            <div class="new-prompt-actions">
+              <button class="new-prompt-attach" aria-label="Attach file">
+                <UIcon name="i-lucide-paperclip" class="w-4 h-4" />
+              </button>
+              <button
+                class="new-prompt-send"
+                :disabled="!!creating"
+                aria-label="Send"
+                @click="handleSubmit"
+              >
+                <UIcon name="i-lucide-arrow-up" class="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -113,12 +129,14 @@ function handleKeydown(e: KeyboardEvent) {
           <button
             v-for="action in quickActions"
             :key="action.templateId"
-            class="new-quick-chip"
+            class="new-quick-card"
             :disabled="!!creating"
             @click="create(action.templateId)"
           >
-            <UIcon :name="action.icon" class="w-3.5 h-3.5" />
-            {{ action.label }}
+            <div class="new-quick-icon" :style="{ background: action.templateId === 'launch-bold' ? 'rgba(37,99,235,0.1)' : action.templateId === 'newsletter-editorial' ? 'rgba(15,118,110,0.1)' : action.templateId === 'promotion-minimal' ? 'rgba(220,38,38,0.1)' : action.templateId === 'welcome-soft' ? 'rgba(124,58,237,0.1)' : 'rgba(245,158,11,0.1)' }">
+              <UIcon :name="action.icon" class="w-4 h-4" />
+            </div>
+            <span class="new-quick-label">{{ action.label }}</span>
           </button>
         </div>
       </div>
@@ -128,9 +146,20 @@ function handleKeydown(e: KeyboardEvent) {
     <section class="new-templates">
       <div class="new-templates-header">
         <h2 class="new-templates-title">Start with a template</h2>
+        <div class="new-templates-tabs">
+          <button
+            v-for="tab in tabs"
+            :key="tab.id"
+            class="new-tab"
+            :class="activeTab === tab.id && 'new-tab--active'"
+            @click="activeTab = tab.id"
+          >
+            {{ tab.label }}
+          </button>
+        </div>
       </div>
 
-      <UAlert v-if="error" color="error" variant="soft" class="mb-5 mx-auto max-w-6xl" :title="error" />
+      <UAlert v-if="error" color="error" variant="soft" class="mb-5" :title="error" />
 
       <div class="new-templates-grid">
         <!-- Blank Canvas -->
@@ -141,18 +170,18 @@ function handleKeydown(e: KeyboardEvent) {
         >
           <div class="new-template-preview new-template-preview--blank">
             <div class="new-blank-icon">
-              <UIcon :name="creating === 'blank' ? 'i-lucide-loader-circle' : 'i-lucide-file'" class="w-8 h-8" :class="creating === 'blank' && 'animate-spin'" />
+              <UIcon :name="creating === 'blank' ? 'i-lucide-loader-circle' : 'i-lucide-file'" class="w-7 h-7" :class="creating === 'blank' && 'animate-spin'" />
             </div>
           </div>
           <div class="new-template-info">
             <span class="new-template-name">Blank canvas</span>
-            <span class="new-template-desc">A clean slate. Build it your way or ask the AI.</span>
+            <span class="new-template-desc">Start from scratch and ask the AI.</span>
           </div>
         </button>
 
-        <!-- Template Cards with Previews -->
+        <!-- Template Cards -->
         <button
-          v-for="t in data?.templates"
+          v-for="t in filteredTemplates"
           :key="t.id"
           class="new-template-card"
           :disabled="!!creating"
@@ -162,10 +191,7 @@ function handleKeydown(e: KeyboardEvent) {
             <EmailCardPreview :document="t.document" />
           </div>
           <div class="new-template-info">
-            <div class="new-template-meta">
-              <span class="new-template-name">{{ t.name }}</span>
-              <UBadge color="neutral" variant="soft" size="sm">{{ t.style }}</UBadge>
-            </div>
+            <span class="new-template-name">{{ t.name }}</span>
             <span class="new-template-desc">{{ t.description }}</span>
           </div>
         </button>
@@ -181,35 +207,14 @@ function handleKeydown(e: KeyboardEvent) {
 
 /* ── Hero ──────────────────────────────────────────────────────────────── */
 .new-hero {
-  position: relative;
-  padding: 48px 24px 40px;
+  padding: 56px 24px 32px;
   display: flex;
   justify-content: center;
-  overflow: hidden;
-}
-
-.new-hero-bg {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(60% 50% at 30% 20%, rgba(10, 132, 255, 0.12), transparent 70%),
-    radial-gradient(50% 50% at 70% 30%, rgba(175, 82, 222, 0.1), transparent 70%),
-    radial-gradient(40% 40% at 50% 80%, rgba(48, 209, 88, 0.08), transparent 70%);
-  pointer-events: none;
-}
-
-:root.dark .new-hero-bg {
-  background:
-    radial-gradient(60% 50% at 30% 20%, rgba(10, 132, 255, 0.18), transparent 70%),
-    radial-gradient(50% 50% at 70% 30%, rgba(175, 82, 222, 0.15), transparent 70%),
-    radial-gradient(40% 40% at 50% 80%, rgba(48, 209, 88, 0.1), transparent 70%);
 }
 
 .new-hero-content {
-  position: relative;
-  z-index: 1;
   width: 100%;
-  max-width: 640px;
+  max-width: 680px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -217,12 +222,12 @@ function handleKeydown(e: KeyboardEvent) {
 }
 
 .new-hero-title {
-  font-size: 36px;
+  font-size: 40px;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
   color: var(--pc-text);
-  margin: 0 0 8px;
-  line-height: 1.2;
+  margin: 0 0 10px;
+  line-height: 1.15;
 }
 
 .new-hero-sub {
@@ -243,16 +248,12 @@ function handleKeydown(e: KeyboardEvent) {
 
 .new-prompt-card:focus-within {
   border-color: rgba(10, 132, 255, 0.5);
-  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.1);
-}
-
-.new-prompt-inner {
-  padding: 16px 18px 4px;
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.08);
 }
 
 .new-prompt-input {
   width: 100%;
-  min-height: 36px;
+  min-height: 48px;
   max-height: 160px;
   background: transparent;
   border: none;
@@ -262,12 +263,11 @@ function handleKeydown(e: KeyboardEvent) {
   line-height: 1.55;
   color: var(--pc-text);
   resize: none;
-  padding: 0;
+  padding: 16px 18px 4px;
 }
 
 .new-prompt-input::placeholder {
-  color: var(--pc-text-dim);
-  opacity: 0.7;
+  color: var(--pc-text-muted);
 }
 
 .new-prompt-footer {
@@ -277,7 +277,7 @@ function handleKeydown(e: KeyboardEvent) {
   padding: 8px 10px 10px 14px;
 }
 
-.new-prompt-hint {
+.new-prompt-model {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -286,12 +286,37 @@ function handleKeydown(e: KeyboardEvent) {
   user-select: none;
 }
 
-.new-prompt-hint-dot {
+.new-prompt-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: #22c55e;
   box-shadow: 0 0 6px rgba(34, 197, 94, 0.5);
+}
+
+.new-prompt-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.new-prompt-attach {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  color: var(--pc-text-dim);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  background: transparent;
+  border: none;
+  font-family: inherit;
+}
+
+.new-prompt-attach:hover {
+  background: var(--pc-hover);
+  color: var(--pc-text);
 }
 
 .new-prompt-send {
@@ -302,7 +327,10 @@ function handleKeydown(e: KeyboardEvent) {
   place-items: center;
   background: var(--pc-text);
   color: var(--pc-bg);
+  border: none;
+  cursor: pointer;
   transition: opacity 0.15s;
+  font-family: inherit;
 }
 
 .new-prompt-send:hover {
@@ -319,43 +347,52 @@ function handleKeydown(e: KeyboardEvent) {
   flex-wrap: wrap;
   gap: 8px;
   justify-content: center;
-  margin-top: 18px;
+  margin-top: 20px;
 }
 
-.new-quick-chip {
-  display: inline-flex;
+.new-quick-card {
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  border-radius: 9999px;
+  gap: 8px;
+  padding: 8px 14px 8px 10px;
+  border-radius: 10px;
   border: 1px solid var(--pc-border);
   background: var(--pc-window-solid);
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--pc-text);
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
-  white-space: nowrap;
   font-family: inherit;
 }
 
-.new-quick-chip:hover {
-  background: rgba(10, 132, 255, 0.08);
-  border-color: rgba(10, 132, 255, 0.3);
+.new-quick-card:hover {
+  border-color: var(--pc-border-strong);
+  background: var(--pc-hover);
 }
 
-:root.dark .new-quick-chip:hover {
-  background: rgba(10, 132, 255, 0.15);
-}
-
-.new-quick-chip:disabled {
+.new-quick-card:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
+.new-quick-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  color: var(--pc-text);
+  flex-shrink: 0;
+}
+
+.new-quick-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--pc-text);
+  white-space: nowrap;
+}
+
 /* ── Templates section ─────────────────────────────────────────────────── */
 .new-templates {
-  padding: 0 24px 48px;
+  padding: 8px 24px 64px;
   max-width: 1100px;
   margin: 0 auto;
 }
@@ -363,20 +400,56 @@ function handleKeydown(e: KeyboardEvent) {
 .new-templates-header {
   display: flex;
   align-items: center;
-  margin-bottom: 20px;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
 .new-templates-title {
-  font-size: 20px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 600;
   color: var(--pc-text);
   margin: 0;
 }
 
+.new-templates-tabs {
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.new-tab {
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 450;
+  color: var(--pc-text-dim);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+  font-family: inherit;
+}
+
+.new-tab:hover {
+  background: var(--pc-hover);
+  color: var(--pc-text);
+}
+
+.new-tab--active {
+  background: var(--pc-hover);
+  color: var(--pc-text);
+  font-weight: 500;
+}
+
+/* ── Template grid ─────────────────────────────────────────────────────── */
 .new-templates-grid {
   display: grid;
   grid-template-columns: repeat(1, 1fr);
-  gap: 16px;
+  gap: 14px;
 }
 
 @media (min-width: 640px) {
@@ -397,32 +470,30 @@ function handleKeydown(e: KeyboardEvent) {
   flex-direction: column;
   background: var(--pc-window-solid);
   border: 1px solid var(--pc-border);
-  border-radius: var(--radius-card);
+  border-radius: 12px;
   overflow: hidden;
   cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
   text-align: left;
   font-family: inherit;
 }
 
 .new-template-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.15);
   border-color: var(--pc-border-strong);
+  box-shadow: 0 4px 24px -4px rgba(0, 0, 0, 0.08);
 }
 
-:root.dark .new-template-card:hover {
-  box-shadow: 0 16px 50px -12px rgba(0, 0, 0, 0.5);
+.dark .new-template-card:hover {
+  box-shadow: 0 4px 24px -4px rgba(0, 0, 0, 0.4);
 }
 
 .new-template-card:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-  transform: none;
 }
 
 .new-template-preview {
-  height: 220px;
+  height: 200px;
   overflow: hidden;
   position: relative;
   border-bottom: 1px solid var(--pc-border);
@@ -432,42 +503,34 @@ function handleKeydown(e: KeyboardEvent) {
   display: flex;
   align-items: center;
   justify-content: center;
-  background:
-    radial-gradient(40% 50% at 30% 30%, rgba(10, 132, 255, 0.06), transparent 70%),
-    radial-gradient(40% 50% at 70% 70%, rgba(175, 82, 222, 0.05), transparent 70%);
+  background: var(--pc-surface);
 }
 
 .new-blank-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 16px;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
   display: grid;
   place-items: center;
-  background: rgba(108, 108, 115, 0.1);
+  background: var(--pc-hover);
   color: var(--pc-text-dim);
 }
 
 .new-template-info {
-  padding: 14px 16px 16px;
+  padding: 12px 14px 14px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-}
-
-.new-template-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  gap: 3px;
 }
 
 .new-template-name {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--pc-text);
 }
 
 .new-template-desc {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--pc-text-dim);
   line-height: 1.4;
 }

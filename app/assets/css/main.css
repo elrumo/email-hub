@@ -32,36 +32,36 @@
 
 /* ── Light theme ───────────────────────────────────────────────────────── */
 :root {
-  --pc-bg: #f7f7f8;
+  --pc-bg: #fafafa;
   --pc-window: #ffffff;
   --pc-window-solid: #ffffff;
   --pc-sidebar: #fafafa;
-  --pc-border: rgba(0, 0, 0, 0.08);
-  --pc-border-strong: rgba(0, 0, 0, 0.14);
-  --pc-text: #171717;
-  --pc-text-dim: #737373;
-  --pc-text-muted: #a3a3a3;
-  --pc-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 8px 24px -4px rgba(0, 0, 0, 0.08);
-  --pc-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --pc-border: rgba(0, 0, 0, 0.06);
+  --pc-border-strong: rgba(0, 0, 0, 0.12);
+  --pc-text: #09090b;
+  --pc-text-dim: #71717a;
+  --pc-text-muted: #a1a1aa;
+  --pc-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --pc-shadow-sm: 0 1px 1px rgba(0, 0, 0, 0.03);
   --pc-hover: rgba(0, 0, 0, 0.04);
-  --pc-surface: #f5f5f5;
+  --pc-surface: #f4f4f5;
 }
 
 /* ── Dark theme ────────────────────────────────────────────────────────── */
 .dark {
-  --pc-bg: #0a0a0a;
+  --pc-bg: #09090b;
   --pc-window: #111113;
   --pc-window-solid: #111113;
-  --pc-sidebar: #0f0f11;
-  --pc-border: rgba(255, 255, 255, 0.08);
-  --pc-border-strong: rgba(255, 255, 255, 0.14);
-  --pc-text: #ededed;
-  --pc-text-dim: #737373;
-  --pc-text-muted: #525252;
-  --pc-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 8px 24px -4px rgba(0, 0, 0, 0.4);
-  --pc-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --pc-sidebar: #0a0a0c;
+  --pc-border: rgba(255, 255, 255, 0.06);
+  --pc-border-strong: rgba(255, 255, 255, 0.1);
+  --pc-text: #fafafa;
+  --pc-text-dim: #71717a;
+  --pc-text-muted: #3f3f46;
+  --pc-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --pc-shadow-sm: 0 1px 1px rgba(0, 0, 0, 0.2);
   --pc-hover: rgba(255, 255, 255, 0.05);
-  --pc-surface: #1a1a1c;
+  --pc-surface: #18181b;
 }
 
 html, body, #__nuxt {

@@ -11,7 +11,6 @@ const initials = computed(() => {
 const navItems = [
   { label: 'Home', icon: 'i-lucide-home', to: '/app/new' },
   { label: 'Projects', icon: 'i-lucide-layout-grid', to: '/app' },
-  { label: 'Templates', icon: 'i-lucide-layout-template', to: '/app/new' },
 ]
 
 const bottomNav = computed(() => [
@@ -39,12 +38,10 @@ const bottomNav = computed(() => [
       </div>
 
       <!-- New email button -->
-      <div class="sidebar-section">
-        <NuxtLink to="/app/new" class="sidebar-new-btn">
-          <UIcon name="i-lucide-plus" class="w-4 h-4" />
-          New email
-        </NuxtLink>
-      </div>
+      <NuxtLink to="/app/new" class="sidebar-new-btn">
+        <UIcon name="i-lucide-plus" class="w-4 h-4" />
+        New email
+      </NuxtLink>
 
       <!-- Primary nav -->
       <nav class="sidebar-nav">
@@ -77,7 +74,7 @@ const bottomNav = computed(() => [
         </NuxtLink>
       </nav>
 
-      <!-- Theme toggle + User -->
+      <!-- Footer: theme + user -->
       <div class="sidebar-footer">
         <button
           class="sidebar-theme-btn"
@@ -90,7 +87,6 @@ const bottomNav = computed(() => [
           <span class="sidebar-user-avatar">{{ initials }}</span>
           <div class="sidebar-user-info">
             <div class="sidebar-user-name">{{ user?.name || 'Account' }}</div>
-            <div class="sidebar-user-plan">{{ user?.plan }} plan</div>
           </div>
         </div>
         <button class="sidebar-logout-btn" aria-label="Sign out" @click="logout">
@@ -115,28 +111,28 @@ const bottomNav = computed(() => [
 
 /* ── Sidebar ───────────────────────────────────────────────────────────── */
 .app-sidebar {
-  width: 240px;
+  width: 220px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   background: var(--pc-sidebar);
   border-right: 1px solid var(--pc-border);
-  padding: 12px;
+  padding: 12px 10px;
   overflow-y: auto;
 }
 
 .sidebar-logo {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 8px;
-  margin-bottom: 8px;
+  gap: 8px;
+  padding: 4px 6px;
+  margin-bottom: 6px;
 }
 
 .sidebar-logo-mark {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
   display: grid;
   place-items: center;
   background: var(--pc-text);
@@ -144,24 +140,21 @@ const bottomNav = computed(() => [
 }
 
 .sidebar-logo-text {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--pc-text);
   letter-spacing: -0.01em;
 }
 
 /* ── New email button ──────────────────────────────────────────────────── */
-.sidebar-section {
-  margin-bottom: 8px;
-}
-
 .sidebar-new-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 5px;
   width: 100%;
-  padding: 8px 12px;
+  padding: 7px 10px;
+  margin-bottom: 8px;
   border-radius: 8px;
   font-size: 13px;
   font-weight: 500;
@@ -183,21 +176,21 @@ const bottomNav = computed(() => [
 .sidebar-nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 4px 0;
+  gap: 1px;
+  padding: 2px 0;
 }
 
 .sidebar-nav--bottom {
   border-top: 1px solid var(--pc-border);
-  padding-top: 8px;
+  padding-top: 6px;
   margin-top: 4px;
 }
 
 .sidebar-nav-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 7px 10px;
+  gap: 8px;
+  padding: 6px 8px;
   border-radius: 6px;
   font-size: 13px;
   font-weight: 450;
@@ -223,15 +216,15 @@ const bottomNav = computed(() => [
 .sidebar-footer {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 4px 4px;
+  gap: 6px;
+  padding: 6px 2px 2px;
   border-top: 1px solid var(--pc-border);
   margin-top: 4px;
 }
 
 .sidebar-theme-btn {
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   border-radius: 6px;
   display: grid;
   place-items: center;
@@ -252,14 +245,14 @@ const bottomNav = computed(() => [
 .sidebar-user {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   min-width: 0;
   flex: 1;
 }
 
 .sidebar-user-avatar {
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -283,15 +276,9 @@ const bottomNav = computed(() => [
   text-overflow: ellipsis;
 }
 
-.sidebar-user-plan {
-  font-size: 11px;
-  color: var(--pc-text-dim);
-  text-transform: capitalize;
-}
-
 .sidebar-logout-btn {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border-radius: 6px;
   display: grid;
   place-items: center;
