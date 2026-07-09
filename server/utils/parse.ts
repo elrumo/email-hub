@@ -68,6 +68,10 @@ export interface EmailProject {
   id: string
   ownerId: string
   name: string
+  /** optional free-text description (null when unset) */
+  description: string | null
+  /** user-defined labels for organising/filtering (empty when none) */
+  tags: string[]
   document: EmailDocument
   variables: TemplateVariable[]
   /** containing Project (null on legacy rows until adopted) */
@@ -89,6 +93,10 @@ export interface ProjectContainer {
   id: string
   ownerId: string
   name: string
+  /** optional free-text description (null when unset) */
+  description: string | null
+  /** user-defined labels for organising/filtering (empty when none) */
+  tags: string[]
   /** user ids with full view/edit access to everything in the project */
   memberIds: string[]
   /** public share link token (null = not shared) */
@@ -172,8 +180,8 @@ function setFields(obj: Parse.Object, data: Record<string, unknown>): void {
 
 const USER_FIELDS = ['email', 'name', 'passwordHash', 'role', 'plan', 'planStatus', 'stripeCustomerId', 'stripeSubscriptionId', 'lastLoginAt', 'createdAt', 'updatedAt']
 const SESSION_FIELDS = ['token', 'userId', 'expiresAt', 'userAgent', 'createdAt']
-const PROJECT_FIELDS = ['ownerId', 'name', 'document', 'variables', 'projectId', 'folderId', 'shareToken', 'shareMode', 'lastActorId', 'createdAt', 'updatedAt']
-const CONTAINER_FIELDS = ['ownerId', 'name', 'memberIds', 'shareToken', 'shareMode', 'createdAt', 'updatedAt']
+const PROJECT_FIELDS = ['ownerId', 'name', 'description', 'tags', 'document', 'variables', 'projectId', 'folderId', 'shareToken', 'shareMode', 'lastActorId', 'createdAt', 'updatedAt']
+const CONTAINER_FIELDS = ['ownerId', 'name', 'description', 'tags', 'memberIds', 'shareToken', 'shareMode', 'createdAt', 'updatedAt']
 const FOLDER_FIELDS = ['ownerId', 'projectId', 'parentId', 'name', 'createdAt', 'updatedAt']
 const MESSAGE_FIELDS = ['clientId', 'projectId', 'role', 'parts', 'createdAt']
 const API_KEY_FIELDS = ['ownerId', 'name', 'prefix', 'hash', 'lastUsedAt', 'revokedAt', 'createdAt']

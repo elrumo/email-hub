@@ -2,13 +2,15 @@ import type { EmailDocument } from '#shared/email/blocks'
 import type { TemplateVariable } from '../../../utils/parse'
 import { updateProject } from '../../../utils/parse'
 import { requireEmailAccess } from '../../../utils/access'
-import { projectSummary, reconcileVariables, requireOwnedContainer, requireOwnedFolder } from '../../../utils/projects'
+import { normalizeDescription, normalizeTags, projectSummary, reconcileVariables, requireOwnedContainer, requireOwnedFolder } from '../../../utils/projects'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
   const { email: project, level, user } = await requireEmailAccess(event, id, 'edit')
   const body = await readBody<{
     name?: string
+    description?: string
+    tags?: string[]
     document?: EmailDocument
     variables?: TemplateVariable[]
     projectId?: string
@@ -19,6 +21,10 @@ export default defineEventHandler(async (event) => {
   const document = body.document ?? project.document
   const patch: Record<string, unknown> = {}
   if (typeof body.name === 'string') patch.name = body.name.trim() || project.name
+  const description = normalizeDescription(body.description)
+  if (description !== undefined) patch.description = description
+  const tags = normalizeTags(body.tags)
+  if (tags !== null) patch.tags = tags
   if (body.document) patch.document = body.document
   patch.variables = reconcileVariables(document, body.variables ?? project.variables)
   // Live-sync echo suppression: remember which client tab saved last.

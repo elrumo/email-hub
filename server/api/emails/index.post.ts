@@ -3,12 +3,14 @@ import type { EmailDocument } from '#shared/email/blocks'
 import { countProjectsForOwner, createProject } from '../../utils/parse'
 import { requireUser } from '../../utils/auth'
 import { planFor } from '../../utils/plans'
-import { projectSummary, reconcileVariables, requireOwnedContainer, requireOwnedFolder } from '../../utils/projects'
+import { normalizeDescription, normalizeTags, projectSummary, reconcileVariables, requireOwnedContainer, requireOwnedFolder } from '../../utils/projects'
 
 export default defineEventHandler(async (event) => {
   const user = await requireUser(event)
   const body = await readBody<{
     name?: string
+    description?: string
+    tags?: string[]
     templateId?: string
     document?: EmailDocument
     projectId?: string
@@ -41,6 +43,8 @@ export default defineEventHandler(async (event) => {
   const row = await createProject({
     ownerId: user.id,
     name: (body.name ?? '').trim() || doc.settings.title || 'Untitled email',
+    description: normalizeDescription(body.description) ?? null,
+    tags: normalizeTags(body.tags) ?? [],
     document: doc,
     variables: reconcileVariables(doc, []),
     projectId,
