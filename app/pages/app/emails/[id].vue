@@ -336,7 +336,8 @@ async function copyHtml() {
 function downloadFile(content: string, filename: string, type: string) {
   const blob = new Blob([content], { type })
   const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
+  // `document` is a ref in this component — reach the DOM via window.document.
+  const a = window.document.createElement('a')
   a.href = url
   a.download = filename
   a.click()
@@ -372,51 +373,60 @@ useHead({ title: () => `${name.value} · Postcard` })
 </script>
 
 <template>
-  <div class="h-screen p-0 sm:p-3 bg-(--pc-bg)">
-    <div class="pc-window h-full flex flex-col">
-      <!-- Titlebar -->
-      <div class="pc-titlebar pc-material shrink-0">
-        <TrafficLights />
-        <UButton :to="backTo" color="neutral" variant="ghost" size="xs" icon="i-lucide-arrow-left" />
-        <UInput
-          v-model="name"
-          variant="none"
-          placeholder="Untitled email"
-          :ui="{ base: 'text-sm font-medium px-0' }"
-          class="min-w-0 flex-1 max-w-xs"
-        />
-        <span class="flex items-center gap-1.5 text-xs pc-dim">
-          <UIcon :name="saving ? 'i-lucide-loader-circle' : 'i-lucide-check'" :class="saving ? 'animate-spin' : 'text-green-500'" class="size-3.5" />
-          <span class="hidden sm:inline">{{ saving ? 'Saving…' : 'Saved' }}</span>
-        </span>
-        <div class="flex-1" />
+  <div class="h-screen flex flex-col bg-(--pc-bg)">
+    <!-- Top bar -->
+    <header class="editor-topbar shrink-0">
+      <UButton :to="backTo" color="neutral" variant="ghost" size="xs" icon="i-lucide-arrow-left" />
+      <span class="editor-logo hidden sm:grid">
+        <svg viewBox="0 0 20 20" fill="none" class="w-3.5 h-3.5">
+          <rect x="2" y="4" width="16" height="12" rx="2" stroke="currentColor" stroke-width="1.5" />
+          <path d="M2 7l8 5 8-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+        </svg>
+      </span>
+      <UInput
+        v-model="name"
+        variant="none"
+        placeholder="Untitled email"
+        :ui="{ base: 'text-sm font-medium px-0' }"
+        class="min-w-0 flex-1 max-w-[15rem]"
+      />
+      <span class="editor-save-pill" :data-saving="saving ? 'true' : 'false'">
+        <UIcon v-if="saving" name="i-lucide-loader-circle" class="size-3 animate-spin" />
+        <span v-else class="editor-save-dot" />
+        <span class="hidden sm:inline">{{ saving ? 'Saving' : 'Saved' }}</span>
+      </span>
+      <div class="flex-1" />
+      <div class="editor-toolgroup">
         <UButton icon="i-lucide-undo-2" color="neutral" variant="ghost" size="xs" aria-label="Undo" :disabled="!canUndo" @click="undo" />
         <UButton icon="i-lucide-redo-2" color="neutral" variant="ghost" size="xs" aria-label="Redo" :disabled="!canRedo" @click="redo" />
-        <UDropdownMenu :items="addItems">
-          <UButton icon="i-lucide-plus" label="Add" color="neutral" variant="ghost" size="xs" :ui="{ label: 'hidden sm:inline' }" />
-        </UDropdownMenu>
-        <UButton icon="i-lucide-layout-template" color="neutral" variant="ghost" size="xs" aria-label="Templates" @click="templateOpen = true" />
-        <UButton
-          v-if="isOwner"
-          :icon="shareMode === 'off' ? 'i-lucide-share-2' : 'i-lucide-globe'"
-          :label="shareMode === 'off' ? 'Share' : 'Shared'"
-          :color="shareMode === 'off' ? 'neutral' : 'primary'"
-          variant="ghost"
-          size="xs"
-          :ui="{ label: 'hidden sm:inline' }"
-          @click="shareOpen = true"
-        />
-        <UButton
-          color="neutral"
-          variant="ghost"
-          size="xs"
-          :icon="colorMode.value === 'dark' ? 'i-lucide-sun' : 'i-lucide-moon'"
-          aria-label="Toggle theme"
-          @click="colorMode.preference = colorMode.value === 'dark' ? 'light' : 'dark'"
-        />
-        <UPopover>
-          <UButton icon="i-lucide-code-xml" label="Export" size="xs" :ui="{ label: 'hidden sm:inline' }" />
-          <template #content>
+      </div>
+      <div class="editor-divider" />
+      <UDropdownMenu :items="addItems">
+        <UButton icon="i-lucide-plus" label="Add" color="neutral" variant="ghost" size="xs" :ui="{ label: 'hidden sm:inline' }" />
+      </UDropdownMenu>
+      <UButton icon="i-lucide-layout-template" color="neutral" variant="ghost" size="xs" aria-label="Templates" @click="templateOpen = true" />
+      <UButton
+        v-if="isOwner"
+        :icon="shareMode === 'off' ? 'i-lucide-share-2' : 'i-lucide-globe'"
+        :label="shareMode === 'off' ? 'Share' : 'Shared'"
+        color="neutral"
+        variant="ghost"
+        size="xs"
+        :ui="{ label: 'hidden sm:inline' }"
+        @click="shareOpen = true"
+      />
+      <UButton
+        color="neutral"
+        variant="ghost"
+        size="xs"
+        :icon="colorMode.value === 'dark' ? 'i-lucide-sun' : 'i-lucide-moon'"
+        aria-label="Toggle theme"
+        @click="colorMode.preference = colorMode.value === 'dark' ? 'light' : 'dark'"
+      />
+      <div class="editor-divider" />
+      <UPopover>
+        <UButton icon="i-lucide-code-xml" label="Export" color="neutral" variant="solid" size="xs" :ui="{ label: 'hidden sm:inline' }" />
+        <template #content>
             <div class="p-1 w-52">
               <button type="button" class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/5 transition" @click="exportJson">
                 <UIcon name="i-lucide-folder-down" class="size-4 text-primary-500" />
@@ -438,14 +448,14 @@ useHead({ title: () => `${name.value} · Postcard` })
             </div>
           </template>
         </UPopover>
-      </div>
+    </header>
 
-      <!-- 3 panes -->
-      <div class="min-h-0 flex-1 grid grid-cols-1 lg:grid-cols-[320px_1fr_320px]">
+    <!-- 3 panes -->
+    <div class="min-h-0 flex-1 grid grid-cols-1 lg:grid-cols-[320px_1fr_320px]">
         <!-- AI chat (owner) / collaborator note -->
         <aside v-if="!isOwner" class="hidden relative lg:flex h-full min-h-0 flex-col border-r pc-hairline pc-sidebar-material">
           <div class="flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center">
-            <div class="grid place-items-center w-12 h-12 rounded-2xl bg-primary-500/10 text-primary-500">
+            <div class="grid place-items-center w-12 h-12 rounded-2xl bg-(--pc-surface) border border-(--pc-border) text-(--pc-text-dim)">
               <UIcon name="i-lucide-users" class="size-6" />
             </div>
             <p class="mt-3 text-sm font-medium">You're collaborating live</p>
@@ -458,14 +468,14 @@ useHead({ title: () => `${name.value} · Postcard` })
 
         <aside v-else class="hidden relative lg:flex h-full min-h-0 flex-col border-r pc-hairline pc-sidebar-material">
           <div class="flex items-center gap-2 border-b pc-hairline px-4 py-3">
-            <span class="grid place-items-center w-6 h-6 rounded-md bg-primary-500 text-white">
+            <span class="grid place-items-center w-6 h-6 rounded-md bg-(--pc-text) text-(--pc-bg)">
               <UIcon name="i-lucide-sparkles" class="size-3.5" />
             </span>
             <span class="text-sm font-semibold">Postcard AI</span>
           </div>
 
           <div v-if="!chat.messages.length" class="flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center">
-            <div class="grid place-items-center w-12 h-12 rounded-2xl bg-primary-500/10 text-primary-500">
+            <div class="grid place-items-center w-12 h-12 rounded-2xl bg-(--pc-surface) border border-(--pc-border) text-(--pc-text)">
               <UIcon name="i-lucide-sparkles" class="size-6" />
             </div>
             <p class="mt-3 text-sm font-medium">Describe your email</p>
@@ -496,10 +506,10 @@ useHead({ title: () => `${name.value} · Postcard` })
           <div class="border-t pc-hairline p-3 space-y-2">
             <!-- Scoped-edit context chip -->
             <div v-if="selectedBlock" class="flex items-center gap-1.5 text-xs">
-              <span class="inline-flex items-center gap-1.5 rounded-full bg-primary-500/10 text-primary-500 pl-2.5 pr-1 py-1">
+              <span class="inline-flex items-center gap-1.5 rounded-full bg-(--pc-surface) border border-(--pc-border) text-(--pc-text) pl-2.5 pr-1 py-1">
                 <UIcon name="i-lucide-square-mouse-pointer" class="size-3.5" />
                 <span class="max-w-[180px] truncate">Editing: {{ blockLabel(selectedBlock) }}</span>
-                <button type="button" class="grid place-items-center size-4 rounded-full hover:bg-primary-500/20" aria-label="Clear selection" @click="selectedId = null">
+                <button type="button" class="grid place-items-center size-4 rounded-full text-(--pc-text-dim) hover:bg-black/10 dark:hover:bg-white/10" aria-label="Clear selection" @click="selectedId = null">
                   <UIcon name="i-lucide-x" class="size-3" />
                 </button>
               </span>
@@ -537,26 +547,28 @@ useHead({ title: () => `${name.value} · Postcard` })
         </main>
 
         <!-- inspector / variables -->
-        <aside class="relative hidden lg:flex h-full min-h-0 flex-col border-l pc-hairline">
-          <div class="flex items-center gap-1 border-b pc-hairline p-2">
-            <UButton
-              label="Design"
-              icon="i-lucide-sliders-horizontal"
-              size="xs"
-              class="flex-1 justify-center"
-              :color="rightTab === 'design' ? 'primary' : 'neutral'"
-              :variant="rightTab === 'design' ? 'soft' : 'ghost'"
-              @click="rightTab = 'design'"
-            />
-            <UButton
-              label="Variables"
-              icon="i-lucide-braces"
-              size="xs"
-              class="flex-1 justify-center"
-              :color="rightTab === 'variables' ? 'primary' : 'neutral'"
-              :variant="rightTab === 'variables' ? 'soft' : 'ghost'"
-              @click="rightTab = 'variables'"
-            />
+        <aside class="relative hidden lg:flex h-full min-h-0 flex-col border-l pc-hairline bg-(--pc-window)">
+          <div class="border-b pc-hairline p-2">
+            <div class="editor-seg">
+              <button
+                type="button"
+                class="editor-seg-btn"
+                :class="rightTab === 'design' && 'editor-seg-btn--active'"
+                @click="rightTab = 'design'"
+              >
+                <UIcon name="i-lucide-sliders-horizontal" class="size-3.5" />
+                Design
+              </button>
+              <button
+                type="button"
+                class="editor-seg-btn"
+                :class="rightTab === 'variables' && 'editor-seg-btn--active'"
+                @click="rightTab = 'variables'"
+              >
+                <UIcon name="i-lucide-braces" class="size-3.5" />
+                Variables
+              </button>
+            </div>
           </div>
 
           <div v-show="rightTab === 'design'" class="flex-1 min-h-0 flex flex-col">
@@ -572,7 +584,7 @@ useHead({ title: () => `${name.value} · Postcard` })
                 <li v-for="b in document.blocks" :key="b.id">
                   <button
                     class="flex w-full items-center gap-2 px-4 py-1.5 text-left text-sm transition"
-                    :class="selectedId === b.id ? 'bg-primary-500/10 text-primary-500' : 'pc-dim hover:bg-black/5 dark:hover:bg-white/5'"
+                    :class="selectedId === b.id ? 'bg-(--pc-hover) text-(--pc-text) font-medium' : 'pc-dim hover:bg-black/5 dark:hover:bg-white/5'"
                     @click="selectedId = b.id"
                   >
                     <UIcon name="i-lucide-grip-vertical" class="size-3.5 shrink-0 opacity-50" />
@@ -592,7 +604,6 @@ useHead({ title: () => `${name.value} · Postcard` })
           </div>
         </aside>
       </div>
-    </div>
 
     <EmailTemplatePicker
       v-model:open="templateOpen"
@@ -607,7 +618,7 @@ useHead({ title: () => `${name.value} · Postcard` })
       <div class="pc-card p-5 w-[440px] max-w-[calc(100vw-2rem)] space-y-4">
         <div class="flex items-center justify-between">
           <div class="font-medium flex items-center gap-2">
-            <UIcon name="i-lucide-share-2" class="size-4 text-primary-500" /> Share this email
+            <UIcon name="i-lucide-share-2" class="size-4" /> Share this email
           </div>
           <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="xs" aria-label="Close" @click="shareOpen = false" />
         </div>
@@ -618,7 +629,7 @@ useHead({ title: () => `${name.value} · Postcard` })
             :key="m.value"
             type="button"
             class="w-full rounded-lg border p-3 text-left transition"
-            :class="shareMode === m.value ? 'border-primary-500 bg-primary-500/5' : 'pc-hairline hover:border-primary-500/40'"
+            :class="shareMode === m.value ? 'border-(--pc-text) bg-(--pc-hover)' : 'pc-hairline hover:border-(--pc-border-strong)'"
             :disabled="shareBusy"
             @click="setShareMode(m.value as 'off' | 'view' | 'edit')"
           >
@@ -638,3 +649,100 @@ useHead({ title: () => `${name.value} · Postcard` })
     </div>
   </div>
 </template>
+
+<style scoped>
+/* ── Top bar ───────────────────────────────────────────────────────────── */
+.editor-topbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 48px;
+  padding: 0 10px;
+  background: var(--pc-window);
+  border-bottom: 1px solid var(--pc-border);
+}
+
+.editor-logo {
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background: var(--pc-text);
+  color: var(--pc-bg);
+  flex-shrink: 0;
+}
+
+.editor-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--pc-border);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+.editor-toolgroup {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+/* Saved / saving status pill */
+.editor-save-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--pc-text-dim);
+  background: var(--pc-surface);
+  border: 1px solid var(--pc-border);
+  flex-shrink: 0;
+}
+
+.editor-save-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: #22c55e;
+}
+
+/* ── Segmented control (inspector tabs) ────────────────────────────────── */
+.editor-seg {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 9px;
+  background: var(--pc-surface);
+  border: 1px solid var(--pc-border);
+}
+
+.editor-seg-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--pc-text-dim);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  font-family: inherit;
+}
+
+.editor-seg-btn:hover {
+  color: var(--pc-text);
+}
+
+.editor-seg-btn--active {
+  color: var(--pc-text);
+  background: var(--pc-window-solid);
+  box-shadow: var(--pc-shadow-sm);
+}
+</style>

@@ -280,23 +280,22 @@ async function remove(p: ProjectRow) {
 .projects-new-btn {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 7px 14px;
+  gap: 6px;
+  padding: 8px 14px;
   border-radius: 8px;
   font-size: 13px;
   font-weight: 500;
-  color: var(--pc-text);
-  background: var(--pc-window-solid);
-  border: 1px solid var(--pc-border);
+  color: var(--pc-bg);
+  background: var(--pc-text);
+  border: 1px solid transparent;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: opacity 0.15s;
   font-family: inherit;
   white-space: nowrap;
 }
 
 .projects-new-btn:hover {
-  background: var(--pc-hover);
-  border-color: var(--pc-border-strong);
+  opacity: 0.88;
 }
 
 /* ── Create form ───────────────────────────────────────────────────────── */
@@ -409,17 +408,27 @@ async function remove(p: ProjectRow) {
 }
 
 .project-card-thumb {
-  height: 140px;
+  height: 132px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--pc-surface);
+  background-color: var(--pc-surface);
+  background-image: radial-gradient(var(--pc-dot) 1px, transparent 1px);
+  background-size: 14px 14px;
+  background-position: -7px -7px;
   border-bottom: 1px solid var(--pc-border);
 }
 
 .project-card-thumb-icon {
-  color: var(--pc-text-muted);
-  opacity: 0.4;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 11px;
+  background: var(--pc-window-solid);
+  border: 1px solid var(--pc-border);
+  color: var(--pc-text-dim);
+  box-shadow: var(--pc-shadow-sm);
 }
 
 .project-card-info {

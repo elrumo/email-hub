@@ -194,7 +194,7 @@ function buildSrcDoc(): string {
       rows.forEach(function (row) {
         var on = row.getAttribute('data-block-id') === selected;
         row.toggleAttribute('data-selected', on);
-        row.style.outline = on ? '2px solid #2563eb' : '';
+        row.style.outline = on ? '2px solid #18181b' : '';
         row.style.outlineOffset = on ? '-2px' : '';
         row.style.cursor = 'pointer';
       });
@@ -243,7 +243,7 @@ function buildSrcDoc(): string {
     }
     document.addEventListener('mouseover', function (e) {
       var row = e.target.closest('[data-block-id]');
-      if (row && !row.style.outline) { row.style.boxShadow = 'inset 0 0 0 2px rgba(37,99,235,.35)'; }
+      if (row && !row.style.outline) { row.style.boxShadow = 'inset 0 0 0 2px rgba(24,24,27,.28)'; }
     });
     document.addEventListener('mouseout', function (e) {
       var row = e.target.closest('[data-block-id]');
@@ -329,7 +329,7 @@ watch(() => props.device, () => nextTick(updateScale), { deep: true })
 <template>
   <div
     ref="viewport"
-    class="flex h-full w-full justify-center overflow-auto bg-elevated/40 p-4"
+    class="pc-dots flex h-full w-full justify-center overflow-auto p-6"
   >
     <div
       class="relative shrink-0 transition-[height,width]"
