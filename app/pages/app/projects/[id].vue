@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import type { EmailDocument } from '#shared/email/blocks'
+import { walkBlocks } from '#shared/email/blocks'
+
 definePageMeta({ layout: 'app' })
 
 interface FolderRow { id: string, name: string, parentId: string | null }
@@ -112,6 +115,64 @@ async function removeEmail(e: EmailRow) {
   toast.add({ title: 'Deleted', icon: 'i-lucide-trash-2' })
 }
 
+// ---- import ----------------------------------------------------------------
+const fileInput = ref<HTMLInputElement | null>(null)
+
+function isValidEmailDocument(doc: unknown): doc is EmailDocument {
+  if (!doc || typeof doc !== 'object') return false
+  const d = doc as Record<string, unknown>
+  if (!d.settings || typeof d.settings !== 'object') return false
+  if (!Array.isArray(d.blocks)) return false
+  return true
+}
+
+function assignBlockIds(blocks: EmailDocument['blocks']) {
+  walkBlocks(blocks, (b) => {
+    if (!b.id) (b as { id: string }).id = `blk_${Math.random().toString(36).slice(2, 9)}`
+  })
+}
+
+async function onImportFile(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  input.value = ''
+
+  try {
+    const text = await file.text()
+    const parsed = JSON.parse(text)
+
+    let doc: EmailDocument
+    let name: string
+
+    if (isValidEmailDocument(parsed)) {
+      doc = parsed
+      name = file.name.replace(/\.json$/i, '') || 'Imported email'
+    } else if (parsed.document && isValidEmailDocument(parsed.document)) {
+      doc = parsed.document
+      name = parsed.name || file.name.replace(/\.json$/i, '') || 'Imported email'
+    } else {
+      toast.add({ title: 'Invalid file — expected an email document (.json)', color: 'error' })
+      return
+    }
+
+    assignBlockIds(doc.blocks)
+
+    busy.value = true
+    const res = await $fetch<{ project: { id: string } }>('/api/emails', {
+      method: 'POST',
+      body: { name, document: doc, projectId: id, folderId: currentFolderId.value }
+    })
+    await refresh()
+    toast.add({ title: `Imported "${name}"`, icon: 'i-lucide-upload', color: 'success' })
+    await navigateTo(`/app/emails/${res.project.id}`)
+  } catch (err: any) {
+    toast.add({ title: err?.data?.statusMessage || 'Import failed — check the file format.', color: 'error' })
+  } finally {
+    busy.value = false
+  }
+}
+
 // ---- sharing & members -------------------------------------------------------
 interface Member { id: string, email: string, name: string | null }
 const shareOpen = ref(false)
@@ -210,96 +271,154 @@ async function saveMove() {
 </script>
 
 <template>
-  <div class="p-8 max-w-5xl mx-auto">
-    <!-- Breadcrumbs + actions -->
-    <div class="flex items-end justify-between mb-6 gap-4 flex-wrap">
-      <div class="min-w-0">
-        <div class="flex items-center gap-1.5 text-sm pc-dim flex-wrap">
-          <NuxtLink to="/app" class="hover:text-(--pc-text) transition">Projects</NuxtLink>
-          <UIcon name="i-lucide-chevron-right" class="w-3.5 h-3.5" />
-          <NuxtLink :to="folderLink(null)" class="hover:text-(--pc-text) transition" :class="!currentFolderId && 'font-medium text-(--pc-text)'">
+  <div class="project-detail-page">
+    <!-- Header -->
+    <div class="pd-header pc-rise">
+      <div class="pd-header-left">
+        <div class="pd-breadcrumbs">
+          <NuxtLink to="/app" class="pd-breadcrumb">Projects</NuxtLink>
+          <UIcon name="i-lucide-chevron-right" class="w-3.5 h-3.5 pd-breadcrumb-sep" />
+          <NuxtLink :to="folderLink(null)" class="pd-breadcrumb" :class="!currentFolderId && 'pd-breadcrumb--active'">
             {{ data?.project.name }}
           </NuxtLink>
           <template v-for="(f, i) in breadcrumbs" :key="f.id">
-            <UIcon name="i-lucide-chevron-right" class="w-3.5 h-3.5" />
-            <NuxtLink :to="folderLink(f.id)" class="hover:text-(--pc-text) transition" :class="i === breadcrumbs.length - 1 && 'font-medium text-(--pc-text)'">
+            <UIcon name="i-lucide-chevron-right" class="w-3.5 h-3.5 pd-breadcrumb-sep" />
+            <NuxtLink :to="folderLink(f.id)" class="pd-breadcrumb" :class="i === breadcrumbs.length - 1 && 'pd-breadcrumb--active'">
               {{ f.name }}
             </NuxtLink>
           </template>
         </div>
-        <h1 class="text-2xl font-semibold tracking-tight mt-1 truncate">
-          {{ currentFolder?.name ?? data?.project.name }}
-        </h1>
+        <h1 class="pd-title">{{ currentFolder?.name ?? data?.project.name }}</h1>
       </div>
-      <div class="flex gap-2">
-        <UButton v-if="data?.access === 'owner'" color="neutral" variant="subtle" icon="i-lucide-share-2" @click="openShare">Share</UButton>
-        <UButton color="neutral" variant="subtle" icon="i-lucide-folder-plus" @click="creatingFolder = true">New folder</UButton>
-        <UButton :to="newEmailLink" color="primary" icon="i-lucide-plus">New email</UButton>
+      <div class="pd-header-actions">
+        <button v-if="data?.access === 'owner'" class="pd-action-btn" @click="openShare">
+          <UIcon name="i-lucide-share-2" class="w-4 h-4" />
+          Share
+        </button>
+        <button class="pd-action-btn" @click="creatingFolder = true">
+          <UIcon name="i-lucide-folder-plus" class="w-4 h-4" />
+          Folder
+        </button>
+        <button class="pd-action-btn" @click="fileInput?.click()">
+          <UIcon name="i-lucide-upload" class="w-4 h-4" />
+          Import
+        </button>
+        <NuxtLink :to="newEmailLink" class="pd-action-btn pd-action-btn--primary">
+          <UIcon name="i-lucide-plus" class="w-4 h-4" />
+          New email
+        </NuxtLink>
       </div>
+      <input ref="fileInput" type="file" accept=".json" class="hidden" @change="onImportFile" >
     </div>
 
     <!-- New folder inline form -->
-    <div v-if="creatingFolder" class="pc-card p-4 mb-5 flex items-center gap-3">
-      <UInput v-model="folderName" placeholder="Folder name…" class="flex-1" autofocus @keyup.enter="createFolder" />
-      <UButton color="primary" :loading="busy" @click="createFolder">Create</UButton>
-      <UButton color="neutral" variant="ghost" @click="creatingFolder = false">Cancel</UButton>
+    <div v-if="creatingFolder" class="pd-create-form pc-rise-2">
+      <input
+        v-model="folderName"
+        class="pd-create-input"
+        placeholder="Folder name..."
+        autofocus
+        @keyup.enter="createFolder"
+      >
+      <button class="pd-create-btn" :disabled="busy || !folderName.trim()" @click="createFolder">
+        {{ busy ? 'Creating...' : 'Create' }}
+      </button>
+      <button class="pd-create-cancel" @click="creatingFolder = false">Cancel</button>
     </div>
 
-    <div v-if="pending" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      <div v-for="i in 6" :key="i" class="pc-card h-36 animate-pulse" />
+    <!-- Loading -->
+    <div v-if="pending" class="pd-grid">
+      <div v-for="i in 6" :key="i" class="pd-card pd-card--skeleton">
+        <div class="pd-card-thumb pd-card-thumb--skeleton" />
+        <div class="pd-card-info">
+          <div class="skeleton-line skeleton-line--w60" />
+          <div class="skeleton-line skeleton-line--w40" />
+        </div>
+      </div>
     </div>
 
     <template v-else>
       <!-- Folders -->
-      <div v-if="subfolders.length" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-        <div v-for="f in subfolders" :key="f.id" class="pc-card overflow-hidden group hover:-translate-y-0.5 hover:shadow-md transition">
-          <NuxtLink :to="folderLink(f.id)" class="flex items-center gap-3 p-4">
-            <div class="grid place-items-center w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 shrink-0">
-              <UIcon name="i-lucide-folder" class="w-5 h-5" />
+      <div v-if="subfolders.length" class="pd-section">
+        <div class="pd-section-title">Folders</div>
+        <div class="pd-grid">
+          <div v-for="f in subfolders" :key="f.id" class="pd-folder-card">
+            <NuxtLink :to="folderLink(f.id)" class="pd-folder-link">
+              <div class="pd-folder-icon">
+                <UIcon name="i-lucide-folder" class="w-4 h-4" />
+              </div>
+              <span class="pd-folder-name">{{ f.name }}</span>
+            </NuxtLink>
+            <div class="pd-folder-actions">
+              <button class="pd-mini-btn" @click.stop="renameFolder(f)">
+                <UIcon name="i-lucide-pencil" class="w-3.5 h-3.5" />
+              </button>
+              <button class="pd-mini-btn pd-mini-btn--danger" @click.stop="removeFolder(f)">
+                <UIcon name="i-lucide-trash-2" class="w-3.5 h-3.5" />
+              </button>
             </div>
-            <div class="font-medium truncate">{{ f.name }}</div>
-          </NuxtLink>
-          <div class="flex border-t pc-hairline opacity-0 group-hover:opacity-100 transition">
-            <UButton variant="ghost" color="neutral" size="xs" class="flex-1 justify-center rounded-none" icon="i-lucide-pencil" @click="renameFolder(f)">Rename</UButton>
-            <UButton variant="ghost" color="error" size="xs" class="flex-1 justify-center rounded-none border-l pc-hairline" icon="i-lucide-trash-2" @click="removeFolder(f)">Delete</UButton>
           </div>
         </div>
       </div>
 
-      <!-- Emails -->
-      <div v-if="!emailsHere.length && !subfolders.length" class="pc-card p-16 text-center">
-        <div class="grid place-items-center w-14 h-14 rounded-2xl bg-primary-500/10 text-primary-500 mx-auto mb-4">
-          <UIcon name="i-lucide-mail-plus" class="w-7 h-7" />
+      <!-- Empty state -->
+      <div v-if="!emailsHere.length && !subfolders.length" class="pd-empty pc-rise-2">
+        <div class="pd-empty-icon">
+          <UIcon name="i-lucide-mail-plus" class="w-8 h-8" />
         </div>
-        <h3 class="font-semibold text-lg">Nothing here yet</h3>
-        <p class="pc-dim text-sm mt-1 max-w-sm mx-auto">Create an email or add folders to organise this project.</p>
-        <UButton :to="newEmailLink" color="primary" class="mt-5" icon="i-lucide-plus">Create an email</UButton>
+        <h3 class="pd-empty-title">Nothing here yet</h3>
+        <p class="pd-empty-desc">Create an email or add folders to organize this project.</p>
+        <NuxtLink :to="newEmailLink" class="pd-empty-btn">
+          <UIcon name="i-lucide-plus" class="w-4 h-4" />
+          Create an email
+        </NuxtLink>
       </div>
 
-      <div v-else-if="emailsHere.length" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div
-          v-for="e in emailsHere"
-          :key="e.id"
-          class="pc-card overflow-hidden group hover:-translate-y-0.5 hover:shadow-md transition pc-rise"
-        >
-          <NuxtLink :to="`/app/emails/${e.id}`" class="block">
-            <div class="h-24 bg-gradient-to-br from-primary-500/15 to-purple-500/15 grid place-items-center">
-              <UIcon name="i-lucide-mail" class="w-8 h-8 text-primary-500/70" />
-            </div>
-            <div class="p-4">
-              <div class="font-medium truncate">{{ e.name }}</div>
-              <div class="text-xs pc-dim truncate mt-0.5">{{ e.subject || 'No subject' }}</div>
-              <div class="flex items-center gap-3 mt-3 text-[11px] pc-dim">
-                <span class="flex items-center gap-1"><UIcon name="i-lucide-clock" class="w-3 h-3" /> {{ when(e.updatedAt) }}</span>
-                <span v-if="e.variables.length" class="flex items-center gap-1"><UIcon name="i-lucide-braces" class="w-3 h-3" /> {{ e.variables.length }} vars</span>
+      <!-- Emails -->
+      <div v-else-if="emailsHere.length" class="pd-section">
+        <div v-if="subfolders.length" class="pd-section-title">Emails</div>
+        <div class="pd-grid">
+          <div
+            v-for="(e, i) in emailsHere"
+            :key="e.id"
+            class="pd-email-card pc-rise"
+            :style="{ animationDelay: `${i * 0.03}s` }"
+          >
+            <NuxtLink :to="`/app/emails/${e.id}`" class="pd-email-link">
+              <div class="pd-email-thumb">
+                <div class="pd-email-thumb-icon">
+                  <UIcon name="i-lucide-mail" class="w-6 h-6" />
+                </div>
               </div>
+              <div class="pd-email-info">
+                <div class="pd-email-name">{{ e.name }}</div>
+                <div class="pd-email-subject">{{ e.subject || 'No subject' }}</div>
+                <div class="pd-email-meta">
+                  <span class="pd-email-meta-item">
+                    <UIcon name="i-lucide-clock" class="w-3 h-3" />
+                    {{ when(e.updatedAt) }}
+                  </span>
+                  <span v-if="e.variables.length" class="pd-email-meta-item">
+                    <UIcon name="i-lucide-braces" class="w-3 h-3" />
+                    {{ e.variables.length }} vars
+                  </span>
+                </div>
+              </div>
+            </NuxtLink>
+            <div class="pd-email-actions">
+              <NuxtLink :to="`/app/emails/${e.id}`" class="pd-email-action">
+                <UIcon name="i-lucide-pencil" class="w-3.5 h-3.5" />
+              </NuxtLink>
+              <button class="pd-email-action" @click.stop="startMove(e)">
+                <UIcon name="i-lucide-folder-input" class="w-3.5 h-3.5" />
+              </button>
+              <button class="pd-email-action" @click.stop="duplicate(e.id)">
+                <UIcon name="i-lucide-copy" class="w-3.5 h-3.5" />
+              </button>
+              <button class="pd-email-action pd-email-action--danger" @click.stop="removeEmail(e)">
+                <UIcon name="i-lucide-trash-2" class="w-3.5 h-3.5" />
+              </button>
             </div>
-          </NuxtLink>
-          <div class="flex border-t pc-hairline opacity-0 group-hover:opacity-100 transition">
-            <UButton :to="`/app/emails/${e.id}`" variant="ghost" color="neutral" size="xs" class="flex-1 justify-center rounded-none" icon="i-lucide-pencil">Edit</UButton>
-            <UButton variant="ghost" color="neutral" size="xs" class="flex-1 justify-center rounded-none border-l pc-hairline" icon="i-lucide-folder-input" @click="startMove(e)">Move</UButton>
-            <UButton variant="ghost" color="neutral" size="xs" class="flex-1 justify-center rounded-none border-l pc-hairline" icon="i-lucide-copy" @click="duplicate(e.id)">Copy</UButton>
-            <UButton variant="ghost" color="error" size="xs" class="flex-1 justify-center rounded-none border-l pc-hairline" icon="i-lucide-trash-2" @click="removeEmail(e)">Delete</UButton>
           </div>
         </div>
       </div>
@@ -371,3 +490,477 @@ async function saveMove() {
     </div>
   </div>
 </template>
+
+<style scoped>
+.project-detail-page {
+  padding: 32px 40px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* ── Header ────────────────────────────────────────────────────────────── */
+.pd-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  gap: 16px;
+}
+
+.pd-header-left {
+  min-width: 0;
+}
+
+.pd-breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.pd-breadcrumb {
+  font-size: 13px;
+  color: var(--pc-text-dim);
+  text-decoration: none;
+  transition: color 0.12s;
+}
+
+.pd-breadcrumb:hover {
+  color: var(--pc-text);
+}
+
+.pd-breadcrumb--active {
+  color: var(--pc-text);
+  font-weight: 500;
+}
+
+.pd-breadcrumb-sep {
+  color: var(--pc-text-muted);
+}
+
+.pd-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--pc-text);
+  margin: 0;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pd-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.pd-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--pc-text);
+  background: var(--pc-window-solid);
+  border: 1px solid var(--pc-border);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  text-decoration: none;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.pd-action-btn:hover {
+  background: var(--pc-hover);
+  border-color: var(--pc-border-strong);
+}
+
+.pd-action-btn--primary {
+  background: var(--pc-text);
+  color: var(--pc-bg);
+  border-color: transparent;
+}
+
+.pd-action-btn--primary:hover {
+  opacity: 0.85;
+}
+
+/* ── Create form ───────────────────────────────────────────────────────── */
+.pd-create-form {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: var(--pc-window-solid);
+  border: 1px solid var(--pc-border);
+  margin-bottom: 20px;
+}
+
+.pd-create-input {
+  flex: 1;
+  padding: 6px 0;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  color: var(--pc-text);
+  outline: none;
+  font-family: inherit;
+}
+
+.pd-create-input::placeholder {
+  color: var(--pc-text-muted);
+}
+
+.pd-create-btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--pc-bg);
+  background: var(--pc-text);
+  cursor: pointer;
+  font-family: inherit;
+  border: none;
+  white-space: nowrap;
+}
+
+.pd-create-btn:hover {
+  opacity: 0.85;
+}
+
+.pd-create-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pd-create-cancel {
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--pc-text-dim);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.pd-create-cancel:hover {
+  color: var(--pc-text);
+}
+
+/* ── Sections ──────────────────────────────────────────────────────────── */
+.pd-section {
+  margin-bottom: 28px;
+}
+
+.pd-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--pc-text-dim);
+  margin-bottom: 12px;
+}
+
+/* ── Grid ──────────────────────────────────────────────────────────────── */
+.pd-grid {
+  display: grid;
+  grid-template-columns: repeat(1, 1fr);
+  gap: 12px;
+}
+
+@media (min-width: 640px) {
+  .pd-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 900px) {
+  .pd-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* ── Folder card ───────────────────────────────────────────────────────── */
+.pd-folder-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--pc-window-solid);
+  border: 1px solid var(--pc-border);
+  transition: border-color 0.15s;
+}
+
+.pd-folder-card:hover {
+  border-color: var(--pc-border-strong);
+}
+
+.pd-folder-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  text-decoration: none;
+  color: inherit;
+}
+
+.pd-folder-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+  flex-shrink: 0;
+}
+
+.pd-folder-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--pc-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pd-folder-actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.pd-folder-card:hover .pd-folder-actions {
+  opacity: 1;
+}
+
+.pd-mini-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  color: var(--pc-text-dim);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  background: transparent;
+  border: none;
+}
+
+.pd-mini-btn:hover {
+  background: var(--pc-hover);
+  color: var(--pc-text);
+}
+
+.pd-mini-btn--danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+/* ── Email card ────────────────────────────────────────────────────────── */
+.pd-email-card {
+  position: relative;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--pc-window-solid);
+  border: 1px solid var(--pc-border);
+  transition: border-color 0.15s, box-shadow 0.2s;
+}
+
+.pd-email-card:hover {
+  border-color: var(--pc-border-strong);
+  box-shadow: 0 4px 16px -4px rgba(0, 0, 0, 0.1);
+}
+
+.dark .pd-email-card:hover {
+  box-shadow: 0 4px 16px -4px rgba(0, 0, 0, 0.4);
+}
+
+.pd-email-link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+
+.pd-email-thumb {
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(10, 132, 255, 0.08), rgba(175, 82, 222, 0.06));
+  border-bottom: 1px solid var(--pc-border);
+}
+
+.dark .pd-email-thumb {
+  background: linear-gradient(135deg, rgba(10, 132, 255, 0.12), rgba(175, 82, 222, 0.08));
+}
+
+.pd-email-thumb-icon {
+  color: var(--pc-text-muted);
+  opacity: 0.35;
+}
+
+.pd-email-info {
+  padding: 12px 14px;
+}
+
+.pd-email-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pc-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pd-email-subject {
+  font-size: 12px;
+  color: var(--pc-text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+.pd-email-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--pc-text-muted);
+}
+
+.pd-email-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* Actions */
+.pd-email-actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.pd-email-card:hover .pd-email-actions {
+  opacity: 1;
+}
+
+.pd-email-action {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  background: var(--pc-window-solid);
+  border: 1px solid var(--pc-border);
+  color: var(--pc-text-dim);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  text-decoration: none;
+}
+
+.pd-email-action:hover {
+  background: var(--pc-hover);
+  color: var(--pc-text);
+}
+
+.pd-email-action--danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+/* ── Empty state ───────────────────────────────────────────────────────── */
+.pd-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 80px 20px;
+}
+
+.pd-empty-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: var(--pc-surface);
+  color: var(--pc-text-muted);
+  margin-bottom: 16px;
+}
+
+.pd-empty-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--pc-text);
+  margin: 0 0 6px;
+}
+
+.pd-empty-desc {
+  font-size: 14px;
+  color: var(--pc-text-dim);
+  margin: 0 0 20px;
+}
+
+.pd-empty-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--pc-bg);
+  background: var(--pc-text);
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  text-decoration: none;
+  transition: opacity 0.15s;
+}
+
+.pd-empty-btn:hover {
+  opacity: 0.85;
+}
+
+/* ── Skeleton ──────────────────────────────────────────────────────────── */
+.pd-card--skeleton {
+  pointer-events: none;
+}
+
+.pd-card-thumb--skeleton {
+  background: var(--pc-surface);
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.skeleton-line {
+  height: 12px;
+  border-radius: 4px;
+  background: var(--pc-surface);
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+  margin-bottom: 6px;
+}
+
+.skeleton-line--w60 { width: 60%; }
+.skeleton-line--w40 { width: 40%; }
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+</style>

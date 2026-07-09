@@ -24,6 +24,7 @@ import { isStarterEmailDocument, type EmailTemplateDefinition } from '#shared/em
 import type { TemplateVariable } from '~~/server/utils/parse'
 
 import { lintEmailDocument } from '#shared/email/lint'
+import { useUndoRedo, type EditorSnapshot } from '~/composables/useUndoRedo'
 
 import EmailPreview from '~/components/email/EmailPreview.vue'
 import EmailInspector from '~/components/email/EmailInspector.vue'
@@ -74,6 +75,70 @@ const rightTab = ref<'design' | 'variables' | 'review'>('design')
 const reviewIssues = computed(() => lintEmailDocument(document.value))
 const reviewIssueCount = computed(() => reviewIssues.value.length)
 
+// ---- undo / redo -----------------------------------------------------------
+const { push: pushHistory, undo: undoPop, redo: redoPop, clear: clearHistory, canUndo, canRedo } = useUndoRedo()
+let skipHistory = false
+// Coalesce typing bursts: edits landing within this window share one undo step.
+const HISTORY_COALESCE_MS = 900
+let lastHistoryPushAt = 0
+
+function snapshot(): EditorSnapshot {
+  return { document: document.value, name: name.value, variables: variables.value }
+}
+
+function applySnapshot(snap: EditorSnapshot) {
+  skipHistory = true
+  // Deliberately NOT skipping autosave: an undo/redo must persist, or the
+  // server (and collaborators) would keep the state the user just left.
+  document.value = snap.document
+  name.value = snap.name
+  variables.value = snap.variables
+}
+
+function undo() {
+  const prev = undoPop(snapshot())
+  if (prev) applySnapshot(prev)
+}
+
+function redo() {
+  const next = redoPop(snapshot())
+  if (next) applySnapshot(next)
+}
+
+// Push to history on user-initiated document changes (not sync/AI/undo).
+watch(document, (_next, prev) => {
+  if (access.value === 'view') return
+  if (skipHistory) {
+    skipHistory = false
+    lastHistoryPushAt = 0
+    return
+  }
+  const now = Date.now()
+  if (now - lastHistoryPushAt > HISTORY_COALESCE_MS) {
+    pushHistory({ document: prev, name: name.value, variables: variables.value })
+  }
+  lastHistoryPushAt = now
+})
+
+// Keyboard shortcuts (skip when focus is in a text field — native undo wins).
+function isEditableTarget(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null
+  if (!el) return false
+  return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable
+}
+
+onMounted(() => {
+  function onKey(e: KeyboardEvent) {
+    const mod = e.metaKey || e.ctrlKey
+    if (!mod || isEditableTarget(e.target)) return
+    if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo() }
+    if (e.key === 'z' && e.shiftKey) { e.preventDefault(); redo() }
+    if (e.key === 'y') { e.preventDefault(); redo() }
+  }
+  window.addEventListener('keydown', onKey)
+  onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+})
+
 // Preview merges sample values so previews look real; the saved doc keeps {{ }}.
 const previewDocument = computed(() => {
   const vars: Record<string, string> = {}
@@ -122,93 +187,20 @@ watch([document, name, variables], () => {
   saveDoc()
 }, { deep: true })
 
-// ---- undo / redo ------------------------------------------------------------
-// A snapshot stack over the whole document. Edits within a short burst
-// (typing) coalesce into one step; remote live-sync updates and undo/redo
-// applications reset the baseline without recording a step.
-const undoStack = ref<string[]>([])
-const redoStack = ref<string[]>([])
-const HISTORY_LIMIT = 100
-const HISTORY_COALESCE_MS = 900
-let lastSnapshot = JSON.stringify(document.value)
-let lastEditAt = 0
-let skipHistoryOnce = false
-
-watch(document, () => {
-  if (access.value === 'view') return
-  const json = JSON.stringify(document.value)
-  // Consume the one-shot flag even when the payload is identical (a live-sync
-  // echo of our own state) — leaking it would swallow the next real edit's
-  // undo step.
-  if (skipHistoryOnce) {
-    skipHistoryOnce = false
-    lastSnapshot = json
-    lastEditAt = 0
-    return
-  }
-  if (json === lastSnapshot) return
-  const now = Date.now()
-  if (now - lastEditAt > HISTORY_COALESCE_MS) {
-    undoStack.value.push(lastSnapshot)
-    if (undoStack.value.length > HISTORY_LIMIT) undoStack.value.shift()
-    redoStack.value = []
-  }
-  lastEditAt = now
-  lastSnapshot = json
-}, { deep: true })
-
-function undo() {
-  if (!undoStack.value.length || access.value === 'view') return
-  redoStack.value.push(JSON.stringify(document.value))
-  const prev = undoStack.value.pop()!
-  skipHistoryOnce = true
-  document.value = JSON.parse(prev) as EmailDocument
-  selectedId.value = null
-}
-
-function redo() {
-  if (!redoStack.value.length || access.value === 'view') return
-  undoStack.value.push(JSON.stringify(document.value))
-  const next = redoStack.value.pop()!
-  skipHistoryOnce = true
-  document.value = JSON.parse(next) as EmailDocument
-  selectedId.value = null
-}
-
-function isEditableTarget(target: EventTarget | null): boolean {
-  const el = target as HTMLElement | null
-  if (!el) return false
-  return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable
-}
-
-function onKeydown(e: KeyboardEvent) {
-  const mod = e.metaKey || e.ctrlKey
-  if (!mod || isEditableTarget(e.target)) return
-  if (e.key.toLowerCase() === 'z') {
-    e.preventDefault()
-    if (e.shiftKey) redo()
-    else undo()
-  } else if (e.key.toLowerCase() === 'y') {
-    e.preventDefault()
-    redo()
-  }
-}
-
 // ---- live multiplayer sync --------------------------------------------------
 // Every open tab of this email streams document updates (SSE backed by Parse
 // Live Queries). Saves from other collaborators appear in place.
 let liveSource: EventSource | null = null
 onMounted(() => {
   actorId.value = crypto.randomUUID()
-  window.addEventListener('keydown', onKeydown)
   liveSource = new EventSource(`/api/emails/${id}/events${apiSuffix}`)
   liveSource.onmessage = (ev) => {
     try {
       const payload = JSON.parse(ev.data) as { document?: EmailDocument, variables?: TemplateVariable[], name?: string, actorId?: string | null }
       if (!payload?.document || payload.actorId === actorId.value) return
       skipNextSave = true
-      // Remote edits reset the local undo baseline instead of becoming a step.
-      skipHistoryOnce = true
+      // Remote edits must not become local undo steps.
+      skipHistory = true
       document.value = payload.document
       if (payload.variables) variables.value = payload.variables
       if (payload.name) name.value = payload.name
@@ -216,7 +208,6 @@ onMounted(() => {
   }
 })
 onBeforeUnmount(() => {
-  window.removeEventListener('keydown', onKeydown)
   liveSource?.close()
 })
 
@@ -395,6 +386,7 @@ const chat = new Chat<UIMessage>({
   }),
   onData: (part) => {
     if (part.type === 'data-document' && part.data) {
+      skipHistory = true
       document.value = part.data as unknown as EmailDocument
     }
   },
@@ -447,6 +439,14 @@ function sendQuick(prompt: string) {
 }
 
 onMounted(() => {
+  // Arriving from "Describe your email" on the new-email page: hand the brief
+  // straight to Postcard AI (once — the query is stripped so reloads don't resend).
+  const initialPrompt = typeof route.query.prompt === 'string' ? route.query.prompt.trim() : ''
+  if (initialPrompt && isOwner.value && !chat.messages.length) {
+    chat.sendMessage({ text: initialPrompt })
+    navigateTo({ query: { ...route.query, prompt: undefined } }, { replace: true })
+    return
+  }
   if (!chat.messages.length && isStarterEmailDocument(document.value)) templateOpen.value = true
 })
 
@@ -469,16 +469,20 @@ function insert(type: EmailBlockType) {
 }
 
 function applyTemplate(payload: { template: EmailTemplateDefinition, document: EmailDocument }) {
+  skipHistory = true
   document.value = payload.document
   name.value = payload.template.name
   selectedId.value = null
   templateOpen.value = false
+  clearHistory()
   toast.add({ title: `Applied “${payload.template.name}”`, color: 'success' })
 }
 function applyBlank(next: EmailDocument) {
+  skipHistory = true
   document.value = next
   selectedId.value = null
   templateOpen.value = false
+  clearHistory()
 }
 
 function onPreviewMove({ id: bid, to }: { id: string, to: number }) {
@@ -496,21 +500,34 @@ async function copyHtml() {
   }
 }
 
-function downloadHtml() {
-  const html = renderEmailHtml(document.value)
-  const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+function downloadFile(content: string, filename: string, type: string) {
+  const blob = new Blob([content], { type })
   const url = URL.createObjectURL(blob)
+  // `document` is the email document ref in this component — use the DOM's.
   const a = window.document.createElement('a')
   a.href = url
-  a.download = `${(name.value || 'email').replace(/[^a-z0-9-_ ]/gi, '').trim().replace(/\s+/g, '-').toLowerCase() || 'email'}.html`
+  a.download = filename
   a.click()
   URL.revokeObjectURL(url)
 }
 
-const exportItems = computed(() => [[
-  { label: 'Copy HTML', icon: 'i-lucide-clipboard-copy', onSelect: copyHtml },
-  { label: 'Download .html', icon: 'i-lucide-download', onSelect: downloadHtml }
-]])
+function exportJson() {
+  const payload = { name: name.value, document: document.value, variables: variables.value }
+  downloadFile(JSON.stringify(payload, null, 2), `${name.value || 'email'}.json`, 'application/json')
+  toast.add({ title: 'Project exported', icon: 'i-lucide-download', color: 'success' })
+}
+
+function downloadHtml() {
+  downloadFile(renderEmailHtml(document.value), `${name.value || 'email'}.html`, 'text/html')
+  toast.add({ title: 'HTML downloaded', icon: 'i-lucide-download', color: 'success' })
+}
+
+function copyEndpoint() {
+  const origin = window.location.origin
+  const url = `${origin}/api/v1/projects/${id}/html?format=html`
+  navigator.clipboard.writeText(url)
+  toast.add({ title: 'API endpoint copied', icon: 'i-lucide-clipboard-check', color: 'success' })
+}
 
 const moreItems = computed(() => {
   const items: Array<{ label: string, icon: string, onSelect: () => void }> = []
@@ -521,10 +538,12 @@ const moreItems = computed(() => {
 })
 
 function applySavedTemplate(payload: { name: string, document: EmailDocument }) {
+  skipHistory = true
   document.value = payload.document
   name.value = payload.name
   selectedId.value = null
   templateOpen.value = false
+  clearHistory()
   toast.add({ title: `Applied “${payload.name}”`, color: 'success' })
 }
 
@@ -579,24 +598,8 @@ useHead({ title: () => `${name.value} · Postcard` })
         </span>
         <div class="flex-1" />
         <template v-if="canEdit">
-          <UButton
-            icon="i-lucide-undo-2"
-            color="neutral"
-            variant="ghost"
-            size="xs"
-            aria-label="Undo"
-            :disabled="!undoStack.length"
-            @click="undo"
-          />
-          <UButton
-            icon="i-lucide-redo-2"
-            color="neutral"
-            variant="ghost"
-            size="xs"
-            aria-label="Redo"
-            :disabled="!redoStack.length"
-            @click="redo"
-          />
+          <UButton icon="i-lucide-undo-2" color="neutral" variant="ghost" size="xs" aria-label="Undo" :disabled="!canUndo" @click="undo" />
+          <UButton icon="i-lucide-redo-2" color="neutral" variant="ghost" size="xs" aria-label="Redo" :disabled="!canRedo" @click="redo" />
         </template>
         <UDropdownMenu :items="addItems">
           <UButton icon="i-lucide-plus" label="Add" color="neutral" variant="ghost" size="xs" :ui="{ label: 'hidden sm:inline' }" />
@@ -623,15 +626,36 @@ useHead({ title: () => `${name.value} · Postcard` })
           aria-label="Toggle theme"
           @click="colorMode.preference = colorMode.value === 'dark' ? 'light' : 'dark'"
         />
-        <UDropdownMenu :items="exportItems">
+        <UPopover>
           <UButton icon="i-lucide-code-xml" label="Export" size="xs" :ui="{ label: 'hidden sm:inline' }" />
-        </UDropdownMenu>
+          <template #content>
+            <div class="p-1 w-52">
+              <button type="button" class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/5 transition" @click="exportJson">
+                <UIcon name="i-lucide-folder-down" class="size-4 text-primary-500" />
+                <span>Export project</span>
+              </button>
+              <button type="button" class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/5 transition" @click="downloadHtml">
+                <UIcon name="i-lucide-download" class="size-4 text-primary-500" />
+                <span>Download HTML</span>
+              </button>
+              <button type="button" class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/5 transition" @click="copyHtml">
+                <UIcon name="i-lucide-clipboard" class="size-4 text-primary-500" />
+                <span>Copy HTML</span>
+              </button>
+              <div class="border-t pc-hairline my-1" />
+              <button type="button" class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/5 transition" @click="copyEndpoint">
+                <UIcon name="i-lucide-link" class="size-4 text-primary-500" />
+                <span>Copy API endpoint</span>
+              </button>
+            </div>
+          </template>
+        </UPopover>
       </div>
 
       <!-- 3 panes -->
       <div class="min-h-0 flex-1 grid grid-cols-1 lg:grid-cols-[320px_1fr_320px]">
         <!-- AI chat (owner) / collaborator note -->
-        <aside v-if="!isOwner" class="hidden lg:flex h-full min-h-0 flex-col border-r pc-hairline pc-sidebar-material">
+        <aside v-if="!isOwner" class="hidden relative lg:flex h-full min-h-0 flex-col border-r pc-hairline pc-sidebar-material">
           <div class="flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center">
             <div class="grid place-items-center w-12 h-12 rounded-2xl bg-primary-500/10 text-primary-500">
               <UIcon name="i-lucide-users" class="size-6" />
@@ -644,7 +668,7 @@ useHead({ title: () => `${name.value} · Postcard` })
           </div>
         </aside>
 
-        <aside v-else class="hidden lg:flex h-full min-h-0 flex-col border-r pc-hairline pc-sidebar-material">
+        <aside v-else class="hidden relative lg:flex h-full min-h-0 flex-col border-r pc-hairline pc-sidebar-material">
           <div class="flex items-center gap-2 border-b pc-hairline px-4 py-3">
             <span class="grid place-items-center w-6 h-6 rounded-md bg-primary-500 text-white">
               <UIcon name="i-lucide-sparkles" class="size-3.5" />
@@ -751,7 +775,7 @@ useHead({ title: () => `${name.value} · Postcard` })
         </main>
 
         <!-- inspector / variables -->
-        <aside class="hidden lg:flex h-full min-h-0 flex-col border-l pc-hairline">
+        <aside class="relative hidden lg:flex h-full min-h-0 flex-col border-l pc-hairline">
           <div class="flex items-center gap-1 border-b pc-hairline p-2">
             <UButton
               label="Design"

@@ -17,7 +17,9 @@ services:
       PARSE_PUBLIC_SERVER_URL: ${PARSE_PUBLIC_URL:-http://localhost:1337/parse}
       PARSE_SERVER_APPLICATION_ID: ${PARSE_APP_ID:-email-hub}
       PARSE_SERVER_MASTER_KEY: ${PARSE_MASTER_KEY:-}
-      NUXT_AI_BASE_URL: ${NUXT_AI_BASE_URL:-http://litellm:4000/v1}
+      NUXT_AI_BASE_URL: ${NUXT_AI_BASE_URL:?set NUXT_AI_BASE_URL in Dokploy}
+      NUXT_AI_API_KEY: ${NUXT_AI_API_KEY:?set NUXT_AI_API_KEY in Dokploy}
+      NUXT_AI_MODEL: ${NUXT_AI_MODEL:-}
       NUXT_PUBLIC_APP_URL: ${NUXT_PUBLIC_APP_URL:-http://localhost:3000}
     healthcheck:
       test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:3000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
@@ -83,6 +85,7 @@ services:
       PARSE_SERVER_MOUNT_PATH: ${PARSE_MOUNT_PATH:-/parse}
       PARSE_SERVER_URL: http://parse-server:1337${PARSE_MOUNT_PATH:-/parse}
       PARSE_PUBLIC_SERVER_URL: ${PARSE_PUBLIC_URL:-http://localhost:1337/parse}
+      PARSE_SERVER_MASTER_KEY_IPS: ${PARSE_MASTER_KEY_IPS:-0.0.0.0/0}
       PARSE_SERVER_ALLOW_CLIENT_CLASS_CREATION: ${PARSE_ALLOW_CLIENT_CLASS_CREATION:-false}
       # Live Query powers multiplayer document sync (EmailProject updates)
       PARSE_SERVER_START_LIVE_QUERY_SERVER: "true"
@@ -103,15 +106,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
-
-  litellm:
-    image: ghcr.io/berriai/litellm:main-stable
-    restart: unless-stopped
-    command: ["--config", "/app/litellm.config.yaml", "--port", "4000"]
-    expose:
-      - "4000"
-    volumes:
-      - ./litellm.config.yaml:/app/litellm.config.yaml:ro
 
 volumes:
   postcard_redis:

@@ -12,6 +12,8 @@ export default defineEventHandler(async (event) => {
     templateId?: string
     /** id of one of the user's saved templates (takes precedence over templateId) */
     userTemplateId?: string
+    /** a full document to start from (e.g. an imported email) */
+    document?: EmailDocument
     projectId?: string
     folderId?: string
   }>(event)
@@ -45,6 +47,7 @@ export default defineEventHandler(async (event) => {
     doc = structuredClone(saved.document)
     templateName = saved.name
   }
+  if (!doc && body.document) doc = body.document
   if (!doc) doc = (body.templateId && cloneEmailTemplateDocument(body.templateId)) || cloneBlankEmailDocument()
   const row = await createProject({
     ownerId: user.id,

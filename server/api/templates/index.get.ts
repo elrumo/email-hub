@@ -18,7 +18,9 @@ export default defineEventHandler(async (event) => {
       style: t.style,
       icon: t.icon,
       accent: t.accent,
-      description: t.description
+      description: t.description,
+      // full document so pickers can render real card previews
+      document: t.document
     })),
     userTemplates: mine.map(t => ({
       id: t.id,
