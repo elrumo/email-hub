@@ -147,30 +147,29 @@ const bottomNav = computed(() => [
   letter-spacing: -0.01em;
 }
 
-/* ── New email button ──────────────────────────────────────────────────── */
+/* ── New email button — solid foreground CTA (v0-style) ─────────────────── */
 .sidebar-new-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 6px;
   width: 100%;
-  padding: 7px 10px;
-  margin-bottom: 8px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
   border-radius: 8px;
   font-size: 13px;
   font-weight: 500;
-  color: var(--pc-text);
-  background: var(--pc-hover);
-  border: 1px solid var(--pc-border);
+  color: var(--pc-bg);
+  background: var(--pc-text);
+  border: 1px solid transparent;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: opacity 0.15s;
   text-decoration: none;
   font-family: inherit;
 }
 
 .sidebar-new-btn:hover {
-  background: var(--pc-border);
-  border-color: var(--pc-border-strong);
+  opacity: 0.88;
 }
 
 /* ── Navigation ────────────────────────────────────────────────────────── */

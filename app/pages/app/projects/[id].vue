@@ -716,8 +716,9 @@ async function saveMove() {
   border-radius: 8px;
   display: grid;
   place-items: center;
-  background: rgba(245, 158, 11, 0.1);
-  color: #f59e0b;
+  background: var(--pc-surface);
+  border: 1px solid var(--pc-border);
+  color: var(--pc-text-dim);
   flex-shrink: 0;
 }
 
@@ -794,17 +795,23 @@ async function saveMove() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, rgba(10, 132, 255, 0.08), rgba(175, 82, 222, 0.06));
+  background-color: var(--pc-surface);
+  background-image: radial-gradient(var(--pc-dot) 1px, transparent 1px);
+  background-size: 14px 14px;
+  background-position: -7px -7px;
   border-bottom: 1px solid var(--pc-border);
 }
 
-.dark .pd-email-thumb {
-  background: linear-gradient(135deg, rgba(10, 132, 255, 0.12), rgba(175, 82, 222, 0.08));
-}
-
 .pd-email-thumb-icon {
-  color: var(--pc-text-muted);
-  opacity: 0.35;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 11px;
+  background: var(--pc-window-solid);
+  border: 1px solid var(--pc-border);
+  color: var(--pc-text-dim);
+  box-shadow: var(--pc-shadow-sm);
 }
 
 .pd-email-info {
