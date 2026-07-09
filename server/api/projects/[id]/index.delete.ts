@@ -1,6 +1,7 @@
 import {
   deleteChatMessages,
   deleteContainer,
+  deleteEmailVersions,
   deleteFolder,
   deleteProject,
   listEmailsInContainer,
@@ -16,13 +17,17 @@ export default defineEventHandler(async (event) => {
   await requireOwnedContainer(id, user.id)
 
   const [folders, emails] = await Promise.all([listFolders(id), listEmailsInContainer(id)])
-  for (const email of emails) {
-    await deleteChatMessages(email.id)
-    await deleteProject(email.id)
+  // Emails are independent of each other — clean them up in bounded batches
+  // instead of 3 sequential round-trips per email (large projects would
+  // otherwise push this request into client timeouts).
+  const BATCH = 10
+  for (let i = 0; i < emails.length; i += BATCH) {
+    await Promise.all(emails.slice(i, i + BATCH).map(email =>
+      Promise.all([deleteChatMessages(email.id), deleteEmailVersions(email.id)])
+        .then(() => deleteProject(email.id))
+    ))
   }
-  for (const folder of folders) {
-    await deleteFolder(folder.id)
-  }
+  await Promise.all(folders.map(folder => deleteFolder(folder.id)))
   await deleteContainer(id)
   return { ok: true }
 })

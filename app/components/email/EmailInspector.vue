@@ -13,12 +13,18 @@ import {
   getUniformPaddingValue,
   isPaddingSides
 } from '#shared/email/blocks'
-import { removeBlock, updateBlock, updateSettings } from '#shared/email/ops'
+import { duplicateBlock, removeBlock, updateBlock, updateSettings } from '#shared/email/ops'
 import { applyThemeToDocument, currentTheme, FONT_STACKS, THEME_PRESETS } from '#shared/email/theme'
 
 const props = defineProps<{
   document: EmailDocument
   selectedId?: string | null
+  /** email id — enables the AI subject-line suggester in settings */
+  emailId?: string
+  /** whether AI features are available to this user (owner only) */
+  canAi?: boolean
+  /** false for view-only visitors — hides actions whose results can't persist */
+  canEdit?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -83,6 +89,56 @@ function removeSelected() {
   emit('select', null)
 }
 
+function duplicateSelected() {
+  if (!props.selectedId) return
+  const res = duplicateBlock(props.document, props.selectedId)
+  if (!res.ok) return
+  emit('update:document', res.doc)
+  if (res.id) emit('select', res.id)
+}
+
+// ---- image upload -----------------------------------------------------------
+const uploadInput = ref<HTMLInputElement | null>(null)
+const uploading = ref(false)
+
+async function onUploadPicked(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (uploadInput.value) uploadInput.value.value = ''
+  // Pin the target now: the user may select another block while the upload
+  // runs, and the URL must land on the image block it was picked for.
+  const targetId = props.selectedId
+  if (!file || !targetId) return
+  if (file.size > 5 * 1024 * 1024) {
+    toast.add({ title: 'Images are limited to 5 MB.', color: 'error' })
+    return
+  }
+  uploading.value = true
+  try {
+    const data = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(String(reader.result))
+      reader.onerror = () => reject(reader.error)
+      reader.readAsDataURL(file)
+    })
+    const res = await $fetch<{ url: string }>('/api/uploads', {
+      method: 'POST',
+      body: { name: file.name, contentType: file.type, data }
+    })
+    const target = findBlock(props.document.blocks, targetId)
+    if (target?.type === 'image') {
+      emit('update:document', updateBlock(props.document, targetId, { src: res.url }).doc)
+      toast.add({ title: 'Image uploaded', icon: 'i-lucide-image-up', color: 'success' })
+    } else {
+      toast.add({ title: 'Image uploaded, but its block was removed.', description: res.url, color: 'warning' })
+    }
+  } catch (err: unknown) {
+    const e2 = err as { data?: { statusMessage?: string } }
+    toast.add({ title: e2?.data?.statusMessage || 'Upload failed.', color: 'error' })
+  } finally {
+    uploading.value = false
+  }
+}
+
 const typeLabel: Record<string, string> = {
   heading: 'Heading', text: 'Text', button: 'Button', image: 'Image',
   divider: 'Divider', spacer: 'Spacer', columns: 'Columns', html: 'Custom HTML'
@@ -111,6 +167,32 @@ function applyPreset(presetId: string) {
 }
 
 const fontItems = FONT_STACKS.map(f => ({ label: f.label, value: f.value }))
+
+// ---- AI subject line suggestions -------------------------------------------
+const toast = useToast()
+const suggesting = ref(false)
+const suggestions = ref<Array<{ subject: string, preheader: string, angle: string }>>([])
+
+async function suggestSubjects() {
+  if (!props.emailId || suggesting.value) return
+  suggesting.value = true
+  try {
+    const res = await $fetch<{ suggestions: typeof suggestions.value }>(`/api/emails/${props.emailId}/subjects`, {
+      method: 'POST',
+      body: { document: props.document }
+    })
+    suggestions.value = res.suggestions
+  } catch (e: unknown) {
+    const err = e as { data?: { statusMessage?: string } }
+    toast.add({ title: err?.data?.statusMessage || 'Could not get suggestions.', color: 'error' })
+  } finally {
+    suggesting.value = false
+  }
+}
+
+function applySuggestion(s: { subject: string, preheader: string }) {
+  emit('update:document', updateSettings(props.document, { title: s.subject, preheader: s.preheader }).doc)
+}
 
 const paddingPopoverOpen = ref(false)
 
@@ -143,14 +225,24 @@ watch(() => props.selectedId, () => {
           />
           <span class="text-sm font-semibold text-highlighted">{{ typeLabel[selected.type] }}</span>
         </div>
-        <UButton
-          icon="i-lucide-trash-2"
-          color="error"
-          variant="ghost"
-          size="xs"
-          aria-label="Delete block"
-          @click="removeSelected"
-        />
+        <div class="flex items-center gap-0.5">
+          <UButton
+            icon="i-lucide-copy"
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            aria-label="Duplicate block"
+            @click="duplicateSelected"
+          />
+          <UButton
+            icon="i-lucide-trash-2"
+            color="error"
+            variant="ghost"
+            size="xs"
+            aria-label="Delete block"
+            @click="removeSelected"
+          />
+        </div>
       </div>
 
       <div class="flex-1 space-y-4 overflow-y-auto p-4">
@@ -241,12 +333,32 @@ watch(() => props.selectedId, () => {
 
         <!-- Image -->
         <template v-else-if="selected.type === 'image'">
-          <UFormField label="Image URL" help="Paste a hosted image URL.">
-            <UInput
-              :model-value="selected.src"
-              class="w-full"
-              @update:model-value="patch('src', $event)"
-            />
+          <UFormField label="Image URL" help="Paste a hosted image URL, or upload one.">
+            <div class="space-y-2">
+              <UInput
+                :model-value="selected.src"
+                class="w-full"
+                @update:model-value="patch('src', $event)"
+              />
+              <template v-if="canEdit !== false">
+                <input
+                  ref="uploadInput"
+                  type="file"
+                  accept="image/png,image/jpeg,image/gif,image/webp"
+                  class="hidden"
+                  @change="onUploadPicked"
+                >
+                <UButton
+                  label="Upload image"
+                  icon="i-lucide-image-up"
+                  size="xs"
+                  color="neutral"
+                  variant="subtle"
+                  :loading="uploading"
+                  @click="uploadInput?.click()"
+                />
+              </template>
+            </div>
           </UFormField>
           <UFormField label="Alt text">
             <UInput
@@ -429,6 +541,35 @@ watch(() => props.selectedId, () => {
             @update:model-value="patchSettings('preheader', $event)"
           />
         </UFormField>
+
+        <!-- AI subject line ideas -->
+        <div v-if="canAi && emailId" class="space-y-2">
+          <UButton
+            :label="suggestions.length ? 'More ideas' : 'Suggest subject & preheader'"
+            icon="i-lucide-sparkles"
+            size="xs"
+            color="primary"
+            variant="soft"
+            :loading="suggesting"
+            @click="suggestSubjects"
+          />
+          <div v-if="suggestions.length" class="space-y-1.5">
+            <button
+              v-for="(s, i) in suggestions"
+              :key="i"
+              type="button"
+              class="w-full rounded-lg border border-default p-2.5 text-left transition hover:border-primary/50"
+              @click="applySuggestion(s)"
+            >
+              <div class="flex items-center justify-between gap-2">
+                <span class="min-w-0 truncate text-xs font-medium text-highlighted">{{ s.subject }}</span>
+                <UBadge v-if="s.angle" :label="s.angle" color="neutral" variant="soft" size="sm" class="shrink-0" />
+              </div>
+              <p class="mt-0.5 line-clamp-2 text-[11px] leading-4 text-muted">{{ s.preheader }}</p>
+            </button>
+            <p class="text-[11px] text-muted">Tap an idea to apply its subject and preheader.</p>
+          </div>
+        </div>
         <!-- Theme designer -->
         <div class="border-t border-default pt-4">
           <div class="flex items-center gap-2 mb-1">

@@ -308,7 +308,7 @@ async function saveMove() {
           New email
         </NuxtLink>
       </div>
-      <input ref="fileInput" type="file" accept=".json" class="hidden" @change="onImportFile" />
+      <input ref="fileInput" type="file" accept=".json" class="hidden" @change="onImportFile" >
     </div>
 
     <!-- New folder inline form -->
@@ -319,7 +319,7 @@ async function saveMove() {
         placeholder="Folder name..."
         autofocus
         @keyup.enter="createFolder"
-      />
+      >
       <button class="pd-create-btn" :disabled="busy || !folderName.trim()" @click="createFolder">
         {{ busy ? 'Creating...' : 'Create' }}
       </button>
@@ -376,7 +376,7 @@ async function saveMove() {
 
       <!-- Emails -->
       <div v-else-if="emailsHere.length" class="pd-section">
-        <div class="pd-section-title" v-if="subfolders.length">Emails</div>
+        <div v-if="subfolders.length" class="pd-section-title">Emails</div>
         <div class="pd-grid">
           <div
             v-for="(e, i) in emailsHere"

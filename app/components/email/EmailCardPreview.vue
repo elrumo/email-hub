@@ -17,7 +17,7 @@ function onFrameLoad() {
   try {
     const body = frame.value?.contentDocument?.body
     if (body) frameHeight.value = body.scrollHeight + 16
-  } catch {}
+  } catch { /* cross-origin or detached frame — keep the default height */ }
 }
 
 onMounted(() => {

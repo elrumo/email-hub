@@ -16,21 +16,24 @@ import { emptyDocument, findBlock, type EmailDocument, type EmailTheme } from '#
 import { applyThemeToDocument, THEME_PRESETS } from '#shared/email/theme'
 import {
   addBlock,
+  duplicateBlock,
   moveBlock,
   removeBlock,
   setDocument,
   updateBlock,
   updateSettings
 } from '#shared/email/ops'
+import { lintEmailDocument, lintSummaryForPrompt } from '#shared/email/lint'
 import {
   createChatMessage,
-  updateProject
+  updateProject,
+  type TemplateVariable
 } from '../../../utils/parse'
 import { requireUser } from '../../../utils/auth'
 import { getAssistantModel } from '../../../utils/ai'
 import { planFor } from '../../../utils/plans'
 import { messagesThisMonth, recordUsageForUser } from '../../../utils/usage'
-import { reconcileVariables, requireOwnedProject } from '../../../utils/projects'
+import { reconcileVariables, requireOwnedProject, snapshotVersion } from '../../../utils/projects'
 
 const BLOCK_TYPES = ['heading', 'text', 'button', 'image', 'divider', 'spacer', 'columns', 'html'] as const
 
@@ -40,8 +43,9 @@ function documentForPrompt(doc: EmailDocument): string {
   return json.length > 14000 ? `${json.slice(0, 14000)}…(truncated — use block ids above to target edits)` : json
 }
 
-function systemPrompt(doc: EmailDocument, selectedId?: string): string {
+function systemPrompt(doc: EmailDocument, selectedId?: string, variables: TemplateVariable[] = []): string {
   const selected = selectedId ? findBlock(doc.blocks, selectedId) : null
+  const lint = lintEmailDocument(doc)
   return [
     'You are Postcard AI, an expert email designer embedded in a visual email builder.',
     'You design marketing and transactional emails that render correctly across Gmail, Apple Mail and Outlook.',
@@ -65,8 +69,9 @@ function systemPrompt(doc: EmailDocument, selectedId?: string): string {
     '',
     'Guidance:',
     '- When the user asks for a whole new email or a big redesign, prefer set_document with the full block list.',
-    '- For targeted tweaks, use update_block / update_settings / add_block / remove_block / move_block.',
+    '- For targeted tweaks, use update_block / update_settings / add_block / remove_block / move_block / duplicate_block.',
     '- Keep content width-friendly (~600px), use real, sensible copy, and accessible color contrast.',
+    '- Design mobile-first: most emails are read on phones. Prefer single-column flow; use columns only for short, scannable content (feature pairs, link lists).',
     '- Structure quality: lead with a clear hero (heading + supporting text), one primary CTA button, generous spacer rhythm, and a muted footer (small text block) with the sender address and an unsubscribe line.',
     '- Copy quality: concrete and concise; subject (settings.title) under ~50 chars; always set a preheader that complements the subject.',
     '- IMAGES: never invent or hotlink random image URLs. Use clearly-labelled placeholder URLs (e.g. dummyimage.com) for layout and tell the user to swap them for their own.',
@@ -74,6 +79,11 @@ function systemPrompt(doc: EmailDocument, selectedId?: string): string {
     '- After editing, briefly tell the user what you changed. Do not dump the JSON or HTML.',
     '',
     `Current top-level blocks (id:type): ${doc.blocks.map(b => `${b.id}:${b.type}`).join(', ') || '(none)'}.`,
+    `Declared template variables: ${variables.length ? variables.map(v => `{{ ${v.key} }}`).join(', ') : '(none yet)'}. Reuse existing keys rather than inventing near-duplicates.`,
+    '',
+    'Automated review findings on the current email (fix these when the user asks to "fix issues", to polish, or when your change touches the same block — never silently ignore an error-severity finding you could fix in the same edit):',
+    lintSummaryForPrompt(lint),
+    '',
     `Current document JSON: ${documentForPrompt(doc)}`,
     selected
       ? `The user has SELECTED this block — assume edits target it unless they say otherwise:\n${JSON.stringify(selected)}`
@@ -122,11 +132,20 @@ export default defineEventHandler(async (event) => {
   const { model, modelId } = getAssistantModel()
   let captured: { promptTokens?: number, completionTokens?: number, totalTokens?: number } = {}
 
+  const declaredVariables = project.variables ?? []
+  let docChanged = false
+
+  // Checkpoint the pre-AI state (at most every 10 minutes) so "before the AI
+  // touched it" is always reachable from History. Fire-and-forget — never
+  // delays the stream.
+  void snapshotVersion(projectId, project.name, doc, declaredVariables, 'manual', 10 * 60_000)
+
   const stream = createUIMessageStream({
     execute: async ({ writer }) => {
       const apply = (res: { ok: boolean, message: string, doc: EmailDocument }) => {
         if (res.ok) {
           doc = res.doc
+          docChanged = true
           writer.write({ type: 'data-document', data: doc as unknown as Record<string, unknown> })
         }
         return res.message
@@ -215,12 +234,17 @@ export default defineEventHandler(async (event) => {
             type: 'object', required: ['id', 'to'], properties: { id: { type: 'string' }, to: { type: 'number' } }
           }),
           execute: async ({ id, to }) => apply(moveBlock(doc, id, to))
+        }),
+        duplicate_block: tool({
+          description: 'Duplicate an existing block (works inside columns too). The copy is inserted right after the original with fresh ids — useful for repeating sections like feature rows before editing the copy.',
+          inputSchema: jsonSchema<{ id: string }>({ type: 'object', required: ['id'], properties: { id: { type: 'string' } } }),
+          execute: async ({ id }) => apply(duplicateBlock(doc, id))
         })
       }
 
       const result = streamText({
         model,
-        system: systemPrompt(doc, selectedId),
+        system: systemPrompt(doc, selectedId, declaredVariables),
         messages: await convertToModelMessages(incoming),
         tools,
         maxRetries: 3,
@@ -254,10 +278,20 @@ export default defineEventHandler(async (event) => {
             parts: responseMessage.parts as unknown[]
           })
         }
+        const reconciled = reconcileVariables(doc, project.variables ?? [])
         await updateProject(projectId, {
           document: doc,
-          variables: reconcileVariables(doc, project.variables ?? [])
+          variables: reconciled,
+          // Clear the last autosave's actorId: this save is the AI's, and
+          // leaving a tab's id here would make that tab discard the SSE
+          // broadcast as its own echo (hiding a server-side overwrite, e.g.
+          // right after a local undo).
+          lastActorId: null
         })
+        // Every AI edit lands in version history so it can be rolled back.
+        if (docChanged) {
+          await snapshotVersion(projectId, project.name, doc, reconciled, 'ai')
+        }
       } catch (e) {
         // Persistence must not kill the stream; the client still holds the doc
         // and its autosave will retry.

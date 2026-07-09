@@ -23,12 +23,14 @@ import { applyTemplateVariables } from '#shared/email/placeholders'
 import { isStarterEmailDocument, type EmailTemplateDefinition } from '#shared/email/templates'
 import type { TemplateVariable } from '~~/server/utils/parse'
 
+import { lintEmailDocument } from '#shared/email/lint'
 import { useUndoRedo, type EditorSnapshot } from '~/composables/useUndoRedo'
 
 import EmailPreview from '~/components/email/EmailPreview.vue'
 import EmailInspector from '~/components/email/EmailInspector.vue'
 import EmailVariables from '~/components/email/EmailVariables.vue'
 import EmailTemplatePicker from '~/components/email/EmailTemplatePicker.vue'
+import EmailReview from '~/components/email/EmailReview.vue'
 
 definePageMeta({ layout: false })
 
@@ -53,6 +55,7 @@ if (error.value || !data.value) {
 
 const access = computed(() => data.value?.access ?? 'owner')
 const isOwner = computed(() => access.value === 'owner')
+const canEdit = computed(() => access.value !== 'view')
 
 const backTo = computed(() =>
   data.value?.project.projectId ? `/app/projects/${data.value.project.projectId}` : '/app'
@@ -65,11 +68,19 @@ const name = ref(data.value.project.name)
 const selectedId = ref<string | null>(null)
 const input = ref('')
 const templateOpen = ref(false)
-const rightTab = ref<'design' | 'variables'>('design')
+const rightTab = ref<'design' | 'variables' | 'review'>('design')
+
+// Live lint findings — computed once, shared by the Review tab, its badge and
+// the "Fix issues" quick action.
+const reviewIssues = computed(() => lintEmailDocument(document.value))
+const reviewIssueCount = computed(() => reviewIssues.value.length)
 
 // ---- undo / redo -----------------------------------------------------------
 const { push: pushHistory, undo: undoPop, redo: redoPop, clear: clearHistory, canUndo, canRedo } = useUndoRedo()
 let skipHistory = false
+// Coalesce typing bursts: edits landing within this window share one undo step.
+const HISTORY_COALESCE_MS = 900
+let lastHistoryPushAt = 0
 
 function snapshot(): EditorSnapshot {
   return { document: document.value, name: name.value, variables: variables.value }
@@ -77,7 +88,8 @@ function snapshot(): EditorSnapshot {
 
 function applySnapshot(snap: EditorSnapshot) {
   skipHistory = true
-  skipNextSave = true
+  // Deliberately NOT skipping autosave: an undo/redo must persist, or the
+  // server (and collaborators) would keep the state the user just left.
   document.value = snap.document
   name.value = snap.name
   variables.value = snap.variables
@@ -95,15 +107,30 @@ function redo() {
 
 // Push to history on user-initiated document changes (not sync/AI/undo).
 watch(document, (_next, prev) => {
-  if (skipHistory) { skipHistory = false; return }
-  pushHistory({ document: prev, name: name.value, variables: variables.value })
+  if (access.value === 'view') return
+  if (skipHistory) {
+    skipHistory = false
+    lastHistoryPushAt = 0
+    return
+  }
+  const now = Date.now()
+  if (now - lastHistoryPushAt > HISTORY_COALESCE_MS) {
+    pushHistory({ document: prev, name: name.value, variables: variables.value })
+  }
+  lastHistoryPushAt = now
 })
 
-// Keyboard shortcuts.
+// Keyboard shortcuts (skip when focus is in a text field — native undo wins).
+function isEditableTarget(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null
+  if (!el) return false
+  return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable
+}
+
 onMounted(() => {
   function onKey(e: KeyboardEvent) {
     const mod = e.metaKey || e.ctrlKey
-    if (!mod) return
+    if (!mod || isEditableTarget(e.target)) return
     if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo() }
     if (e.key === 'z' && e.shiftKey) { e.preventDefault(); redo() }
     if (e.key === 'y') { e.preventDefault(); redo() }
@@ -172,6 +199,7 @@ onMounted(() => {
       const payload = JSON.parse(ev.data) as { document?: EmailDocument, variables?: TemplateVariable[], name?: string, actorId?: string | null }
       if (!payload?.document || payload.actorId === actorId.value) return
       skipNextSave = true
+      // Remote edits must not become local undo steps.
       skipHistory = true
       document.value = payload.document
       if (payload.variables) variables.value = payload.variables
@@ -179,7 +207,9 @@ onMounted(() => {
     } catch { /* malformed frame — ignore */ }
   }
 })
-onBeforeUnmount(() => liveSource?.close())
+onBeforeUnmount(() => {
+  liveSource?.close()
+})
 
 // ---- sharing ----------------------------------------------------------------
 const shareOpen = ref(false)
@@ -217,6 +247,132 @@ async function copyShareUrl() {
   if (!shareUrl.value) return
   await navigator.clipboard.writeText(shareUrl.value)
   toast.add({ title: 'Share link copied', icon: 'i-lucide-clipboard-check', color: 'success' })
+}
+
+// ---- version history --------------------------------------------------------
+interface VersionMeta {
+  id: string
+  name: string
+  cause: string
+  subject: string
+  blockCount: number
+  createdAt: number
+}
+
+const historyOpen = ref(false)
+const historyLoading = ref(false)
+const versions = ref<VersionMeta[]>([])
+const restoringId = ref<string | null>(null)
+
+const causeLabels: Record<string, { label: string, icon: string }> = {
+  ai: { label: 'AI edit', icon: 'i-lucide-sparkles' },
+  manual: { label: 'Checkpoint', icon: 'i-lucide-save' },
+  restore: { label: 'Before restore', icon: 'i-lucide-history' }
+}
+
+function relativeTime(ts: number): string {
+  const diff = Date.now() - ts
+  const minutes = Math.round(diff / 60_000)
+  if (minutes < 1) return 'just now'
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.round(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.round(hours / 24)
+  if (days < 30) return `${days}d ago`
+  return new Date(ts).toLocaleDateString()
+}
+
+watch(historyOpen, async (open) => {
+  if (!open) return
+  historyLoading.value = true
+  try {
+    const res = await $fetch<{ versions: VersionMeta[] }>(`/api/emails/${id}/versions${apiSuffix}`)
+    versions.value = res.versions
+  } catch {
+    toast.add({ title: 'Could not load version history.', color: 'error' })
+  } finally {
+    historyLoading.value = false
+  }
+})
+
+async function restoreVersion(versionId: string) {
+  restoringId.value = versionId
+  try {
+    const res = await $fetch<{ project: { name: string, document: EmailDocument, variables: TemplateVariable[] } }>(
+      `/api/emails/${id}/versions/${versionId}/restore${apiSuffix}`,
+      { method: 'POST' }
+    )
+    // The server already persisted the restore; apply it locally as an
+    // undoable edit but skip the redundant autosave round-trip.
+    skipNextSave = true
+    document.value = res.project.document
+    variables.value = res.project.variables
+    name.value = res.project.name
+    selectedId.value = null
+    historyOpen.value = false
+    toast.add({ title: 'Version restored', icon: 'i-lucide-history', color: 'success' })
+  } catch (e: any) {
+    toast.add({ title: e?.data?.statusMessage || 'Could not restore that version.', color: 'error' })
+  } finally {
+    restoringId.value = null
+  }
+}
+
+// ---- send a test email ------------------------------------------------------
+const { user } = useAuth()
+const testOpen = ref(false)
+const testTo = ref('')
+const testSending = ref(false)
+
+watch(testOpen, (open) => {
+  if (open && !testTo.value) testTo.value = user.value?.email ?? ''
+})
+
+async function sendTest() {
+  const to = testTo.value.trim()
+  if (!to || testSending.value) return
+  testSending.value = true
+  try {
+    const res = await $fetch<{ delivered: boolean, to: string }>(`/api/emails/${id}/send-test${apiSuffix}`, {
+      method: 'POST',
+      body: { to, document: document.value }
+    })
+    testOpen.value = false
+    toast.add(res.delivered
+      ? { title: `Test sent to ${res.to}`, icon: 'i-lucide-mail-check', color: 'success' }
+      : { title: 'SMTP isn\'t configured', description: 'The send was logged on the server instead of delivered.', icon: 'i-lucide-mail-warning', color: 'warning' })
+  } catch (e: any) {
+    toast.add({ title: e?.data?.statusMessage || 'Could not send the test email.', color: 'error' })
+  } finally {
+    testSending.value = false
+  }
+}
+
+// ---- save as template -------------------------------------------------------
+const saveTplOpen = ref(false)
+const tplName = ref('')
+const tplDescription = ref('')
+const tplSaving = ref(false)
+
+watch(saveTplOpen, (open) => {
+  if (open && !tplName.value) tplName.value = name.value
+})
+
+async function saveAsTemplate() {
+  if (!tplName.value.trim() || tplSaving.value) return
+  tplSaving.value = true
+  try {
+    await $fetch('/api/templates', {
+      method: 'POST',
+      body: { name: tplName.value, description: tplDescription.value, document: document.value }
+    })
+    saveTplOpen.value = false
+    toast.add({ title: 'Saved as template', description: 'Find it under “Your templates” when starting an email.', icon: 'i-lucide-bookmark-check', color: 'success' })
+  } catch (e: any) {
+    toast.add({ title: e?.data?.statusMessage || 'Could not save the template.', color: 'error' })
+  } finally {
+    tplSaving.value = false
+  }
 }
 
 // ---- AI chat --------------------------------------------------------------
@@ -265,6 +421,9 @@ const quickActions = computed(() =>
         { label: 'Make it pop', prompt: 'Make the selected block stand out more — stronger hierarchy, better contrast, without clashing with the theme.' }
       ]
     : [
+        ...(reviewIssueCount.value
+          ? [{ label: `Fix ${reviewIssueCount.value} issue${reviewIssueCount.value === 1 ? '' : 's'}`, prompt: 'Fix all outstanding review findings listed in your context. Keep the layout and intent; only fix the problems, and summarize what you fixed.' }]
+          : []),
         { label: 'Improve copy', prompt: 'Improve the copy across the whole email: clearer, more concrete, more persuasive. Keep the layout.' },
         { label: 'Polish design', prompt: 'Polish the design: spacing rhythm, hierarchy and color contrast. Keep the content.' },
         { label: 'Add footer', prompt: 'Add a proper muted footer with the sender address line and an unsubscribe link.' },
@@ -280,6 +439,14 @@ function sendQuick(prompt: string) {
 }
 
 onMounted(() => {
+  // Arriving from "Describe your email" on the new-email page: hand the brief
+  // straight to Postcard AI (once — the query is stripped so reloads don't resend).
+  const initialPrompt = typeof route.query.prompt === 'string' ? route.query.prompt.trim() : ''
+  if (initialPrompt && isOwner.value && !chat.messages.length) {
+    chat.sendMessage({ text: initialPrompt })
+    navigateTo({ query: { ...route.query, prompt: undefined } }, { replace: true })
+    return
+  }
   if (!chat.messages.length && isStarterEmailDocument(document.value)) templateOpen.value = true
 })
 
@@ -336,7 +503,8 @@ async function copyHtml() {
 function downloadFile(content: string, filename: string, type: string) {
   const blob = new Blob([content], { type })
   const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
+  // `document` is the email document ref in this component — use the DOM's.
+  const a = window.document.createElement('a')
   a.href = url
   a.download = filename
   a.click()
@@ -359,6 +527,45 @@ function copyEndpoint() {
   const url = `${origin}/api/v1/projects/${id}/html?format=html`
   navigator.clipboard.writeText(url)
   toast.add({ title: 'API endpoint copied', icon: 'i-lucide-clipboard-check', color: 'success' })
+}
+
+const moreItems = computed(() => {
+  const items: Array<{ label: string, icon: string, onSelect: () => void }> = []
+  if (canEdit.value) items.push({ label: 'Send test email…', icon: 'i-lucide-mail-check', onSelect: () => (testOpen.value = true) })
+  if (user.value) items.push({ label: 'Save as template…', icon: 'i-lucide-bookmark-plus', onSelect: () => (saveTplOpen.value = true) })
+  if (canEdit.value) items.push({ label: 'Version history…', icon: 'i-lucide-history', onSelect: () => (historyOpen.value = true) })
+  return [items]
+})
+
+function applySavedTemplate(payload: { name: string, document: EmailDocument }) {
+  skipHistory = true
+  document.value = payload.document
+  name.value = payload.name
+  selectedId.value = null
+  templateOpen.value = false
+  clearHistory()
+  toast.add({ title: `Applied “${payload.name}”`, color: 'success' })
+}
+
+/** Review tab → "Fix with AI": hand the finding to the chat. */
+function fixWithAi(prompt: string) {
+  if (!isOwner.value || busyChat.value) return
+  chat.sendMessage({ text: prompt })
+}
+
+const clearingChat = ref(false)
+async function clearChat() {
+  if (busyChat.value || clearingChat.value || !chat.messages.length) return
+  clearingChat.value = true
+  try {
+    await $fetch(`/api/emails/${id}/chat`, { method: 'DELETE' })
+    chat.messages = []
+    toast.add({ title: 'Conversation cleared', icon: 'i-lucide-eraser', color: 'success' })
+  } catch (e: any) {
+    toast.add({ title: e?.data?.statusMessage || 'Could not clear the conversation.', color: 'error' })
+  } finally {
+    clearingChat.value = false
+  }
 }
 
 function blockLabel(b: EmailBlock): string {
@@ -390,12 +597,17 @@ useHead({ title: () => `${name.value} · Postcard` })
           <span class="hidden sm:inline">{{ saving ? 'Saving…' : 'Saved' }}</span>
         </span>
         <div class="flex-1" />
-        <UButton icon="i-lucide-undo-2" color="neutral" variant="ghost" size="xs" aria-label="Undo" :disabled="!canUndo" @click="undo" />
-        <UButton icon="i-lucide-redo-2" color="neutral" variant="ghost" size="xs" aria-label="Redo" :disabled="!canRedo" @click="redo" />
+        <template v-if="canEdit">
+          <UButton icon="i-lucide-undo-2" color="neutral" variant="ghost" size="xs" aria-label="Undo" :disabled="!canUndo" @click="undo" />
+          <UButton icon="i-lucide-redo-2" color="neutral" variant="ghost" size="xs" aria-label="Redo" :disabled="!canRedo" @click="redo" />
+        </template>
         <UDropdownMenu :items="addItems">
           <UButton icon="i-lucide-plus" label="Add" color="neutral" variant="ghost" size="xs" :ui="{ label: 'hidden sm:inline' }" />
         </UDropdownMenu>
         <UButton icon="i-lucide-layout-template" color="neutral" variant="ghost" size="xs" aria-label="Templates" @click="templateOpen = true" />
+        <UDropdownMenu v-if="moreItems[0]?.length" :items="moreItems">
+          <UButton icon="i-lucide-ellipsis" color="neutral" variant="ghost" size="xs" aria-label="More actions" />
+        </UDropdownMenu>
         <UButton
           v-if="isOwner"
           :icon="shareMode === 'off' ? 'i-lucide-share-2' : 'i-lucide-globe'"
@@ -462,6 +674,18 @@ useHead({ title: () => `${name.value} · Postcard` })
               <UIcon name="i-lucide-sparkles" class="size-3.5" />
             </span>
             <span class="text-sm font-semibold">Postcard AI</span>
+            <div class="flex-1" />
+            <UButton
+              v-if="chat.messages.length"
+              icon="i-lucide-eraser"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              aria-label="Clear conversation"
+              :loading="clearingChat"
+              :disabled="busyChat"
+              @click="clearChat"
+            />
           </div>
 
           <div v-if="!chat.messages.length" class="flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center">
@@ -526,7 +750,7 @@ useHead({ title: () => `${name.value} · Postcard` })
         </aside>
 
         <!-- preview -->
-        <main class="h-full min-h-0">
+        <main class="relative h-full min-h-0">
           <EmailPreview
             :document="previewDocument"
             :selected-id="selectedId"
@@ -534,6 +758,20 @@ useHead({ title: () => `${name.value} · Postcard` })
             @select="selectedId = $event"
             @move="onPreviewMove"
           />
+          <!-- device switcher -->
+          <div class="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-0.5 rounded-full pc-material border pc-hairline p-1 shadow-sm">
+            <UButton
+              v-for="d in previewDevices"
+              :key="d.id"
+              :icon="d.icon"
+              size="xs"
+              :color="previewDeviceId === d.id ? 'primary' : 'neutral'"
+              :variant="previewDeviceId === d.id ? 'soft' : 'ghost'"
+              :aria-label="`Preview on ${d.label}`"
+              class="rounded-full"
+              @click="previewDeviceId = d.id"
+            />
+          </div>
         </main>
 
         <!-- inspector / variables -->
@@ -557,12 +795,32 @@ useHead({ title: () => `${name.value} · Postcard` })
               :variant="rightTab === 'variables' ? 'soft' : 'ghost'"
               @click="rightTab = 'variables'"
             />
+            <UButton
+              icon="i-lucide-scan-search"
+              size="xs"
+              class="flex-1 justify-center"
+              :color="rightTab === 'review' ? 'primary' : 'neutral'"
+              :variant="rightTab === 'review' ? 'soft' : 'ghost'"
+              @click="rightTab = 'review'"
+            >
+              Review
+              <UBadge
+                v-if="reviewIssueCount"
+                :label="String(reviewIssueCount)"
+                color="warning"
+                variant="soft"
+                size="sm"
+              />
+            </UButton>
           </div>
 
           <div v-show="rightTab === 'design'" class="flex-1 min-h-0 flex flex-col">
             <EmailInspector
               :document="document"
               :selected-id="selectedId"
+              :email-id="id"
+              :can-ai="isOwner"
+              :can-edit="canEdit"
               @update:document="document = $event"
               @select="selectedId = $event"
             />
@@ -590,6 +848,16 @@ useHead({ title: () => `${name.value} · Postcard` })
               @update:variables="variables = $event"
             />
           </div>
+
+          <div v-show="rightTab === 'review'" class="flex-1 min-h-0">
+            <EmailReview
+              :issues="reviewIssues"
+              :can-ai="isOwner"
+              :ai-busy="busyChat"
+              @select="(bid) => { selectedId = bid; rightTab = 'design' }"
+              @fix="fixWithAi"
+            />
+          </div>
         </aside>
       </div>
     </div>
@@ -599,8 +867,97 @@ useHead({ title: () => `${name.value} · Postcard` })
       title="Start from a template"
       description="Pick a structure for this email, or keep the blank starter."
       @select="applyTemplate"
+      @select-saved="applySavedTemplate"
       @blank="applyBlank"
     />
+
+    <!-- Version history modal -->
+    <div v-if="historyOpen" class="fixed inset-0 z-50 grid place-items-center bg-black/30" @click.self="historyOpen = false">
+      <div class="pc-card p-5 w-[480px] max-w-[calc(100vw-2rem)] space-y-4">
+        <div class="flex items-center justify-between">
+          <div class="font-medium flex items-center gap-2">
+            <UIcon name="i-lucide-history" class="size-4 text-primary-500" /> Version history
+          </div>
+          <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="xs" aria-label="Close" @click="historyOpen = false" />
+        </div>
+
+        <div v-if="historyLoading" class="flex items-center justify-center py-10">
+          <UIcon name="i-lucide-loader-circle" class="size-5 animate-spin pc-dim" />
+        </div>
+        <p v-else-if="!versions.length" class="py-8 text-center text-sm pc-dim">
+          No versions yet — snapshots are taken automatically as you and the AI edit.
+        </p>
+        <ul v-else class="max-h-[50vh] space-y-2 overflow-y-auto pc-scroll pr-1">
+          <li
+            v-for="v in versions"
+            :key="v.id"
+            class="flex items-center gap-3 rounded-lg border pc-hairline p-3"
+          >
+            <UIcon :name="causeLabels[v.cause]?.icon ?? 'i-lucide-save'" class="size-4 shrink-0 text-primary-500" />
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2">
+                <span class="truncate text-sm font-medium">{{ v.subject || v.name }}</span>
+                <UBadge :label="causeLabels[v.cause]?.label ?? v.cause" color="neutral" variant="soft" size="sm" />
+              </div>
+              <div class="mt-0.5 text-xs pc-dim">{{ relativeTime(v.createdAt) }} · {{ v.blockCount }} block{{ v.blockCount === 1 ? '' : 's' }}</div>
+            </div>
+            <UButton
+              label="Restore"
+              size="xs"
+              color="neutral"
+              variant="subtle"
+              :loading="restoringId === v.id"
+              :disabled="!!restoringId"
+              @click="restoreVersion(v.id)"
+            />
+          </li>
+        </ul>
+        <p class="text-xs pc-dim">Restoring snapshots the current state first, so you can always come back.</p>
+      </div>
+    </div>
+
+    <!-- Send test modal -->
+    <div v-if="testOpen" class="fixed inset-0 z-50 grid place-items-center bg-black/30" @click.self="testOpen = false">
+      <div class="pc-card p-5 w-[420px] max-w-[calc(100vw-2rem)] space-y-4">
+        <div class="flex items-center justify-between">
+          <div class="font-medium flex items-center gap-2">
+            <UIcon name="i-lucide-mail-check" class="size-4 text-primary-500" /> Send a test email
+          </div>
+          <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="xs" aria-label="Close" @click="testOpen = false" />
+        </div>
+        <p class="text-xs pc-dim">Sends the current design with your sample variable values filled in, so you can check it in a real inbox.</p>
+        <UFormField label="Send to">
+          <UInput v-model="testTo" type="email" placeholder="you@example.com" class="w-full" @keydown.enter="sendTest" />
+        </UFormField>
+        <div class="flex justify-end gap-2">
+          <UButton label="Cancel" color="neutral" variant="ghost" size="sm" @click="testOpen = false" />
+          <UButton label="Send test" icon="i-lucide-send" size="sm" :loading="testSending" @click="sendTest" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Save as template modal -->
+    <div v-if="saveTplOpen" class="fixed inset-0 z-50 grid place-items-center bg-black/30" @click.self="saveTplOpen = false">
+      <div class="pc-card p-5 w-[420px] max-w-[calc(100vw-2rem)] space-y-4">
+        <div class="flex items-center justify-between">
+          <div class="font-medium flex items-center gap-2">
+            <UIcon name="i-lucide-bookmark-plus" class="size-4 text-primary-500" /> Save as template
+          </div>
+          <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="xs" aria-label="Close" @click="saveTplOpen = false" />
+        </div>
+        <p class="text-xs pc-dim">Reuse this design as a starting point for future emails.</p>
+        <UFormField label="Template name">
+          <UInput v-model="tplName" placeholder="e.g. Monthly newsletter" class="w-full" />
+        </UFormField>
+        <UFormField label="Description (optional)">
+          <UInput v-model="tplDescription" placeholder="What is this template for?" class="w-full" />
+        </UFormField>
+        <div class="flex justify-end gap-2">
+          <UButton label="Cancel" color="neutral" variant="ghost" size="sm" @click="saveTplOpen = false" />
+          <UButton label="Save template" icon="i-lucide-bookmark" size="sm" :loading="tplSaving" :disabled="!tplName.trim()" @click="saveAsTemplate" />
+        </div>
+      </div>
+    </div>
 
     <!-- Share modal -->
     <div v-if="shareOpen" class="fixed inset-0 z-50 grid place-items-center bg-black/30" @click.self="shareOpen = false">

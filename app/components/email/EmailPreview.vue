@@ -316,12 +316,13 @@ onBeforeUnmount(() => {
 })
 
 // Re-render the iframe when the document changes; re-apply selection when only
-// the selection changes (cheaper than a full reload).
+// the selection changes (cheaper than a full reload). Rebuilds are debounced:
+// a full srcdoc reload per keystroke makes typing in the inspector janky.
 const srcDoc = ref(buildSrcDoc())
-function rebuild() {
+const rebuild = useDebounceFn(() => {
   srcDoc.value = buildSrcDoc()
-}
-watch(() => props.document, rebuild, { deep: true })
+}, 150)
+watch(() => props.document, () => rebuild(), { deep: true })
 watch(() => props.selectedId, () => postSelected())
 watch(() => props.device, () => nextTick(updateScale), { deep: true })
 </script>

@@ -6,6 +6,9 @@ import nodemailer, { type Transporter } from 'nodemailer'
  * and the send API degrade gracefully in development.
  */
 
+/** Pragmatic address check shared by signup, test sends and the send API. */
+export const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
+
 export interface OutgoingMail {
   to: string
   subject: string

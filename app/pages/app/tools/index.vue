@@ -184,9 +184,9 @@ function lookupSupportLevel(feature: CaniemailFeature, family: string): string {
   // Get the latest version's support level
   for (const platform of Object.values(familyStats)) {
     const versions = Object.keys(platform)
-    if (versions.length) {
-      const latest = versions[versions.length - 1]
-      return platform[latest]
+    const latest = versions[versions.length - 1]
+    if (latest !== undefined) {
+      return platform[latest] ?? 'u'
     }
   }
   return 'u'
@@ -267,7 +267,7 @@ function downloadPreview() {
               <UIcon name="i-lucide-upload" class="w-3.5 h-3.5" />
               Upload file
             </button>
-            <input ref="checkFileInput" type="file" accept=".html,.htm,.txt" class="hidden" @change="onCheckFileUpload" />
+            <input ref="checkFileInput" type="file" accept=".html,.htm,.txt" class="hidden" @change="onCheckFileUpload" >
           </div>
           <textarea
             v-model="checkHtml"
@@ -333,7 +333,7 @@ function downloadPreview() {
           class="lookup-search-input"
           placeholder="Search CSS properties, HTML elements, or attributes… (e.g. flexbox, video, border-radius)"
           @input="runLookup"
-        />
+        >
       </div>
 
       <div v-if="lookupResults.length" class="lookup-results">
@@ -389,7 +389,7 @@ function downloadPreview() {
               <UIcon name="i-lucide-upload" class="w-3.5 h-3.5" />
               Upload HTML
             </button>
-            <input ref="previewFileInput" type="file" accept=".html,.htm,.txt" class="hidden" @change="onPreviewFileUpload" />
+            <input ref="previewFileInput" type="file" accept=".html,.htm,.txt" class="hidden" @change="onPreviewFileUpload" >
             <button class="preview-ctrl-btn" :disabled="!previewHtml" @click="downloadPreview">
               <UIcon name="i-lucide-download" class="w-3.5 h-3.5" />
               Download

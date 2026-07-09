@@ -24,7 +24,8 @@ const GENERATE_SYSTEM = [
   '  - columns: { type:"columns", columns: block[][], gap? }',
   'All blocks also accept { padding?, background? }.',
   '',
-  'Guidance: real, sensible copy; accessible contrast; use {{ mustache }} placeholders for personalization when the brief implies it; never hotlink random images — use clearly-labelled placeholders (e.g. dummyimage.com).'
+  'Guidance: real, sensible copy; accessible contrast; use {{ mustache }} placeholders for personalization when the brief implies it; never hotlink random images — use clearly-labelled placeholders (e.g. dummyimage.com).',
+  'Structure quality: lead with a clear hero (heading + supporting text), one primary CTA button, generous spacer rhythm, and a muted footer (small text block) with the sender address and an unsubscribe line. Set a subject (settings.title, under ~50 chars) AND a complementary preheader. Design mobile-first: prefer single-column flow; use columns only for short, scannable content.'
 ].join('\n')
 
 /**

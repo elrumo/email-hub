@@ -93,7 +93,7 @@ async function remove(p: ProjectRow) {
             type="text"
             class="projects-search-input"
             placeholder="Search projects..."
-          />
+          >
         </div>
         <button class="projects-new-btn" @click="creating = true">
           <UIcon name="i-lucide-plus" class="w-4 h-4" />
@@ -110,7 +110,7 @@ async function remove(p: ProjectRow) {
         placeholder="Project name..."
         autofocus
         @keyup.enter="createProject"
-      />
+      >
       <button class="projects-create-btn" :disabled="busy || !newName.trim()" @click="createProject">
         {{ busy ? 'Creating...' : 'Create' }}
       </button>
@@ -199,7 +199,7 @@ async function remove(p: ProjectRow) {
           class="modal-input"
           autofocus
           @keyup.enter="saveRename"
-        />
+        >
         <div class="modal-actions">
           <button class="modal-btn modal-btn--ghost" @click="renaming = null">Cancel</button>
           <button class="modal-btn modal-btn--primary" :disabled="busy || !renameName.trim()" @click="saveRename">

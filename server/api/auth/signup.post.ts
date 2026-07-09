@@ -11,14 +11,23 @@ import {
   toPublicUser
 } from '../../utils/auth'
 import { fireTrigger } from '../../utils/triggers'
+import { assertRateLimit } from '../../utils/rateLimit'
+import { EMAIL_RE } from '../../utils/mailer'
 
 export default defineEventHandler(async (event) => {
+  // Keep bots from mass-creating accounts: 5 signups per IP per hour.
+  assertRateLimit(event, 'signup', {
+    limit: 5,
+    windowMs: 60 * 60_000,
+    message: 'Too many accounts created from this address — try again later.'
+  })
+
   const body = await readBody<{ email?: string, password?: string, name?: string }>(event)
   const email = (body.email ?? '').trim().toLowerCase()
   const password = body.password ?? ''
   const name = (body.name ?? '').trim() || null
 
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+  if (!EMAIL_RE.test(email)) {
     throw createError({ statusCode: 422, statusMessage: 'Enter a valid email address.' })
   }
   if (password.length < 8) {

@@ -4,9 +4,8 @@ import { renderEmailHtml } from '#shared/email/render'
 import type { TemplateVariable } from '../../utils/parse'
 import { requireApiUser } from '../../utils/apiKey'
 import { requireOwnedProject } from '../../utils/projects'
-import { isMailerConfigured, sendMail } from '../../utils/mailer'
+import { EMAIL_RE, isMailerConfigured, sendMail } from '../../utils/mailer'
 
-const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 const MAX_RECIPIENTS = 50
 
 /**

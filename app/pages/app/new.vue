@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { renderEmailHtml } from '#shared/email/render'
 import type { EmailDocument } from '#shared/email/blocks'
 import EmailCardPreview from '~/components/email/EmailCardPreview.vue'
 
@@ -17,7 +16,14 @@ interface TemplateMeta {
   document: EmailDocument
 }
 
-const { data } = await useFetch<{ templates: TemplateMeta[] }>('/api/templates')
+interface SavedTemplateMeta {
+  id: string
+  name: string
+  description: string
+  updatedAt: number
+}
+
+const { data } = await useFetch<{ templates: TemplateMeta[], userTemplates?: SavedTemplateMeta[] }>('/api/templates')
 const route = useRoute()
 const creating = ref<string | null>(null)
 const error = ref('')
@@ -80,15 +86,17 @@ async function uploadHtml(e: Event) {
   }
 }
 
-async function create(templateId?: string) {
+async function create(templateId?: string, userTemplateId?: string, aiPrompt?: string) {
   error.value = ''
-  creating.value = templateId || 'blank'
+  creating.value = userTemplateId || templateId || 'blank'
   try {
     const { project } = await $fetch<{ project: { id: string } }>('/api/emails', {
       method: 'POST',
-      body: { templateId, projectId, folderId }
+      body: { templateId, userTemplateId, projectId, folderId }
     })
-    await navigateTo(`/app/emails/${project.id}`)
+    // Hand a described email straight to Postcard AI in the editor.
+    const suffix = aiPrompt ? `?prompt=${encodeURIComponent(aiPrompt)}` : ''
+    await navigateTo(`/app/emails/${project.id}${suffix}`)
   } catch (e: any) {
     error.value = e?.data?.statusMessage || 'Could not create the email.'
     creating.value = null
@@ -96,7 +104,7 @@ async function create(templateId?: string) {
 }
 
 function handleSubmit() {
-  create()
+  create(undefined, undefined, prompt.value.trim() || undefined)
 }
 
 function autoResize(e: Event) {
@@ -177,7 +185,7 @@ function handleKeydown(e: KeyboardEvent) {
             </div>
             <span class="new-quick-label">Upload HTML</span>
           </button>
-          <input ref="fileInput" type="file" accept=".html,.htm" class="hidden" @change="uploadHtml" />
+          <input ref="fileInput" type="file" accept=".html,.htm" class="hidden" @change="uploadHtml" >
         </div>
       </div>
     </section>
@@ -200,6 +208,30 @@ function handleKeydown(e: KeyboardEvent) {
       </div>
 
       <UAlert v-if="error" color="error" variant="soft" class="mb-5" :title="error" />
+
+      <!-- The user's saved templates -->
+      <template v-if="data?.userTemplates?.length">
+        <div class="mb-3 text-xs font-medium uppercase tracking-wide pc-dim">Your templates</div>
+        <div class="new-templates-grid mb-8">
+          <button
+            v-for="t in data.userTemplates"
+            :key="t.id"
+            class="new-template-card"
+            :disabled="!!creating"
+            @click="create(undefined, t.id)"
+          >
+            <div class="new-template-preview new-template-preview--blank">
+              <div class="new-blank-icon">
+                <UIcon :name="creating === t.id ? 'i-lucide-loader-circle' : 'i-lucide-bookmark'" class="w-7 h-7" :class="creating === t.id && 'animate-spin'" />
+              </div>
+            </div>
+            <div class="new-template-info">
+              <span class="new-template-name">{{ t.name }}</span>
+              <span class="new-template-desc">{{ t.description || 'A template you saved.' }}</span>
+            </div>
+          </button>
+        </div>
+      </template>
 
       <div class="new-templates-grid">
         <!-- Blank Canvas -->
