@@ -49,7 +49,30 @@ export const PLANS: Record<PlanId, Plan> = {
   }
 }
 
+/**
+ * Self-hosted mode: an operator running their own instance is paying for their
+ * own AI provider and storage, so metering them against SaaS plan limits makes
+ * no sense. When NUXT_PUBLIC_SELF_HOSTED is set, every account is treated as an
+ * unlimited plan and the billing/pricing UI is hidden (see `public.selfHosted`).
+ */
+export function isSelfHosted(): boolean {
+  const v = process.env.NUXT_PUBLIC_SELF_HOSTED ?? process.env.POSTCARD_SELF_HOSTED
+  return v === 'true' || v === '1'
+}
+
+const UNLIMITED = Number.MAX_SAFE_INTEGER
+
+const SELF_HOSTED_PLAN: Plan = {
+  id: 'pro',
+  name: 'Self-hosted',
+  price: 0,
+  tagline: 'Your instance, no limits.',
+  features: ['Unlimited email projects', 'Unlimited AI assistant messages', 'Unlimited API keys', 'Full REST API access'],
+  limits: { projects: UNLIMITED, aiMessagesPerMonth: UNLIMITED, apiKeys: UNLIMITED }
+}
+
 export function planFor(id: string | null | undefined): Plan {
+  if (isSelfHosted()) return SELF_HOSTED_PLAN
   return PLANS[(id as PlanId)] ?? PLANS.free
 }
 

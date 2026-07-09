@@ -4,6 +4,11 @@ import type { Plan } from '~~/server/utils/plans'
 definePageMeta({ layout: 'default' })
 useHead({ title: 'Pricing — Postcard' })
 
+// Self-hosted instances are unlimited and never bill — there's nothing to price.
+if (useRuntimeConfig().public.selfHosted) {
+  await navigateTo('/app')
+}
+
 const { user, loaded, fetchUser } = useAuth()
 if (!loaded.value) await fetchUser()
 
