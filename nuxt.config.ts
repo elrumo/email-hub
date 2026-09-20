@@ -32,6 +32,7 @@ export default defineNuxtConfig({
   },
 
   app: {
+    pageTransition: { name: 'page', mode: 'out-in' },
     head: {
       title: 'Postcard — Design email like a native app',
       htmlAttrs: { lang: 'en' },

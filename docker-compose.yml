@@ -85,7 +85,10 @@ services:
       PARSE_SERVER_MOUNT_PATH: ${PARSE_MOUNT_PATH:-/parse}
       PARSE_SERVER_URL: http://parse-server:1337${PARSE_MOUNT_PATH:-/parse}
       PARSE_PUBLIC_SERVER_URL: ${PARSE_PUBLIC_URL:-http://localhost:1337/parse}
-      PARSE_SERVER_MASTER_KEY_IPS: ${PARSE_MASTER_KEY_IPS:-0.0.0.0/0}
+      # 0.0.0.0/0 is IPv4-only; ::/0 must be added or master-key calls arriving
+      # over IPv6 (incl. IPv4-mapped ::ffff:172.x on dual-stack networks) are
+      # rejected with a bare "unauthorized".
+      PARSE_SERVER_MASTER_KEY_IPS: ${PARSE_MASTER_KEY_IPS:-0.0.0.0/0,::/0}
       PARSE_SERVER_ALLOW_CLIENT_CLASS_CREATION: ${PARSE_ALLOW_CLIENT_CLASS_CREATION:-false}
       # Live Query powers multiplayer document sync (EmailProject updates)
       PARSE_SERVER_START_LIVE_QUERY_SERVER: "true"
