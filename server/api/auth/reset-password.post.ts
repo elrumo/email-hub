@@ -1,8 +1,9 @@
-import { deleteSessionsForUser, findUserByResetTokenHash, updateUser } from '../../utils/parse'
+import { deleteSessionsForUser, findUserById, updateUser } from '../../utils/parse'
 import {
   createSession,
   hashPassword,
-  hashToken,
+  readResetToken,
+  resetSigValid,
   setSessionCookie,
   toPublicUser
 } from '../../utils/auth'
@@ -24,16 +25,17 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 422, statusMessage: 'Password must be at least 8 characters.' })
   }
 
-  const user = await findUserByResetTokenHash(hashToken(token))
-  if (!user || !user.resetTokenExpiresAt || user.resetTokenExpiresAt < Date.now()) {
-    throw createError({ statusCode: 400, statusMessage: 'This reset link is invalid or has expired.' })
-  }
+  const invalid = () => createError({ statusCode: 400, statusMessage: 'This reset link is invalid or has expired.' })
 
-  await updateUser(user.id, {
-    passwordHash: await hashPassword(password),
-    resetTokenHash: null,
-    resetTokenExpiresAt: null
-  })
+  const claims = readResetToken(token)
+  if (!claims || claims.exp < Date.now()) throw invalid()
+
+  const user = await findUserById(claims.userId)
+  // Verifying against the current passwordHash makes the token single-use: once
+  // the password changes below, this same token no longer validates.
+  if (!user || !resetSigValid(claims.payload, claims.sig, user.passwordHash)) throw invalid()
+
+  await updateUser(user.id, { passwordHash: await hashPassword(password) })
   await deleteSessionsForUser(user.id)
 
   const sessionToken = await createSession(user.id, getRequestHeader(event, 'user-agent'))

@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 import {
   createError,
   deleteCookie,
@@ -12,6 +12,7 @@ import {
   deleteSessionByToken,
   findSessionByToken,
   findUserById,
+  getParseMasterKey,
   pruneExpiredSessionRecords,
   updateUser,
   type AppUser
@@ -65,18 +66,43 @@ export function verifyPassword(password: string, hash: string): Promise<boolean>
   return Bun.password.verify(password, hash)
 }
 
-/** A high-entropy, URL-safe password-reset token (the plaintext emailed to the user). */
-export function generateResetToken(): string {
-  return randomUUID().replace(/-/g, '') + randomUUID().replace(/-/g, '')
+/**
+ * Password-reset tokens are stateless: `base64url(userId.expiry).hmac`. The
+ * HMAC is taken over the user's current passwordHash, which makes the token
+ * self-invalidating — it stops verifying the moment the password changes, so
+ * it's naturally single-use and needs no database column to track. The signing
+ * key is derived from the (server-only) Parse master key, so no extra config.
+ */
+function resetSigningKey(): Buffer {
+  return createHash('sha256').update('pwreset:' + getParseMasterKey()).digest()
 }
 
-/**
- * Hash a reset token for storage/lookup. Plain sha256 is appropriate here (not
- * argon2): the token is already high-entropy, so it isn't brute-forceable, and
- * we only ever store the hash — a database leak can't reveal usable tokens.
- */
-export function hashToken(token: string): string {
-  return createHash('sha256').update(token).digest('hex')
+function signReset(payload: string, passwordHash: string): string {
+  return createHmac('sha256', resetSigningKey()).update(`${payload}.${passwordHash}`).digest('hex')
+}
+
+export function makeResetToken(userId: string, passwordHash: string): string {
+  const payload = `${userId}.${Date.now() + RESET_TTL_MS}`
+  return `${Buffer.from(payload).toString('base64url')}.${signReset(payload, passwordHash)}`
+}
+
+/** Decode a reset token's claims without verifying the signature (needed to look up the user). */
+export function readResetToken(token: string): { userId: string, exp: number, payload: string, sig: string } | null {
+  const dot = token.indexOf('.')
+  if (dot < 1) return null
+  let payload: string
+  try { payload = Buffer.from(token.slice(0, dot), 'base64url').toString('utf8') } catch { return null }
+  const [userId, expStr] = payload.split('.')
+  const exp = Number(expStr)
+  if (!userId || !Number.isFinite(exp)) return null
+  return { userId, exp, payload, sig: token.slice(dot + 1) }
+}
+
+/** Constant-time check that a token's signature matches the user's current passwordHash. */
+export function resetSigValid(payload: string, sig: string, passwordHash: string): boolean {
+  const a = Buffer.from(sig)
+  const b = Buffer.from(signReset(payload, passwordHash))
+  return a.length === b.length && timingSafeEqual(a, b)
 }
 
 export async function createSession(userId: string, userAgent?: string | null): Promise<string> {

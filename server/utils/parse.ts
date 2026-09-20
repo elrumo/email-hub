@@ -44,10 +44,6 @@ export interface AppUser {
   stripeCustomerId: string | null
   stripeSubscriptionId: string | null
   lastLoginAt: number | null
-  /** sha256 of the active password-reset token (null when none pending) */
-  resetTokenHash?: string | null
-  /** epoch ms after which the reset token is no longer valid */
-  resetTokenExpiresAt?: number | null
   createdAt: number
   updatedAt: number
 }
@@ -182,7 +178,7 @@ function setFields(obj: Parse.Object, data: Record<string, unknown>): void {
   }
 }
 
-const USER_FIELDS = ['email', 'name', 'passwordHash', 'role', 'plan', 'planStatus', 'stripeCustomerId', 'stripeSubscriptionId', 'lastLoginAt', 'resetTokenHash', 'resetTokenExpiresAt', 'createdAt', 'updatedAt']
+const USER_FIELDS = ['email', 'name', 'passwordHash', 'role', 'plan', 'planStatus', 'stripeCustomerId', 'stripeSubscriptionId', 'lastLoginAt', 'createdAt', 'updatedAt']
 const SESSION_FIELDS = ['token', 'userId', 'expiresAt', 'userAgent', 'createdAt']
 const PROJECT_FIELDS = ['ownerId', 'name', 'description', 'tags', 'document', 'variables', 'projectId', 'folderId', 'shareToken', 'shareMode', 'lastActorId', 'createdAt', 'updatedAt']
 const CONTAINER_FIELDS = ['ownerId', 'name', 'description', 'tags', 'memberIds', 'shareToken', 'shareMode', 'createdAt', 'updatedAt']
@@ -200,13 +196,6 @@ export async function findUserByEmail(email: string): Promise<AppUser | null> {
 export async function findUserById(id: string): Promise<AppUser | null> {
   const Query = new Parse.Query(classFor('AppUser'))
   const obj = await Query.get(id, { useMasterKey: true }).catch(() => null)
-  return obj ? toPlain<AppUser>(obj, USER_FIELDS) : null
-}
-
-export async function findUserByResetTokenHash(hash: string): Promise<AppUser | null> {
-  const Query = new Parse.Query(classFor('AppUser'))
-  Query.equalTo('resetTokenHash', hash)
-  const obj = await Query.first({ useMasterKey: true })
   return obj ? toPlain<AppUser>(obj, USER_FIELDS) : null
 }
 

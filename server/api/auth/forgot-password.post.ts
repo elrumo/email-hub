@@ -1,5 +1,5 @@
-import { findUserByEmail, updateUser } from '../../utils/parse'
-import { generateResetToken, hashToken, RESET_TTL_MS } from '../../utils/auth'
+import { findUserByEmail } from '../../utils/parse'
+import { makeResetToken } from '../../utils/auth'
 import { sendMail } from '../../utils/mailer'
 
 /**
@@ -16,11 +16,7 @@ export default defineEventHandler(async (event) => {
   const user = await findUserByEmail(email)
   if (!user) return generic
 
-  const token = generateResetToken()
-  await updateUser(user.id, {
-    resetTokenHash: hashToken(token),
-    resetTokenExpiresAt: Date.now() + RESET_TTL_MS
-  })
+  const token = makeResetToken(user.id, user.passwordHash)
 
   const appUrl = useRuntimeConfig().public.appUrl || getRequestURL(event).origin
   const link = `${appUrl.replace(/\/$/, '')}/reset-password?token=${token}`
