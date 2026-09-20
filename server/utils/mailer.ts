@@ -71,7 +71,10 @@ export async function sendMail(mail: OutgoingMail): Promise<boolean> {
 
   const transport = getTransporter()
   if (!transport) {
-    console.info(`[mailer] SMTP not configured — would send "${mail.subject}" to ${mail.to}`)
+    // Common prod misconfig: only one Mailgun var set (both are required).
+    const partialMailgun = !!(process.env.MAILGUN_API_KEY || process.env.MAILGUN_DOMAIN)
+    const hint = partialMailgun ? ' (Mailgun partially set — need BOTH MAILGUN_API_KEY and MAILGUN_DOMAIN)' : ''
+    console.info(`[mailer] no transport configured${hint} — would send "${mail.subject}" to ${mail.to}`)
     return false
   }
 
