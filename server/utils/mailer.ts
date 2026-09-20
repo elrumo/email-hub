@@ -65,16 +65,25 @@ export async function sendMail(mail: OutgoingMail): Promise<boolean> {
   const from = mail.from || mg?.from || cfg.from || 'Postcard <no-reply@localhost>'
 
   if (mg) {
+    console.info(`[mailer] sending via Mailgun (domain=${mg.domain}, base=${mg.base}) to ${mail.to}`)
     await sendViaMailgun(mail, mg, from)
     return true
   }
 
   const transport = getTransporter()
   if (!transport) {
-    // Common prod misconfig: only one Mailgun var set (both are required).
-    const partialMailgun = !!(process.env.MAILGUN_API_KEY || process.env.MAILGUN_DOMAIN)
-    const hint = partialMailgun ? ' (Mailgun partially set — need BOTH MAILGUN_API_KEY and MAILGUN_DOMAIN)' : ''
-    console.info(`[mailer] no transport configured${hint} — would send "${mail.subject}" to ${mail.to}`)
+    // Env presence dump (values masked) — reveals missing/partial Mailgun
+    // config, e.g. vars not forwarded into the container. Both API_KEY and
+    // DOMAIN are required for Mailgun.
+    const seen = (v?: string) => (v ? `set(${v.length})` : 'MISSING')
+    console.info(
+      `[mailer] no transport configured — would send "${mail.subject}" to ${mail.to}\n` +
+      `[mailer]   MAILGUN_API_KEY=${seen(process.env.MAILGUN_API_KEY)} ` +
+      `MAILGUN_DOMAIN=${seen(process.env.MAILGUN_DOMAIN)} ` +
+      `MAILGUN_API_BASE_URL=${seen(process.env.MAILGUN_API_BASE_URL)} ` +
+      `MAILGUN_FROM_EMAIL=${seen(process.env.MAILGUN_FROM_EMAIL)} ` +
+      `NUXT_MAIL_SMTP_HOST=${seen(useRuntimeConfig().mail.smtpHost)}`
+    )
     return false
   }
 

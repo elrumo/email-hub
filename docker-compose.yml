@@ -32,7 +32,14 @@ services:
       NUXT_AI_MODEL: ${NUXT_AI_MODEL:-gpt-4o-mini}
       NUXT_PUBLIC_APP_URL: ${NUXT_PUBLIC_APP_URL:-http://localhost:3000}
       NUXT_SESSION_COOKIE_SECURE: ${NUXT_SESSION_COOKIE_SECURE:-}
-      # --- Outgoing mail (optional): logs to console until SMTP is set -----
+      # --- Outgoing mail (optional) ----------------------------------------
+      # Preferred: Mailgun HTTP API (set MAILGUN_API_KEY + MAILGUN_DOMAIN).
+      # Takes precedence over SMTP below. Logs to console until one is set.
+      MAILGUN_API_KEY: ${MAILGUN_API_KEY:-}
+      MAILGUN_DOMAIN: ${MAILGUN_DOMAIN:-}
+      MAILGUN_API_BASE_URL: ${MAILGUN_API_BASE_URL:-https://api.mailgun.net/v3}
+      MAILGUN_FROM_EMAIL: ${MAILGUN_FROM_EMAIL:-}
+      # Fallback: SMTP.
       NUXT_MAIL_SMTP_HOST: ${NUXT_MAIL_SMTP_HOST:-}
       NUXT_MAIL_SMTP_PORT: ${NUXT_MAIL_SMTP_PORT:-587}
       NUXT_MAIL_SMTP_SECURE: ${NUXT_MAIL_SMTP_SECURE:-}
