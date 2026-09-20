@@ -43,6 +43,9 @@ async function submit() {
         </UFormField>
         <UFormField label="Password">
           <UInput v-model="password" type="password" placeholder="••••••••" autocomplete="current-password" size="lg" class="w-full" required />
+          <template #hint>
+            <NuxtLink to="/forgot-password" class="text-primary-500 hover:underline">Forgot password?</NuxtLink>
+          </template>
         </UFormField>
 
         <UButton type="submit" block size="lg" color="primary" :loading="loading">Sign in</UButton>
