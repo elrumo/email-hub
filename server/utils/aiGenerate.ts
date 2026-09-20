@@ -3,7 +3,7 @@ import { emptyDocument, type EmailDocument } from '#shared/email/blocks'
 import { setDocument } from '#shared/email/ops'
 import { createError } from 'h3'
 import type { AppUser } from './parse'
-import { getAssistantModel } from './ai'
+import { assertAiConfigured, getAssistantModel } from './ai'
 import { planFor } from './plans'
 import { messagesThisMonth, recordUsageForUser } from './usage'
 
@@ -33,6 +33,7 @@ const GENERATE_SYSTEM = [
  * meters usage. Returns the generated document.
  */
 export async function generateEmailDocument(user: AppUser, prompt: string): Promise<EmailDocument> {
+  assertAiConfigured()
   const limit = planFor(user.plan).limits.aiMessagesPerMonth
   const used = await messagesThisMonth(user.id)
   if (used >= limit) {

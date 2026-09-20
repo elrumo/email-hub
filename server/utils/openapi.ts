@@ -29,9 +29,37 @@ export function buildOpenApiDocument(appUrl: string): Record<string, unknown> {
           properties: {
             id: { type: 'string' },
             name: { type: 'string' },
+            description: { type: ['string', 'null'], description: 'free-text description' },
+            tags: { type: 'array', items: { type: 'string' }, description: 'user-defined labels' },
             subject: { type: 'string' },
             variables: { type: 'array', items: { $ref: '#/components/schemas/TemplateVariable' } },
-            updatedAt: { type: 'integer', description: 'epoch ms' }
+            projectId: { type: ['string', 'null'], description: 'id of the containing project' },
+            folderId: { type: ['string', 'null'] },
+            updatedAt: { type: 'integer', description: 'epoch ms' },
+            createdAt: { type: 'integer', description: 'epoch ms' }
+          }
+        },
+        TemplateDetail: {
+          allOf: [
+            { $ref: '#/components/schemas/ProjectSummary' },
+            {
+              type: 'object',
+              properties: {
+                projectName: { type: ['string', 'null'], description: 'name of the containing project' },
+                document: { type: 'object', description: 'the structured block document (only with include=full)' },
+                html: { type: 'string', description: 'rendered, email-safe HTML (only with include=full)' }
+              }
+            }
+          ]
+        },
+        TemplateList: {
+          type: 'object',
+          properties: {
+            projectId: { type: ['string', 'null'], description: 'the project scoped to, or null for the root (all projects)' },
+            projectName: { type: ['string', 'null'] },
+            include: { type: 'string', enum: ['metadata', 'full'] },
+            count: { type: 'integer' },
+            templates: { type: 'array', items: { $ref: '#/components/schemas/TemplateDetail' } }
           }
         },
         TemplateVariable: {
@@ -87,6 +115,8 @@ export function buildOpenApiDocument(appUrl: string): Record<string, unknown> {
                   type: 'object',
                   properties: {
                     name: { type: 'string', description: 'project name (defaults to the email subject)' },
+                    description: { type: 'string', description: 'optional free-text description' },
+                    tags: { type: 'array', items: { type: 'string' }, description: 'optional user-defined labels' },
                     templateId: { type: 'string', description: 'a predefined template id' },
                     prompt: { type: 'string', description: 'an AI brief, e.g. "a welcome email for a coffee subscription"' }
                   }
@@ -164,6 +194,24 @@ export function buildOpenApiDocument(appUrl: string): Record<string, unknown> {
           responses: {
             200: { description: 'Project summary', content: { 'application/json': { schema: { $ref: '#/components/schemas/ProjectSummary' } } } },
             404: { description: 'Not found' }
+          }
+        }
+      },
+      '/templates': {
+        get: {
+          summary: 'List templates from a project (or the root)',
+          description:
+            'List every template (email document) you own. Pass `projectId` to scope to a single project; omit it (or pass `root`) to get every template across all your projects — the root that holds them all. `include=metadata` (default) returns lightweight metadata and ids; `include=full` also returns each template\'s structured `document` and rendered `html` (with each variable\'s default value substituted).',
+          operationId: 'listTemplates',
+          parameters: [
+            { name: 'projectId', in: 'query', required: false, schema: { type: 'string' }, description: 'a project id, or `root`/omitted for all projects' },
+            { name: 'include', in: 'query', required: false, schema: { type: 'string', enum: ['metadata', 'full'], default: 'metadata' } }
+          ],
+          responses: {
+            200: { description: 'The matching templates', content: { 'application/json': { schema: { $ref: '#/components/schemas/TemplateList' } } } },
+            401: { description: 'Unauthorized', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+            404: { description: 'Project not found' },
+            422: { description: 'Invalid include value', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } }
           }
         }
       },

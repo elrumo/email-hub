@@ -162,7 +162,7 @@ function handleKeydown(e: KeyboardEvent) {
             :disabled="!!creating"
             @click="create(action.templateId)"
           >
-            <div class="new-quick-icon" :style="{ background: action.templateId === 'launch-bold' ? 'rgba(37,99,235,0.1)' : action.templateId === 'newsletter-editorial' ? 'rgba(15,118,110,0.1)' : action.templateId === 'promotion-minimal' ? 'rgba(220,38,38,0.1)' : action.templateId === 'welcome-soft' ? 'rgba(124,58,237,0.1)' : 'rgba(245,158,11,0.1)' }">
+            <div class="new-quick-icon">
               <UIcon :name="action.icon" class="w-4 h-4" />
             </div>
             <span class="new-quick-label">{{ action.label }}</span>
@@ -172,7 +172,7 @@ function handleKeydown(e: KeyboardEvent) {
             :disabled="!!creating"
             @click="fileInput?.click()"
           >
-            <div class="new-quick-icon" style="background: rgba(108,108,115,0.1)">
+            <div class="new-quick-icon">
               <UIcon :name="creating === 'upload' ? 'i-lucide-loader-circle' : 'i-lucide-upload'" class="w-4 h-4" :class="creating === 'upload' && 'animate-spin'" />
             </div>
             <span class="new-quick-label">Upload HTML</span>
@@ -287,8 +287,8 @@ function handleKeydown(e: KeyboardEvent) {
 }
 
 .new-prompt-card:focus-within {
-  border-color: rgba(10, 132, 255, 0.5);
-  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.08);
+  border-color: var(--pc-text);
+  box-shadow: 0 0 0 3px var(--pc-hover);
 }
 
 .new-prompt-input {
@@ -419,7 +419,9 @@ function handleKeydown(e: KeyboardEvent) {
   border-radius: 7px;
   display: grid;
   place-items: center;
-  color: var(--pc-text);
+  color: var(--pc-text-dim);
+  background: var(--pc-surface);
+  border: 1px solid var(--pc-border);
   flex-shrink: 0;
 }
 

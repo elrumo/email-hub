@@ -17,6 +17,8 @@ export default defineEventHandler(async (event) => {
   const row = await createProject({
     ownerId: user.id,
     name: `${source.name} copy`,
+    description: source.description ?? null,
+    tags: source.tags ?? [],
     document: source.document,
     variables: source.variables ?? [],
     projectId: source.projectId ?? null,

@@ -3,6 +3,14 @@ node_modules
 .output
 .data
 .git
+.github
 .env
 *.log
 .DS_Store
+# Not part of the app image — these belong to sibling compose services / docs.
+parse
+mongo
+scripts
+docker-compose*.yml
+litellm.config.yaml
+*.md

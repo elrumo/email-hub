@@ -27,7 +27,7 @@ import {
   updateProject
 } from '../../../utils/parse'
 import { requireUser } from '../../../utils/auth'
-import { getAssistantModel } from '../../../utils/ai'
+import { assertAiConfigured, getAssistantModel } from '../../../utils/ai'
 import { planFor } from '../../../utils/plans'
 import { messagesThisMonth, recordUsageForUser } from '../../../utils/usage'
 import { reconcileVariables, requireOwnedProject } from '../../../utils/projects'
@@ -83,6 +83,7 @@ function systemPrompt(doc: EmailDocument, selectedId?: string): string {
 
 export default defineEventHandler(async (event) => {
   const user = await requireUser(event)
+  assertAiConfigured()
   const projectId = getRouterParam(event, 'id')!
   const project = await requireOwnedProject(projectId, user.id)
 

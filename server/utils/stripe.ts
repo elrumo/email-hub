@@ -1,6 +1,7 @@
 import Stripe from 'stripe'
 import { createError } from 'h3'
 import { updateUser, type AppUser } from './parse'
+import { isSelfHosted } from './plans'
 
 let _stripe: Stripe | null = null
 
@@ -14,6 +15,8 @@ export function getStripe(): Stripe {
 }
 
 export function billingConfigured(): boolean {
+  // Self-hosted instances never bill — everything is unlimited.
+  if (isSelfHosted()) return false
   return !!useRuntimeConfig().stripe.secretKey
 }
 

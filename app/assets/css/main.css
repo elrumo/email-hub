@@ -2,32 +2,36 @@
 @import "@nuxt/ui";
 
 /**
- * Postcard design language — v0-inspired, clean and minimal.
+ * Postcard design language — v0-inspired: monochrome, flat, typographic.
  *
- * A modern email creation studio with a sidebar-first layout,
- * frosted material surfaces, and refined typography. Supports
- * both light and dark themes.
+ * A quiet, high-contrast studio built on Geist. Surfaces are flat with
+ * hairline borders (no frosted glass, no colored accents); the only "accent"
+ * is the foreground itself — black on white, white on black — exactly like
+ * v0.app. Supports both light and dark themes.
  */
 
 @theme {
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
-    "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", "JetBrains Mono", Menlo,
+    Consolas, monospace;
 
-  /* Apple system accent (macOS blue) */
-  --color-primary-50: #eef4ff;
-  --color-primary-100: #d9e6ff;
-  --color-primary-200: #bcd3ff;
-  --color-primary-300: #8eb5ff;
-  --color-primary-400: #598dff;
-  --color-primary-500: #0a84ff;
-  --color-primary-600: #0066d6;
-  --color-primary-700: #0050a8;
-  --color-primary-800: #073f80;
-  --color-primary-900: #0a356a;
-  --color-primary-950: #07213f;
+  /* Monochrome "primary" — a neutral graphite scale (zinc), so any accent
+     renders grayscale. Prominent CTAs use the inverted foreground instead. */
+  --color-primary-50: #fafafa;
+  --color-primary-100: #f4f4f5;
+  --color-primary-200: #e4e4e7;
+  --color-primary-300: #d4d4d8;
+  --color-primary-400: #a1a1aa;
+  --color-primary-500: #71717a;
+  --color-primary-600: #52525b;
+  --color-primary-700: #3f3f46;
+  --color-primary-800: #27272a;
+  --color-primary-900: #18181b;
+  --color-primary-950: #09090b;
 
-  --radius-window: 14px;
-  --radius-card: 12px;
+  --radius-window: 12px;
+  --radius-card: 10px;
 }
 
 /* ── Light theme ───────────────────────────────────────────────────────── */
@@ -35,33 +39,35 @@
   --pc-bg: #fafafa;
   --pc-window: #ffffff;
   --pc-window-solid: #ffffff;
-  --pc-sidebar: #fafafa;
-  --pc-border: rgba(0, 0, 0, 0.06);
-  --pc-border-strong: rgba(0, 0, 0, 0.12);
+  --pc-sidebar: #fbfbfb;
+  --pc-border: rgba(0, 0, 0, 0.08);
+  --pc-border-strong: rgba(0, 0, 0, 0.14);
   --pc-text: #09090b;
   --pc-text-dim: #71717a;
   --pc-text-muted: #a1a1aa;
   --pc-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   --pc-shadow-sm: 0 1px 1px rgba(0, 0, 0, 0.03);
-  --pc-hover: rgba(0, 0, 0, 0.04);
+  --pc-hover: rgba(0, 0, 0, 0.045);
   --pc-surface: #f4f4f5;
+  --pc-dot: rgba(0, 0, 0, 0.08);
 }
 
 /* ── Dark theme ────────────────────────────────────────────────────────── */
 .dark {
-  --pc-bg: #09090b;
-  --pc-window: #111113;
-  --pc-window-solid: #111113;
-  --pc-sidebar: #0a0a0c;
-  --pc-border: rgba(255, 255, 255, 0.06);
-  --pc-border-strong: rgba(255, 255, 255, 0.1);
+  --pc-bg: #0a0a0a;
+  --pc-window: #0f0f0f;
+  --pc-window-solid: #0f0f0f;
+  --pc-sidebar: #0a0a0a;
+  --pc-border: rgba(255, 255, 255, 0.08);
+  --pc-border-strong: rgba(255, 255, 255, 0.14);
   --pc-text: #fafafa;
-  --pc-text-dim: #71717a;
-  --pc-text-muted: #3f3f46;
-  --pc-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --pc-shadow-sm: 0 1px 1px rgba(0, 0, 0, 0.2);
-  --pc-hover: rgba(255, 255, 255, 0.05);
-  --pc-surface: #18181b;
+  --pc-text-dim: #8b8b93;
+  --pc-text-muted: #52525b;
+  --pc-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --pc-shadow-sm: 0 1px 1px rgba(0, 0, 0, 0.25);
+  --pc-hover: rgba(255, 255, 255, 0.06);
+  --pc-surface: #161618;
+  --pc-dot: rgba(255, 255, 255, 0.07);
 }
 
 html, body, #__nuxt {
@@ -74,18 +80,15 @@ body {
   background: var(--pc-bg);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  letter-spacing: -0.006em;
 }
 
-/* ── Materials ─────────────────────────────────────────────────────────── */
+/* ── Materials — flat, hairline-bordered (no frosted glass) ────────────── */
 .pc-material {
   background: var(--pc-window);
-  backdrop-filter: saturate(180%) blur(30px);
-  -webkit-backdrop-filter: saturate(180%) blur(30px);
 }
 .pc-sidebar-material {
   background: var(--pc-sidebar);
-  backdrop-filter: saturate(180%) blur(30px);
-  -webkit-backdrop-filter: saturate(180%) blur(30px);
 }
 .pc-window {
   background: var(--pc-window-solid);
@@ -102,7 +105,15 @@ body {
 .pc-hairline { border-color: var(--pc-border); }
 .pc-dim { color: var(--pc-text-dim); }
 
-/* ── Traffic lights ────────────────────────────────────────────────────── */
+/* ── Dotted canvas texture (v0-style preview backdrop) ─────────────────── */
+.pc-dots {
+  background-color: var(--pc-bg);
+  background-image: radial-gradient(var(--pc-dot) 1px, transparent 1px);
+  background-size: 16px 16px;
+  background-position: -8px -8px;
+}
+
+/* ── Traffic lights (marketing chrome) ─────────────────────────────────── */
 .pc-traffic { display: inline-flex; gap: 8px; align-items: center; }
 .pc-traffic span {
   width: 12px; height: 12px; border-radius: 9999px;
@@ -117,9 +128,9 @@ body {
 
 /* ── Window titlebar ───────────────────────────────────────────────────── */
 .pc-titlebar {
-  height: 44px;
-  display: flex; align-items: center; gap: 12px;
-  padding: 0 14px;
+  height: 48px;
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 12px;
   border-bottom: 1px solid var(--pc-border);
 }
 

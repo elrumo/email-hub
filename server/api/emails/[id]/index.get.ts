@@ -13,6 +13,8 @@ export default defineEventHandler(async (event) => {
     project: {
       id: project.id,
       name: project.name,
+      description: project.description ?? null,
+      tags: project.tags ?? [],
       document: project.document,
       variables: project.variables ?? [],
       projectId: level === 'owner' ? project.projectId ?? null : null,
