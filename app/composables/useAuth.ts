@@ -39,11 +39,27 @@ export function useAuth() {
     return u
   }
 
+  async function forgotPassword(email: string) {
+    return $fetch<{ ok: boolean, message: string }>('/api/auth/forgot-password', {
+      method: 'POST',
+      body: { email }
+    })
+  }
+
+  async function resetPassword(token: string, password: string) {
+    const { user: u } = await $fetch<{ user: PublicUser }>('/api/auth/reset-password', {
+      method: 'POST',
+      body: { token, password }
+    })
+    user.value = u
+    return u
+  }
+
   async function logout() {
     await $fetch('/api/auth/logout', { method: 'POST' })
     user.value = null
     await navigateTo('/login')
   }
 
-  return { user, loaded, fetchUser, login, signup, logout }
+  return { user, loaded, fetchUser, login, signup, forgotPassword, resetPassword, logout }
 }

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import {
   createError,
   deleteCookie,
@@ -19,6 +19,7 @@ import {
 
 export const SESSION_COOKIE = 'pc_session'
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000
+export const RESET_TTL_MS = 60 * 60 * 1000 // password-reset links are valid for one hour
 
 /**
  * Emails that always hold admin rights, no matter how the account was
@@ -62,6 +63,20 @@ export function hashPassword(password: string): Promise<string> {
 
 export function verifyPassword(password: string, hash: string): Promise<boolean> {
   return Bun.password.verify(password, hash)
+}
+
+/** A high-entropy, URL-safe password-reset token (the plaintext emailed to the user). */
+export function generateResetToken(): string {
+  return randomUUID().replace(/-/g, '') + randomUUID().replace(/-/g, '')
+}
+
+/**
+ * Hash a reset token for storage/lookup. Plain sha256 is appropriate here (not
+ * argon2): the token is already high-entropy, so it isn't brute-forceable, and
+ * we only ever store the hash — a database leak can't reveal usable tokens.
+ */
+export function hashToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex')
 }
 
 export async function createSession(userId: string, userAgent?: string | null): Promise<string> {

@@ -44,6 +44,10 @@ export interface AppUser {
   stripeCustomerId: string | null
   stripeSubscriptionId: string | null
   lastLoginAt: number | null
+  /** sha256 of the active password-reset token (null when none pending) */
+  resetTokenHash?: string | null
+  /** epoch ms after which the reset token is no longer valid */
+  resetTokenExpiresAt?: number | null
   createdAt: number
   updatedAt: number
 }
@@ -178,7 +182,7 @@ function setFields(obj: Parse.Object, data: Record<string, unknown>): void {
   }
 }
 
-const USER_FIELDS = ['email', 'name', 'passwordHash', 'role', 'plan', 'planStatus', 'stripeCustomerId', 'stripeSubscriptionId', 'lastLoginAt', 'createdAt', 'updatedAt']
+const USER_FIELDS = ['email', 'name', 'passwordHash', 'role', 'plan', 'planStatus', 'stripeCustomerId', 'stripeSubscriptionId', 'lastLoginAt', 'resetTokenHash', 'resetTokenExpiresAt', 'createdAt', 'updatedAt']
 const SESSION_FIELDS = ['token', 'userId', 'expiresAt', 'userAgent', 'createdAt']
 const PROJECT_FIELDS = ['ownerId', 'name', 'description', 'tags', 'document', 'variables', 'projectId', 'folderId', 'shareToken', 'shareMode', 'lastActorId', 'createdAt', 'updatedAt']
 const CONTAINER_FIELDS = ['ownerId', 'name', 'description', 'tags', 'memberIds', 'shareToken', 'shareMode', 'createdAt', 'updatedAt']
@@ -196,6 +200,13 @@ export async function findUserByEmail(email: string): Promise<AppUser | null> {
 export async function findUserById(id: string): Promise<AppUser | null> {
   const Query = new Parse.Query(classFor('AppUser'))
   const obj = await Query.get(id, { useMasterKey: true }).catch(() => null)
+  return obj ? toPlain<AppUser>(obj, USER_FIELDS) : null
+}
+
+export async function findUserByResetTokenHash(hash: string): Promise<AppUser | null> {
+  const Query = new Parse.Query(classFor('AppUser'))
+  Query.equalTo('resetTokenHash', hash)
+  const obj = await Query.first({ useMasterKey: true })
   return obj ? toPlain<AppUser>(obj, USER_FIELDS) : null
 }
 
@@ -249,6 +260,19 @@ export async function deleteSessionByToken(token: string): Promise<void> {
   Query.equalTo('token', token)
   const rows = await Query.find({ useMasterKey: true }).catch(() => [])
   if (rows.length) await Parse.Object.destroyAll(rows, { useMasterKey: true }).catch(() => {})
+}
+
+/** Destroy every session for a user — used to log them out everywhere after a password reset. */
+export async function deleteSessionsForUser(userId: string): Promise<void> {
+  let deleted = 0
+  do {
+    const Query = new Parse.Query(classFor('AppSession'))
+    Query.equalTo('userId', userId)
+    Query.limit(1000)
+    const rows = await Query.find({ useMasterKey: true })
+    deleted = rows.length
+    if (deleted) await Parse.Object.destroyAll(rows, { useMasterKey: true })
+  } while (deleted >= 1000)
 }
 
 export async function pruneExpiredSessionRecords(now: number): Promise<void> {
